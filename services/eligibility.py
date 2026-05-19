@@ -77,6 +77,8 @@ def recherche_commande(
     print(data, file=sys.stderr, flush=True)
     #return CommandeDetail.model_validate(data)
 
+    #return CommandeDetail.model_validate({**data, "url": "http://moi.fr/6372539"})
+
     return CommandeDetail(
         reference=data["reference"],
         status=Statut(**data["status"]),
