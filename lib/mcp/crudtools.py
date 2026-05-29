@@ -4,6 +4,7 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 from lib.config.config import Config
 from lib.com.database import DataBase
+from lib.com.filter_builder import FilterBuilder
 import sys
 
 class CrudTools:
@@ -30,31 +31,42 @@ class CrudTools:
 
     #------------------------------------------------------------------------------------
 
+    _FILTER_DOC = (
+        "\n\nFilters: list of condition objects. "
+        "Each condition: {field, op, value, logic?}. "
+        "op values: eq, neq, gt, lt, gte, lte, lk, nlk, ilk, nilk, in, nin, btw, nbtw, ist, isf. "
+        "logic: 'and' (default) or 'or' — joins this condition to the previous one. "
+        "For a parenthesised group use {group: [...conditions], logic?} instead of field/op. "
+        "value is a list for in/nin (e.g. [1,2,3]) and btw/nbtw (e.g. [10,20]); omit for ist/isf. "
+        "Example: [{\"field\":\"status\",\"op\":\"eq\",\"value\":\"active\"},"
+        "{\"field\":\"amount\",\"op\":\"gte\",\"value\":100,\"logic\":\"and\"}]"
+    )
+
     @staticmethod
     def _make_list_tool(resource_name: str, endpoint: str, description: str):
         async def fn(
             bearer_token: str,
             page: int = 1,
             limit: int = 12,
-            filters: str = "",
+            filters: list[dict] | None = None,
             sort: str = "",
         ) -> dict:
             params: dict = {"page": page, "limit": limit}
             if filters:
-                params["filters"] = filters
+                params["filters"] = FilterBuilder.build(filters)
             if sort:
                 params["sort"] = sort
             async with httpx.AsyncClient() as client:
                 r = await client.get(
-                    f"{Config.get(key='APP_URL', type="env")}/api/{endpoint}",
-                    headers=_get_headers(bearer_token),
+                    f"{Config.get(key='APP_URL', type='env')}/api/{endpoint}",
+                    headers=CrudTools._get_headers(bearer_token),
                     params=params,
                 )
                 r.raise_for_status()
                 return r.json()
 
         fn.__name__ = f"list_{resource_name}"
-        fn.__doc__ = description
+        fn.__doc__ = description + CrudTools._FILTER_DOC
         return fn
 
     @staticmethod

@@ -75,7 +75,15 @@ class MCPClientManager:
         result = await self.session.call_tool(name, arguments)
         if result.structuredContent:
             return json.dumps(result.structuredContent)
-        return result.content[0].text if result.content else "{}"
+        if not result.content:
+            return "{}"
+        if len(result.content) == 1:
+            return result.content[0].text
+        # FastMCP sérialise une liste de Pydantic models en plusieurs TextContent séparés
+        try:
+            return json.dumps([json.loads(c.text) for c in result.content if hasattr(c, "text")])
+        except (json.JSONDecodeError, ValueError):
+            return "\n".join(c.text for c in result.content if hasattr(c, "text"))
 
 
 # Instance globale — un seul subprocess MCP pour tout le service

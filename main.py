@@ -50,7 +50,7 @@ agent: Agent | None = None
 async def lifespan(app: FastAPI):
     global agent
     async with mcp_manager.run():
-        agent = Agent()
+        agent = Agent(connector=Config.get(key="LLM_CONNECTOR", type="env"))
         yield
 
 
@@ -102,7 +102,7 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=400, detail="Bearer token is empty")
 
     return StreamingResponse(
-        agent.chat_stream(request.message, request.bearer),
+        agent.chatStream(request.message, request.bearer, request.session_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

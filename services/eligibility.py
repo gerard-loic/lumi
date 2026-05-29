@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from pydantic import Field
 from typing import Annotated
 from typing import Optional
+from typing import Literal
+
 
 class AdresseRedirect(BaseModel):
     action: str = Field(description="Action à effectuer côté client ('redirect' = redirection vers l'URL).")
@@ -34,6 +36,7 @@ class CommandeDetail(BaseModel):
     status: Statut
     city: Optional[str]                         = None
     zipcode: Optional[str]                      = None
+    created_at: str                             = Field(description="Date de création de la commande")
     offer_name: str                             = Field(description="Nom de l'offre souscrite")
     offer_bandwidth: int                        = Field(description="Débit en Mb/s")
     offer_delay_weeks: int                      = Field(description="Délai de déploiement en semaines")
@@ -71,7 +74,7 @@ def recherche_commande(
     """
 
     id = DataBase.findRessourceId(entity="orders", reference=reference, attributes=["id:int","reference:str"])
-    RestApi.setBasicAuthentification(basicToken="269|rmrhD32gM0OFoT5LjcOi0Qe269pWC8riWY62JnY74915fadf")
+    RestApi.setBasicAuthentification(basicToken="272|AUdbZUiWvTCEcEGYvZ9Df1iVg4kF1T2PYPRfF4vD82f58852")
     data = RestApi.show(endpoint="order", id=id, relations=["status","operator"])
 
     print(data, file=sys.stderr, flush=True)
@@ -81,3 +84,50 @@ def recherche_commande(
     return CommandeDetail.model_validate({**data, "url": "http://moi.fr/6372539"})
 
 
+def liste_commandes(
+        ordonnancement: Annotated[
+            Literal["reference", "created_at", "offer_name", "offer_bandwidth",
+                "offer_monthly_subscription_price", "offer_commitment_month",
+                "offer_construction_price", "city", "zipcode"],
+                Field(description="Attribut alphanumérique par lequel ordonner les commandes retournées")
+        ],
+        ordonnancement_sens: Annotated[
+            Literal["ASC", "DESC"],
+            Field(description="Ordonner par ordre croissant (ASC) ou décroissant (DESC)")
+        ],
+        limite: Annotated[int, Field(description="Nombre maximal de résultats à retourner")],
+        filtres: Annotated[
+            Optional[list[dict]],
+            Field(
+                default=None,
+                description=(
+                    "Filtres à appliquer sur la liste de commandes. "
+                    "Liste de conditions, chacune sous la forme {\"field\": ..., \"op\": ..., \"value\": ..., \"logic\": \"and\"|\"or\"}. "
+                    "Champs filtrables : reference, created_at, city, zipcode, offer_name, offer_bandwidth, "
+                    "offer_monthly_subscription_price, offer_commitment_month, offer_construction_price. "
+                    "Opérateurs disponibles : eq (égal), neq (différent), gt/lt/gte/lte (comparaisons numériques), "
+                    "ilk/nilk (correspondance partielle insensible à la casse, fonctionne comme SQL LIKE : % est un joker qui remplace zéro ou plusieurs caractères. Exemples : '%paris%' contient 'paris', 'paris%' commence par 'paris', '%paris' finit par 'paris'. nilk est la négation de ilk), "
+                    "in/nin (dans une liste — value doit être une liste), "
+                    "btw/nbtw (entre deux valeurs — value doit être [min, max]), ist/isf (vrai/faux). "
+                    "Le champ 'logic' relie la condition à la précédente (défaut: 'and'). "
+                    "Exemple — commandes de Paris avec débit >= 100 Mb/s : "
+                    "[{\"field\": \"city\", \"op\": \"eq\", \"value\": \"Paris\"}, "
+                    "{\"field\": \"offer_bandwidth\", \"op\": \"gte\", \"value\": 100, \"logic\": \"and\"}]"
+                )
+            )
+        ] = None,
+    ) -> list:
+    """
+    Lister les commandes et en retourner tous es détails : statut, offre souscrite, tarifs (abonnement mensuel, frais de raccordement), délais, engagement.
+    À utiliser dès que l'utilisateur souhaite connaitre l'historique de ses commandes ou si la demande nécessite d'aller consulter l'historique des commandes de l'utilisateur.
+    """
+
+    print(f"Tool : liste_commande // {ordonnancement}:{ordonnancement_sens}:{str(limite)}", file=sys.stderr, flush=True)
+
+    RestApi.setBasicAuthentification(basicToken="272|AUdbZUiWvTCEcEGYvZ9Df1iVg4kF1T2PYPRfF4vD82f58852")
+    data = RestApi.list(endpoint="order", relations=["status","operator"], order=f"{ordonnancement}.{ordonnancement_sens}", limit=limite, filters=filtres)
+    print(data, file=sys.stderr, flush=True)
+
+    return [CommandeDetail.model_validate({**item, "url": f"http://moi.fr/{item['id']}"}) for item in data]
+
+    
