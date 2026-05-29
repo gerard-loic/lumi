@@ -1,29 +1,30 @@
 """
-Orchestration Ollama + MCP avec streaming SSE.
+Orchestration LiteLLM + MCP avec streaming SSE.
 
 Stratégie en deux temps :
-  1. Appel Ollama NON streamé  → détecter les tool calls
+  1. Appel LiteLLM NON streamé  → détecter les tool calls
   2. Exécution des tools via MCP si nécessaire
-  3. Appel Ollama STREAMÉ      → réponse finale token par token
+  3. Appel LiteLLM STREAMÉ      → réponse finale token par token
 """
 
 import json
 from typing import AsyncGenerator
-import ollama
+import litellm
 
 from lib.mcp.client import mcp_manager
 
-import sys
 from lib.config.config import Config
+from lib.agent.llmconnector.litellm import LiteLLM
 
 
 class Agent:
 
     def __init__(self):
-        self._client = ollama.AsyncClient(host=Config.get(key="OLLAMA_HOST", type="env"))
-        self._model  = Config.get(key="OLLAMA_MODEL", type="env")
-        self._tools  = mcp_manager.tools_as_ollama_format()
-        self._system = Config.get(key="SYSTEM_PROMPT", type="env")
+        self._model    = Config.get(key="LLM_MODEL", type="env")
+        self._api_base = Config.get(key="LLM_API_BASE", type="env")
+        self._api_key  = Config.get(key="LLM_API_KEY", type="env")
+        self._tools    = mcp_manager.tools_as_openai_format()
+        self._system   = Config.get(key="SYSTEM_PROMPT", type="env")
         print(f"[Agent] {len(self._tools)} outil(s) chargé(s) : {[t['function']['name'] for t in self._tools]}")
 
     async def chat_stream(self, message: str, bearer: str) -> AsyncGenerator[str, None]:
@@ -40,13 +41,15 @@ class Agent:
         # ----------------------------------------------------------------
         # ÉTAPE 1 — Appel non streamé pour détecter les tool calls
         # ----------------------------------------------------------------
-        response = await self._client.chat(
+        response = await litellm.acompletion(
             model=self._model,
             messages=messages,
             tools=self._tools,
             stream=False,
+            api_base=self._api_base,
+            api_key=self._api_key,
         )
-        assistant_msg = response.message
+        assistant_msg = response.choices[0].message
 
         # ----------------------------------------------------------------
         # ÉTAPE 2 — Boucle de résolution des tool calls
@@ -61,17 +64,19 @@ class Agent:
                 "content": assistant_msg.content or "",
                 "tool_calls": [
                     {
+                        "id": tc.id,
+                        "type": "function",
                         "function": {
                             "name": tc.function.name,
                             "arguments": tc.function.arguments,
-                        }
+                        },
                     }
                     for tc in assistant_msg.tool_calls
                 ],
             })
 
             for tc in assistant_msg.tool_calls:
-                args = dict(tc.function.arguments)
+                args = json.loads(tc.function.arguments)
                 result_text = await mcp_manager.call_tool(tc.function.name, args, bearer=bearer)
 
                 # Interception des actions spéciales — le LLM n'est pas rappelé
@@ -90,26 +95,31 @@ class Agent:
 
                 messages.append({
                     "role": "tool",
+                    "tool_call_id": tc.id,
                     "content": result_text,
                 })
 
-            response = await self._client.chat(
+            response = await litellm.acompletion(
                 model=self._model,
                 messages=messages,
                 tools=self._tools,
                 stream=False,
+                api_base=self._api_base,
+                api_key=self._api_key,
             )
-            assistant_msg = response.message
+            assistant_msg = response.choices[0].message
 
         # ----------------------------------------------------------------
         # ÉTAPE 3 — Réponse finale streamée token par token
         # ----------------------------------------------------------------
-        async for chunk in await self._client.chat(
+        async for chunk in await litellm.acompletion(
             model=self._model,
             messages=messages,
             stream=True,
+            api_base=self._api_base,
+            api_key=self._api_key,
         ):
-            token = chunk.message.content
+            token = chunk.choices[0].delta.content
             if token:
                 yield self._sse_token(token)
 

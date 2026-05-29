@@ -49,7 +49,7 @@ class MCPClientManager:
     def tools(self) -> list:
         return self._tools
 
-    def tools_as_ollama_format(self) -> list[dict]:
+    def tools_as_openai_format(self) -> list[dict]:
         """Convertit les tools MCP au format attendu par Ollama.
         bearer_token est retiré du schéma : le LLM ne doit pas le fournir."""
         result = []

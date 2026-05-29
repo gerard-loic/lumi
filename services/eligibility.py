@@ -41,7 +41,7 @@ class CommandeDetail(BaseModel):
     offer_commitment_month: int                 = Field(description="Durée d'engagement en mois")
     offer_construction_price: float             = Field(description="Frais de raccordement en EUR")
     gtr: Optional[str]                         = Field(None, description="Garantie de Temps de Rétablissement")
-    workflow_actions: list[ActionWorkflow]      = Field(description="Actions disponibles à l'étape courante")
+    workflow_actions: list[ActionWorkflow]      = Field(default=[], description="Actions disponibles à l'étape courante")
     url: str                                    = Field(description="Url pour voir la commande dans l'interface, à afficher au client")
 
 
@@ -71,28 +71,13 @@ def recherche_commande(
     """
 
     id = DataBase.findRessourceId(entity="orders", reference=reference, attributes=["id:int","reference:str"])
-    RestApi.setBasicAuthentification(basicToken="213|lkYOJK3HFfNHvzQqu4qE9pZk1yzv5LaoFQ1KfMXieec5bf73")
+    RestApi.setBasicAuthentification(basicToken="269|rmrhD32gM0OFoT5LjcOi0Qe269pWC8riWY62JnY74915fadf")
     data = RestApi.show(endpoint="order", id=id, relations=["status","operator"])
 
     print(data, file=sys.stderr, flush=True)
-    #return CommandeDetail.model_validate(data)
+    if data is None:
+        raise ValueError(f"Commande introuvable : {reference}")
 
-    #return CommandeDetail.model_validate({**data, "url": "http://moi.fr/6372539"})
-
-    return CommandeDetail(
-        reference=data["reference"],
-        status=Statut(**data["status"]),
-        city=data.get("city"),
-        zipcode=data.get("zipcode"),
-        offer_name=data["offer_name"],
-        offer_bandwidth=data["offer_bandwidth"],
-        offer_delay_weeks=data["offer_delay_weeks"],
-        offer_monthly_subscription_price=data["offer_monthly_subscription_price"],
-        offer_commitment_month=data["offer_commitment_month"],
-        offer_construction_price=data["offer_construction_price"],
-        gtr=data.get("gtr"),
-        workflow_actions=[ActionWorkflow(**a) for a in data.get("workflow_actions", [])],
-        url="http://moi.fr/6372539"
-    )
+    return CommandeDetail.model_validate({**data, "url": "http://moi.fr/6372539"})
 
 
