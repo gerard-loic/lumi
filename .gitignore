@@ -13,4 +13,9 @@ services/*
 config/*
 !config/.gitkeep
 !config/config.default.json
+models/*
+!models/.gitkeep
 __pycache__
+Dockerfile
+.dockerignore
+docker-compose.yml

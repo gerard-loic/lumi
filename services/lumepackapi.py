@@ -1,7 +1,17 @@
 import httpx
 from urllib.parse import urlencode
 from lib.mcp.services import Service
-import sys
+from pydantic import Field, BaseModel
+from typing import Annotated, Literal, Optional, Any
+
+OrderByField = Annotated[Literal["ASC", "DESC"], Field(description="...")]
+LimiteField = Annotated[int, Field(description="Nombre maximal de résultats à retourner")]
+class FilterField(BaseModel):
+    field: str
+    op: str
+    value: Any
+    logic: Literal["and", "or"] = "and"
+
 
 class FilterBuilder:
     """Converts a list of filter dicts to the API filter string syntax.
@@ -38,6 +48,7 @@ class FilterBuilder:
             return ""
         parts: list[str] = []
         for i, item in enumerate(filters):
+            item = item.model_dump() if hasattr(item, "model_dump") else item
             logic = item.get("logic", "and")
             sep = cls._LOGIC.get(logic, "|n|")
             segment = (
@@ -69,6 +80,24 @@ class FilterBuilder:
         return f"{field}:{op}({value})"
 
 
+class LumePackAPIHelper:
+    @staticmethod
+    def make_filters_description(entity:str, filterable_fields: list[str], filterable_text_fields: list[str], example:str):
+        return (
+        f"Filtres à appliquer sur la liste de {entity}. "
+        f"Champs filtrables : {', '.join(filterable_fields)}. "
+        "Opérateurs disponibles : eq (égal), neq (différent), gt/lt/gte/lte (comparaisons numériques), "
+        "ilk/nilk (correspondance partielle insensible à la casse, fonctionne comme SQL LIKE : % est un joker qui remplace zéro ou plusieurs caractères. Exemples : '%paris%' contient 'paris', 'paris%' commence par 'paris', '%paris' finit par 'paris'. nilk est la négation de ilk), "
+        "in/nin (dans une liste — value doit être une liste), "
+        "btw/nbtw (entre deux valeurs — value doit être [min, max]), ist/isf (vrai/faux). "
+        "Le champ 'logic' relie la condition à la précédente (défaut: 'and'). "
+        f"IMPORTANT : pour les champs texte libres ({', '.join(filterable_text_fields)}), "
+        "toujours préférer l'opérateur ilk plutôt que eq afin d'éviter les problèmes de casse "
+        f"Exemple — {example}"
+        )
+    
+
+        
 
 class LumePackAPI(Service):
 
