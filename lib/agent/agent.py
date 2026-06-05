@@ -1,0 +1,193 @@
+import json
+from typing import AsyncGenerator, Optional
+from lib.mcp.client import mcp_manager, MCPToolError
+from lib.config.config import Config
+from lib.agent.llmconnector.litellm import LiteLLM
+from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent
+from lib.log.logger import Logger, ERROR, OK, WARNING
+
+"""
+Agent — Agent d'orchestration / communication LLM
+Stratégie :
+1. Appel LiteLLM NON streamé pour détecter les tool calls
+2. Exécution des tools via MCP si nécessaire
+3. Appel LiteLLM STREAMÉ réponse finale token par token
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class Agent:
+    def __init__(self, connector:str):
+        #Initialisation du connecteur LLM
+        if connector=="LiteLLM":
+            self._connector = LiteLLM()
+        else:
+            Logger.write(f"[AGENT] LLM connector {connector} not supported.", type=ERROR)
+            raise Exception(f"LLM connector {connector} not supported.")
+        
+        #Prompt systeme
+        self._system   = Config.get(key="SYSTEM_PROMPT")
+
+        # Historique des conversations : session_id -> liste de messages {role, content}
+        self._sessions: dict[str, list[dict]] = {}
+        self._MAX_TOOL_ITERATIONS = Config.get(key="MAX_TOOL_ITERATIONS")
+
+        Logger.write("[AGENT] MCP agent initialized", type=OK)
+
+    def _get_history(self, session_id: Optional[str]) -> list[dict]:
+        if not session_id:
+            return []
+        return self._sessions.get(session_id, [])
+
+    def _save_history(self, session_id: Optional[str], history: list[dict]) -> None:
+        if session_id:
+            self._sessions[session_id] = history
+
+    """
+    Gestion d'une connexion SSE (correspondant à une requête client)
+    """
+    async def chatStream(self, message: str, authorization: dict, session_id: Optional[str] = None) -> AsyncGenerator[str, None]:
+        try:
+            history = self._get_history(session_id)
+
+            messages = [
+                {"role": "system", "content": self._system},
+                *history,
+                {"role": "user",   "content": message},
+            ]
+
+            Logger.write("[AGENT] Call LLM...", type=WARNING)
+            # ----------------------------------------------------------------
+            # ÉTAPE 1 — Appel non streamé pour détecter les tool calls
+            # ----------------------------------------------------------------
+            try:
+                response = await self._connector.callLLM(messages=messages, stream=False)
+                if not response.choices:
+                    raise ValueError("Empty LLM answer")
+                assistant_msg = response.choices[0].message
+            except Exception as e:
+                Logger.write(f"[AGENT] LLM call failure : {str(e)}", type=ERROR)
+                yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
+                yield DoneEvent.get()
+                return
+
+            Logger.write("[AGENT] Call LLM OK !", type=OK)
+
+            # ----------------------------------------------------------------
+            # ÉTAPE 2 — Boucle de résolution des tool calls
+            # ----------------------------------------------------------------
+            iteration = 0
+            while assistant_msg.tool_calls:
+                iteration += 1
+                if iteration > self._MAX_TOOL_ITERATIONS:
+                    Logger.write("[AGENT] Too many consecutive tool calls", type=ERROR)
+                    yield ErrorEvent.get(
+                        error_code="MCP_TOOL_LIMIT_EXCEEDED",
+                        message="Too many consecutive tool calls",
+                        details=f"Limit : {self._MAX_TOOL_ITERATIONS} calls",
+                    )
+                    yield DoneEvent.get()
+                    return
+
+                messages.append({
+                    "role": "assistant",
+                    "content": assistant_msg.content or "",
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        }
+                        for tc in assistant_msg.tool_calls
+                    ],
+                })
+
+                for tc in assistant_msg.tool_calls:
+                    Logger.write(f"[AGENT] Call MCP tool {tc.function.name}...", type=WARNING)
+                    yield ToolEvent.get(tool_name=tc.function.name, status="PENDING")
+                    try:
+                        args = json.loads(tc.function.arguments)
+                        result_text, tool_events = await mcp_manager.call_tool(tc.function.name, args)
+                    except MCPToolError as e:
+                        error_detail = str(e)
+                        Logger.write(f"[AGENT] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
+                        yield ToolEvent.get(tool_name=tc.function.name, status="ERROR", message=error_detail)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": f"Tool call failed: {error_detail}",
+                        })
+                        continue
+                    except Exception as e:
+                        error_detail = str(e)
+                        Logger.write(f"[AGENT] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
+                        yield ToolEvent.get(tool_name=tc.function.name, status="ERROR", message=error_detail)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": f"Tool call failed: {error_detail}",
+                        })
+                        continue
+
+                    Logger.write(f"[AGENT] Call MCP tool {tc.function.name} OK !", type=OK)
+                    yield ToolEvent.get(tool_name=tc.function.name, status="OK")
+
+                    for event in tool_events:
+                        yield event
+
+                    # Interception des actions spéciales — le LLM n'est pas rappelé
+                    #TODO
+  
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result_text,
+                    })
+
+
+                Logger.write("[AGENT] Call LLM...", type=WARNING)
+                try:
+                    response = await self._connector.callLLM(messages=messages, stream=False)
+                    if not response.choices:
+                        raise ValueError("Empty LLM answer")
+                    assistant_msg = response.choices[0].message
+                except Exception as e:
+                    Logger.write(f"[AGENT] LLM call failure (iteration {str(iteration)}) : {str(e)}", type=ERROR)
+                    yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
+                    yield DoneEvent.get()
+                    return
+                Logger.write("[AGENT] Call LLM OK !", type=OK)
+
+            # ----------------------------------------------------------------
+            # ÉTAPE 3 — Réponse finale streamée token par token
+            # ----------------------------------------------------------------
+            Logger.write("[AGENT] Call LLM for final answer...", type=WARNING)
+            assistant_reply_tokens = []
+            try:
+                async for chunk in await self._connector.callLLM(messages=messages, stream=True):
+                    token = chunk.choices[0].delta.content
+                    if token:
+                        assistant_reply_tokens.append(token)
+                        yield TokenEvent.get(token=token)
+            except Exception as e:
+                Logger.write(f"[AGENT] LLM streaming error : {str(e)}", type=ERROR)
+                yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM streaming error", details=str(e))
+                yield DoneEvent.get()
+                return
+
+            Logger.write("[AGENT] Call LLM for final answer OK !", type=OK)
+
+            assistant_reply = "".join(assistant_reply_tokens)
+            new_history = history + [
+                {"role": "user",      "content": message},
+                {"role": "assistant", "content": assistant_reply},
+            ]
+            self._save_history(session_id, new_history)
+
+            yield DoneEvent.get()
+        except Exception as e:
+            Logger.write(f"[AGENT] Unexpected error : {str(e)}", type=ERROR)
+            yield ErrorEvent.get(error_code="UNEXPECTED", message="Unexpected error", details=str(e))
+            yield DoneEvent.get()
+

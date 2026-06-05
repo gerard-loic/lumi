@@ -1,0 +1,16 @@
+.venv
+.env
+temp/*
+!temp/.gitkeep
+tools/*
+!tools/.gitkeep
+!tools/excel.py
+logs/*
+!logs/.gitkeep
+services/*
+!services/lumepackapi.py
+!services/postgresql.py
+config/*
+!config/.gitkeep
+!config/config.default.json
+__pycache__

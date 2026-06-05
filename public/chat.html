@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chatbot Extranet</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f0f0f;
+      --surface:   #1a1a1a;
+      --border:    #2a2a2a;
+      --accent:    #00e5a0;
+      --accent-dim:#00e5a020;
+      --text:      #e8e8e8;
+      --muted:     #666;
+      --user-bg:   #1e2a24;
+      --bot-bg:    #1a1a1a;
+      --api:       http://localhost:8000;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 15px;
+    }
+
+    /* ── Layout ── */
+    .app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: 780px;
+      margin: 0 auto;
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    header h1 {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .model-badge {
+      margin-left: auto;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    /* ── Messages ── */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      scroll-behavior: smooth;
+    }
+
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── Message bubble ── */
+    .message {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user  { align-items: flex-end; }
+    .message.bot   { align-items: flex-start; }
+
+    .role {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 4px;
+    }
+    .message.user .role { color: var(--accent); opacity: 0.7; }
+
+    .bubble {
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 8px;
+      line-height: 1.6;
+      font-weight: 300;
+      border: 1px solid transparent;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .message.user .bubble {
+      background: var(--user-bg);
+      border-color: #00e5a030;
+      font-weight: 400;
+    }
+
+    .message.bot .bubble {
+      background: var(--bot-bg);
+      border-color: var(--border);
+    }
+
+    /* ── Tool call indicator ── */
+    .tool-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border: 1px solid #00e5a040;
+      padding: 4px 10px;
+      border-radius: 4px;
+      margin-bottom: 4px;
+      align-self: flex-start;
+    }
+    .tool-indicator::before {
+      content: '⚙';
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    .tool-indicator.done::before {
+      content: '✓';
+      animation: none;
+    }
+    .tool-indicator.error::before {
+      content: '✗';
+      animation: none;
+    }
+    .tool-indicator.error {
+      color: #ff6b6b;
+      background: #ff4d4d10;
+      border-color: #ff4d4d40;
+    }
+
+    /* ── Resource attachment (file / url) ── */
+    .resource-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 5px 10px;
+      border-radius: 4px;
+      text-decoration: none;
+      margin-top: 6px;
+      max-width: 85%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      align-self: flex-start;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    .resource-attachment:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .resource-attachment.type-file::before { content: '⊟  '; opacity: 0.6; }
+    .resource-attachment.type-url::before  { content: '↗  '; opacity: 0.6; }
+
+    /* ── Cursor clignotant pendant stream ── */
+    .cursor {
+      display: inline-block;
+      width: 7px; height: 14px;
+      background: var(--accent);
+      margin-left: 2px;
+      vertical-align: middle;
+      animation: blink 0.8s step-end infinite;
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    /* ── Input zone ── */
+    .input-zone {
+      padding: 16px 24px 20px;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    textarea {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 15px;
+      font-weight: 300;
+      padding: 12px 14px;
+      resize: none;
+      min-height: 46px;
+      max-height: 140px;
+      line-height: 1.5;
+      outline: none;
+      transition: border-color 0.2s;
+      overflow-y: auto;
+    }
+    textarea::placeholder { color: var(--muted); }
+    textarea:focus { border-color: #00e5a050; }
+
+    button#send {
+      width: 46px; height: 46px;
+      flex-shrink: 0;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.2s, transform 0.1s;
+      color: #000;
+    }
+    button#send:hover  { opacity: 0.85; }
+    button#send:active { transform: scale(0.95); }
+    button#send:disabled { opacity: 0.3; cursor: not-allowed; }
+    button#send svg { width: 18px; height: 18px; }
+
+    /* ── Hint raccourci ── */
+    .hint {
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    /* ── Auth modal ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+    .modal-overlay.hidden { display: none; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px 32px;
+      width: 480px;
+      max-width: calc(100vw - 40px);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .modal-header h2 {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--accent);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .modal-desc {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .modal textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      padding: 12px 14px;
+      resize: vertical;
+      min-height: 120px;
+      outline: none;
+      transition: border-color 0.2s;
+      line-height: 1.5;
+    }
+    .modal textarea:focus { border-color: #00e5a050; }
+
+    .modal-error {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      color: #ff6b6b;
+      min-height: 16px;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 22px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-primary:hover    { opacity: 0.85; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Empty state ── */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      color: var(--muted);
+      text-align: center;
+      padding: 40px;
+    }
+    .empty-state .icon {
+      font-size: 36px;
+      opacity: 0.3;
+    }
+    .empty-state p {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .suggestions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .suggestion {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--text);
+      text-align: left;
+      transition: border-color 0.2s, color 0.2s;
+      font-family: 'IBM Plex Sans', sans-serif;
+    }
+    .suggestion:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Auth modal ── -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="dot"></div>
+      <h2>Authentification</h2>
+    </div>
+    <p class="modal-desc">Renseignez le body de connexion en JSON :</p>
+    <textarea id="authBody" spellcheck="false">{
+  "authorization": {
+    "token": ""
+  }
+}</textarea>
+    <div class="modal-error" id="authError"></div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="authBtn" onclick="authenticate()">Se connecter</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+
+  <header>
+    <div class="dot"></div>
+    <h1>Extranet — Assistant</h1>
+    <span class="model-badge" id="modelBadge">llama3.1:8b</span>
+  </header>
+
+  <div class="messages" id="messages">
+    <div class="empty-state" id="emptyState">
+      <div class="icon">⬡</div>
+      <p>Posez une question sur vos commandes ou vos produits.</p>
+      <div class="suggestions">
+        <button class="suggestion" onclick="fillSuggestion(this)">Où en est ma commande 4521 ?</button>
+        <button class="suggestion" onclick="fillSuggestion(this)">Quel est le prix du produit REF-002 ?</button>
+        <button class="suggestion" onclick="fillSuggestion(this)">Est-ce que le REF-003 est en stock ?</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-zone">
+    <div class="input-row">
+      <textarea
+        id="input"
+        placeholder="Posez votre question…"
+        rows="1"
+        autofocus
+      ></textarea>
+      <button id="send" onclick="sendMessage()" title="Envoyer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+    <div class="hint">Entrée pour envoyer · Maj+Entrée pour un saut de ligne</div>
+  </div>
+
+</div>
+
+<script>
+  // ── Config ──────────────────────────────────────────────────────
+  const BASE_URL   = "http://127.0.0.1:8001";
+  const API_URL    = BASE_URL + "/chat";
+  const AUTH_URL   = BASE_URL + "/auth";
+
+  const min = 10000000;
+  const max = 99999999;
+  const session_id = "SESS" + (Math.random() * (max - min) + min);
+
+  let authToken = null;
+
+  // ── Éléments DOM ────────────────────────────────────────────────
+  const messagesEl  = document.getElementById("messages");
+  const inputEl     = document.getElementById("input");
+  const sendBtn     = document.getElementById("send");
+  const emptyState  = document.getElementById("emptyState");
+  const authModal   = document.getElementById("authModal");
+  const authBodyEl  = document.getElementById("authBody");
+  const authErrorEl = document.getElementById("authError");
+  const authBtn     = document.getElementById("authBtn");
+
+  // ── Authentification ─────────────────────────────────────────────
+  async function authenticate() {
+    authErrorEl.textContent = "";
+    authBtn.disabled = true;
+
+    let body;
+    try {
+      body = JSON.parse(authBodyEl.value);
+    } catch {
+      authErrorEl.textContent = "JSON invalide.";
+      authBtn.disabled = false;
+      return;
+    }
+
+    try {
+      const resp = await fetch(AUTH_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const detail = await resp.json().catch(() => ({}));
+        authErrorEl.textContent = detail.detail || `Erreur ${resp.status}`;
+        authBtn.disabled = false;
+        return;
+      }
+
+      const data = await resp.json();
+      authToken = data.token;
+      authModal.classList.add("hidden");
+      inputEl.focus();
+    } catch (err) {
+      authErrorEl.textContent = `Erreur réseau : ${err.message}`;
+      authBtn.disabled = false;
+    }
+  }
+
+  // Soumettre la modale avec Entrée dans le textarea
+  authBodyEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.ctrlKey) {
+      e.preventDefault();
+      authenticate();
+    }
+  });
+
+  // ── Auto-resize textarea ─────────────────────────────────────────
+  inputEl.addEventListener("input", () => {
+    inputEl.style.height = "auto";
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + "px";
+  });
+
+  // ── Entrée pour envoyer, Maj+Entrée pour saut de ligne ──────────
+  inputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  // ── Suggestions ──────────────────────────────────────────────────
+  function fillSuggestion(btn) {
+    inputEl.value = btn.textContent.trim();
+    inputEl.focus();
+  }
+
+  // ── Ajouter un message utilisateur ───────────────────────────────
+  function addUserMessage(text) {
+    if (emptyState) emptyState.remove();
+
+    const msg = document.createElement("div");
+    msg.className = "message user";
+    msg.innerHTML = `
+      <div class="role">Vous</div>
+      <div class="bubble">${escapeHtml(text)}</div>
+    `;
+    messagesEl.appendChild(msg);
+    scrollBottom();
+  }
+
+  // ── Créer un message bot vide (retourner refs pour le remplir) ───
+  function addBotMessage() {
+    const msg = document.createElement("div");
+    msg.className = "message bot";
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+
+    const textNode  = document.createTextNode("");
+    const cursor    = document.createElement("span");
+    cursor.className = "cursor";
+
+    bubble.appendChild(textNode);
+    bubble.appendChild(cursor);
+    msg.innerHTML = '<div class="role">Assistant</div>';
+    msg.appendChild(bubble);
+    messagesEl.appendChild(msg);
+    scrollBottom();
+
+    return { bubble, textNode, cursor, msg };
+  }
+
+  // ── Ajouter un indicateur d'outil (au-dessus de la bubble) ──────
+  function addToolIndicator(msg, bubble, toolName) {
+    const el = document.createElement("div");
+    el.className = "tool-indicator";
+    el.textContent = ` Appel : ${toolName}`;
+    msg.insertBefore(el, bubble);
+    return el;
+  }
+
+  // ── Ajouter une ressource jointe (file / url) ─────────────────────
+  function addResource(msg, event) {
+    const isFile = event.type === "file";
+    const el = document.createElement(event.url ? "a" : "span");
+    el.className = "resource-attachment " + (isFile ? "type-file" : "type-url");
+    if (event.url) {
+      el.href = event.url;
+      el.target = "_blank";
+      el.rel = "noopener noreferrer";
+    }
+    el.textContent = escapeHtml(event.name || event.path || event.url || "Ressource");
+    msg.appendChild(el);
+    return el;
+  }
+
+  // ── Envoi du message ─────────────────────────────────────────────
+  async function sendMessage() {
+    const text = inputEl.value.trim();
+    if (!text || sendBtn.disabled || !authToken) return;
+
+    // Reset input
+    inputEl.value = "";
+    inputEl.style.height = "auto";
+    sendBtn.disabled = true;
+
+    addUserMessage(text);
+    const { bubble, textNode, cursor, msg } = addBotMessage();
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": authToken,
+        },
+        body: JSON.stringify({ message: text, session_id: session_id }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const reader  = response.body.getReader();
+      const decoder = new TextDecoder();
+      let   buffer  = "";
+      const toolIndicators = new Map(); // tool_name -> element
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop(); // garder le fragment incomplet
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+
+          const raw = line.slice(6).trim();
+          if (raw === "[DONE]") {
+            cursor.remove();
+            break;
+          }
+
+          let event;
+          try { event = JSON.parse(raw); }
+          catch { continue; }
+
+          if (event.type === "token") {
+            textNode.textContent += event.content;
+            scrollBottom();
+
+          } else if (event.type === "tool_call") {
+            if (event.status === "PENDING") {
+              const el = addToolIndicator(msg, bubble, event.tools);
+              toolIndicators.set(event.tools, el);
+            } else if (event.status === "OK") {
+              const el = toolIndicators.get(event.tools);
+              if (el) el.classList.add("done");
+            } else if (event.status === "ERROR") {
+              const el = toolIndicators.get(event.tools);
+              if (el) el.classList.add("error");
+            }
+            scrollBottom();
+
+          } else if (event.type === "file" || event.type === "url") {
+            addResource(msg, event);
+            scrollBottom();
+
+          } else if (event.type === "error") {
+            cursor.remove();
+            if (!textNode.textContent) {
+              textNode.textContent = event.message || "Une erreur est survenue.";
+              bubble.style.borderColor = "#ff4d4d40";
+              bubble.style.color = "#ff6b6b";
+            }
+            scrollBottom();
+
+          } else if (event.type === "end") {
+            cursor.remove();
+          }
+        }
+      }
+
+    } catch (err) {
+      cursor.remove();
+      textNode.textContent = `Erreur : ${err.message}`;
+      bubble.style.borderColor = "#ff4d4d40";
+      bubble.style.color = "#ff6b6b";
+    }
+
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────
+  function scrollBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+</script>
+</body>
+</html>

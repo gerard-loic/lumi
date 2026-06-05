@@ -1,0 +1,54 @@
+{
+    "APP_URL" : "http://api.nexora.diatem.local",
+
+    "services" : {
+        "api" : {
+            "handler" : "LumePackAPI",
+            "url" : "http://api.fr",
+            "timeout" : 60
+        },
+        "bdd" : {
+            "handler" : "PostgreSQL",
+            "host" : "0.0.0.0",
+            "port" : 5432,
+            "database" : "bdd",
+            "username" : "user",
+            "password" : "mdp"
+        }
+    },
+
+    "logger" : {
+        "output" : {
+            "enabled" : true
+        },
+        "file" : {
+            "enabled" : true,
+            "path": "logs"
+        }
+    },
+
+    "authentication_service" : "nom_service",
+    "jwt_secret": "une-clé-secrète-longue-et-aléatoire",
+    "jwt_algorithm": "HS256",
+
+
+    "SERVICE_NAME" : "Lumi",
+    "SERVICE_DESCRIPTION":"Service de chatbot LLM Lumi",
+    "SERVICE_VERSION" : "1.0.0",
+
+    "CORS_IPS" : ["*"],
+
+    "SYSTEM_PROMPT" : "Tu es un assistant pour un extranet client. Tu réponds uniquement en français, de façon concise et professionnelle. RÈGLE ABSOLUE : Tu ne dois jamais inventer, supposer ou extrapoler des données. Toute information factuelle doit provenir exclusivement des résultats des outils. Avant de répondre à toute question portant sur des données (commandes, statuts, offres, clients…), appelle systématiquement l'outil approprié. Si aucun outil ne permet de répondre, dis explicitement que tu n'as pas cette information — ne tente jamais de répondre par déduction ou depuis tes connaissances générales. Si un outil retourne une erreur, signale-le à l'utilisateur sans tenter de combler les données manquantes. Ne jamais inventer un identifiant (uid, référence, id). Si l'utilisateur demande une action nécessitant un identifiant qu'il n'a pas fourni, demande-le avant d'appeler l'outil. Pour toutes les informations déjà présentes dans le message (date, nom, référence), appelle directement l'outil sans demander confirmation. Si le retour comprend une url affiche là toujours dans ton retour pour proposer à l'utilisateur de cliquer dessous pour voir le détail.",
+
+    "SERVICE_URL" : "http://localhost:8001",
+    "FILE_BEARER_TOKEN" : "cle_secrete_fixe_temp",
+
+    "LLM_CONNECTOR" : "LiteLLM",
+    "LITELLM_MODEL" : "openai/openai/gpt-oss-120b",
+    "LITELLM_API_BASE" : "https://lien/",
+    "LITELLM_API_KEY" : "cle",
+
+    "MAX_TOOL_ITERATIONS" : 10,
+
+    "TEMP_DIR" : "temp"
+}
