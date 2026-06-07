@@ -3,6 +3,16 @@ import inspect
 import importlib.util
 from mcp.server.fastmcp import FastMCP
 
+
+def slow_tool(message: str = ""):
+    """Décorateur signalant qu'un outil peut être lent à s'exécuter."""
+    def decorator(func):
+        func.__slow_tool__ = True
+        func.__slow_tool_message__ = message
+        return func
+    return decorator
+
+
 """
 MCPTool — classe parente outil MCP
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
@@ -10,12 +20,17 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 class MCPTool:
     name: str = ""
     description: str = ""
+    _registry: dict = {}
 
     def __init__(self):
         self._events: list = []
 
     def emit(self, event) -> None:
         self._events.append(event)
+
+    @classmethod
+    def get_meta(cls, tool_name: str) -> dict:
+        return cls._registry.get(tool_name, {})
 
     @classmethod
     def get_tools(cls) -> list:
@@ -44,6 +59,11 @@ class MCPTool:
         wrapper.__module__ = method.__module__
         wrapper.__annotations__ = {k: v for k, v in method.__annotations__.items() if k not in ("self", "return")}
         wrapper.__signature__ = new_sig
+
+        MCPTool._registry[method.__name__] = {
+            "slow": getattr(method, "__slow_tool__", False),
+            "slow_message": getattr(method, "__slow_tool_message__", ""),
+        }
 
         return wrapper
 

@@ -1,6 +1,7 @@
 import json
 from typing import AsyncGenerator, Optional
 from lib.mcp.client import mcp_manager, MCPToolError
+from lib.mcp.tools import MCPTool
 from lib.config.config import Config
 from lib.agent.llmconnector.litellm import LiteLLM
 from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent
@@ -105,7 +106,8 @@ class Agent:
 
                 for tc in assistant_msg.tool_calls:
                     Logger.write(f"[AGENT] Call MCP tool {tc.function.name}...", type=WARNING)
-                    yield ToolEvent.get(tool_name=tc.function.name, status="PENDING")
+                    meta = MCPTool.get_meta(tc.function.name)
+                    yield ToolEvent.get(tool_name=tc.function.name, status="PENDING", long_call=meta.get("slow", False), message=meta.get("slow_message", ""))
                     try:
                         args = json.loads(tc.function.arguments)
                         result_text, tool_events = await mcp_manager.call_tool(tc.function.name, args)
