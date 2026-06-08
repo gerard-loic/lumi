@@ -48,10 +48,16 @@ class MCPTool:
         params_no_self = [p for p in sig.parameters.values() if p.name != "self"]
         new_sig = sig.replace(parameters=params_no_self, return_annotation=inspect.Parameter.empty)
 
-        def wrapper(*args, **kwargs):
-            instance = cls()
-            result = method(instance, *args, **kwargs)
-            return {"result": result, "events": instance._events}
+        if inspect.iscoroutinefunction(method):
+            async def wrapper(*args, **kwargs):
+                instance = cls()
+                result = await method(instance, *args, **kwargs)
+                return {"result": result, "events": instance._events}
+        else:
+            def wrapper(*args, **kwargs):
+                instance = cls()
+                result = method(instance, *args, **kwargs)
+                return {"result": result, "events": instance._events}
 
         wrapper.__name__ = method.__name__
         wrapper.__qualname__ = method.__qualname__

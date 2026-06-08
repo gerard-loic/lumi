@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Header
 from fastapi.responses import StreamingResponse, FileResponse
 from pathlib import Path
 
-from lib.http.models import ChatRequest, ToolInfo, AuthRequest
+from lib.http.models import ChatRequest, ToolInfo, AuthRequest, IndexRequest
 from lib.http.auth import Auth
 from lib.mcp.client import mcp_manager
 from lib.mcp.services import ServiceManager
@@ -22,6 +22,8 @@ class Router:
         self.router.add_api_route("/chat", self.chat, methods=["POST"])
         self.router.add_api_route("/files/{key}/{filename}", self.get_file, methods=["GET"])
         self.router.add_api_route("/auth", self.auth, methods=["POST"])
+        self.router.add_api_route("/rag/documents", self.rag_index, methods=["POST"])
+        self.router.add_api_route("/rag/collections/{collection}", self.rag_delete_collection, methods=["DELETE"])
 
     """
     Route [GET] /health : renvoie l'état de santé du service
@@ -109,3 +111,30 @@ class Router:
             Logger.write(f"[HTTP] [403] auth — Unauthorized", type=ERROR)
             raise HTTPException(status_code=403, detail="Unauthorized")
         return {"token": token}
+
+    """
+    Route [POST] /rag/documents : Indexe un document dans la base de connaissances
+    """
+    async def rag_index(self, request: IndexRequest):
+        from lib.rag.indexer import Indexer
+        try:
+            indexer = Indexer(collection=request.collection)
+            metadata = {"source": request.source} if request.source else {}
+            count = await indexer.index_text(request.text, metadata=metadata)
+            return {"chunks_indexed": count, "collection": indexer._collection}
+        except Exception as e:
+            Logger.write(f"[HTTP] [500] rag_index — {str(e)}", type=ERROR)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    """
+    Route [DELETE] /rag/collections/{collection} : Supprime tous les documents d'une collection
+    """
+    async def rag_delete_collection(self, collection: str):
+        from lib.rag.indexer import Indexer
+        try:
+            indexer = Indexer(collection=collection)
+            deleted = await indexer.delete_collection(collection)
+            return {"deleted_chunks": deleted, "collection": collection}
+        except Exception as e:
+            Logger.write(f"[HTTP] [500] rag_delete_collection — {str(e)}", type=ERROR)
+            raise HTTPException(status_code=500, detail=str(e))

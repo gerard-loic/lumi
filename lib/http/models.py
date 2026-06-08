@@ -23,3 +23,12 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class AuthRequest(BaseModel):
     authorization: dict
+
+"""
+IndexRequest — Format requête HTTP indexation RAG
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class IndexRequest(BaseModel):
+    text: str
+    source: Optional[str] = None
+    collection: Optional[str] = None

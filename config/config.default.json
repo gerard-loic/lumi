@@ -50,5 +50,12 @@
 
     "MAX_TOOL_ITERATIONS" : 10,
 
-    "TEMP_DIR" : "temp"
+    "TEMP_DIR" : "temp",
+
+    "LITELLM_EMBEDDING_MODEL" : "openai/text-embedding-3-small",
+    "RAG_COLLECTION"          : "default",
+    "RAG_EMBEDDING_DIM"       : 1536,
+    "RAG_TOP_K"               : 5,
+    "RAG_CHUNK_SIZE"          : 500,
+    "RAG_CHUNK_OVERLAP"       : 50
 }
