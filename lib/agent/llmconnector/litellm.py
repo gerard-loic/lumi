@@ -25,3 +25,23 @@ class LiteLLM:
         )
         return response
     
+
+"""
+Embedder — Génération de vecteurs d'embedding via LiteLLM
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class LiteLLMEmbedder:
+    def __init__(self):
+        self._model    = Config.get("LITELLM_EMBEDDING_MODEL")
+        self._api_base = Config.get("LITELLM_API_BASE")
+        self._api_key  = Config.get("LITELLM_API_KEY")
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        response = await litellm.aembedding(
+            model=self._model,
+            input=texts,
+            api_base=self._api_base,
+            api_key=self._api_key,
+        )
+        return [item["embedding"] for item in response.data]
+

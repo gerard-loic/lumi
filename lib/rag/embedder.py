@@ -1,18 +1,19 @@
-import litellm
 from lib.config.config import Config
+from lib.agent.llmconnector.litellm import LiteLLMEmbedder
+from lib.log.logger import Logger, ERROR
 
-
+"""
+Embedder — Génération de vecteurs d'embedding
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class Embedder:
     def __init__(self):
-        self._model    = Config.get("LITELLM_EMBEDDING_MODEL")
-        self._api_base = Config.get("LITELLM_API_BASE")
-        self._api_key  = Config.get("LITELLM_API_KEY")
+        model_connector = Config.get("LLM_CONNECTOR")
+        if model_connector == "LiteLLM":
+            self.embedder = LiteLLMEmbedder()
+        else:
+            Logger.write(text=f"LLM connector {model_connector} not supported", type=ERROR)
+            raise Exception(f"LLM connector {model_connector} not supported")
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        response = await litellm.aembedding(
-            model=self._model,
-            input=texts,
-            api_base=self._api_base,
-            api_key=self._api_key,
-        )
-        return [item["embedding"] for item in response.data]
+        return await self.embedder.embed(texts=texts)

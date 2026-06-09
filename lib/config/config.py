@@ -25,3 +25,11 @@ class Config:
             Config.conf = json.load(f)
 
 
+class StaticConfig:
+    @staticmethod
+    def version():
+        return "1.1.0"
+    
+    @staticmethod
+    def versionName():
+        return "Sense"

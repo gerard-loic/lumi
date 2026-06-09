@@ -53,6 +53,7 @@
     "TEMP_DIR" : "temp",
 
     "LITELLM_EMBEDDING_MODEL" : "openai/text-embedding-3-small",
+    "RAG_RETURN_SOURCES"      : true,
     "RAG_COLLECTION"          : "default",
     "RAG_EMBEDDING_DIM"       : 1536,
     "RAG_TOP_K"               : 5,

@@ -22,7 +22,7 @@ from lib.http.router import Router
 
 import sys
 sys.path.append('lib/')
-from lib.config.config import Config
+from lib.config.config import Config, StaticConfig
 from lib.log.logger import Logger, WARNING
 from lib.agent.agent import Agent
 from lib.mcp.services import ServiceManager
@@ -39,7 +39,7 @@ Logger.init(configuration=Config.get(key="logger"))
 
 print("###############################################################################")
 print('# LUMI - IA agent with MCP toolkit')
-print(f"# Version {Config.get(key="SERVICE_VERSION")}")
+print(f"# Version {StaticConfig.version()} ({StaticConfig.versionName()})")
 print("###############################################################################")
 
 # ----------------------------------------------------------------
@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=Config.get(key="SERVICE_NAME"),
     description=Config.get(key="SERVICE_DESCRIPTION"),
-    version=Config.get(key="SERVICE_VERSION"),
+    version=f"{StaticConfig.version()} ({StaticConfig.versionName()})",
     lifespan=lifespan,
 )
 

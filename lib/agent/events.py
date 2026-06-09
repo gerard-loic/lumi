@@ -70,3 +70,8 @@ class UrlEvent:
     @staticmethod
     def get(name:str, url:str):
         return Event.get(eventType="url", payload={"name": name, "url": url})
+
+class RagEvent:
+    @staticmethod
+    def get(source:str, locations:list = []):
+        return Event.get(eventType="rag", payload={"source":source, "locations":locations})

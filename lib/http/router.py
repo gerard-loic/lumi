@@ -1,12 +1,16 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, FileResponse
 from pathlib import Path
+from typing import Optional
 
-from lib.http.models import ChatRequest, ToolInfo, AuthRequest, IndexRequest
+from lib.http.models import ChatRequest, ToolInfo, AuthRequest
+
 from lib.http.auth import Auth
 from lib.mcp.client import mcp_manager
 from lib.mcp.services import ServiceManager
 from lib.log.logger import Logger, ERROR
+from lib.config.config import StaticConfig
+from lib.rag.raghelper import RagHelper
 
 """
 Router — Routeur endpoints serveur API
@@ -23,7 +27,10 @@ class Router:
         self.router.add_api_route("/files/{key}/{filename}", self.get_file, methods=["GET"])
         self.router.add_api_route("/auth", self.auth, methods=["POST"])
         self.router.add_api_route("/rag/documents", self.rag_index, methods=["POST"])
+        self.router.add_api_route("/rag/documents", self.rag_update, methods=["PUT"])
+        self.router.add_api_route("/rag/stats", self.rag_stats, methods=["GET"])
         self.router.add_api_route("/rag/collections/{collection}", self.rag_delete_collection, methods=["DELETE"])
+        self.router.add_api_route("/rag/collections/{collection}/documents/{source:path}", self.rag_delete_document, methods=["DELETE"])
 
     """
     Route [GET] /health : renvoie l'état de santé du service
@@ -31,7 +38,9 @@ class Router:
     async def health(self):
         out = {
             "status" : "ok",
-            "services" : []
+            "services" : [],
+            "version" : StaticConfig.version(),
+            "version_name" : StaticConfig.versionName()
         }
         for name in ServiceManager.services:
             out["services"].append(name)
@@ -114,16 +123,75 @@ class Router:
 
     """
     Route [POST] /rag/documents : Indexe un document dans la base de connaissances
+    Accepte soit du texte brut (champ `text`), soit un fichier (champ `file`).
     """
-    async def rag_index(self, request: IndexRequest):
-        from lib.rag.indexer import Indexer
+    async def rag_index(
+        self,
+        text:       Optional[str]        = Form(default=None),
+        file:       Optional[UploadFile] = File(default=None),
+        source:     Optional[str]        = Form(default=None),
+        collection: Optional[str]        = Form(default=None),
+    ):
+        if not text and not file:
+            raise HTTPException(status_code=400, detail="Provide either 'text' or 'file'")
+
+        return await RagHelper.addDocument(
+            text=text,
+            file=file,
+            source=source,
+            collection=collection
+        )
+        
+
+    """
+    Route [PUT] /rag/documents : Met à jour un document existant identifié par son `source`
+    Supprime les chunks existants puis ré-indexe le nouveau contenu.
+    """
+    async def rag_update(
+        self,
+        source:     Optional[str]        = Form(default=None),
+        text:       Optional[str]        = Form(default=None),
+        file:       Optional[UploadFile] = File(default=None),
+        collection: Optional[str]        = Form(default=None),
+    ):
+        if not text and not file:
+            raise HTTPException(status_code=400, detail="Provide either 'text' or 'file'")
+
+        if not source and (not file or not file.filename):
+                raise HTTPException(status_code=400, detail="'source' is required to identify the document to update")
+
+        return await RagHelper.updateDocument(
+            text=text,
+            file=file,
+            source=source,
+            collection=collection
+        )
+
+    """
+    Route [GET] /rag/stats : Statistiques sur le contenu de la base vectorielle
+    """
+    async def rag_stats(self):
+        from lib.rag.vectorstore import VectorStore
         try:
-            indexer = Indexer(collection=request.collection)
-            metadata = {"source": request.source} if request.source else {}
-            count = await indexer.index_text(request.text, metadata=metadata)
-            return {"chunks_indexed": count, "collection": indexer._collection}
+            return await VectorStore.stats()
         except Exception as e:
-            Logger.write(f"[HTTP] [500] rag_index — {str(e)}", type=ERROR)
+            Logger.write(f"[HTTP] [500] rag_stats — {str(e)}", type=ERROR)
+            raise HTTPException(status_code=500, detail=str(e))
+
+    """
+    Route [DELETE] /rag/collections/{collection}/documents/{source} : Supprime un document par sa source
+    """
+    async def rag_delete_document(self, collection: str, source: str):
+        from lib.rag.vectorstore import VectorStore
+        try:
+            deleted = await VectorStore.deleteBySource(collection, source)
+            if deleted == 0:
+                raise HTTPException(status_code=404, detail=f"No document with source '{source}' in collection '{collection}'")
+            return {"deleted_chunks": deleted, "source": source, "collection": collection}
+        except HTTPException:
+            raise
+        except Exception as e:
+            Logger.write(f"[HTTP] [500] rag_delete_document — {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=str(e))
 
     """
@@ -133,7 +201,7 @@ class Router:
         from lib.rag.indexer import Indexer
         try:
             indexer = Indexer(collection=collection)
-            deleted = await indexer.delete_collection(collection)
+            deleted = await indexer.deleteCollection(collection)
             return {"deleted_chunks": deleted, "collection": collection}
         except Exception as e:
             Logger.write(f"[HTTP] [500] rag_delete_collection — {str(e)}", type=ERROR)

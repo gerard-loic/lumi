@@ -1,13 +1,26 @@
-from lib.rag.embedder import Embedder
+"""
+Retriever — Recherche sémantique dans le VectorStore
+
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+
 from lib.rag.vectorstore import VectorStore
 from lib.config.config import Config
+from lib.log.logger import Logger, ERROR
+from lib.agent.llmconnector.litellm import LiteLLMEmbedder
 
 
 class Retriever:
     def __init__(self, collection: str = None):
         self._collection = collection or Config.get("RAG_COLLECTION")
         self._top_k      = Config.get("RAG_TOP_K")
-        self._embedder   = Embedder()
+
+        model_connector = Config.get("LLM_CONNECTOR")
+        if model_connector == "LiteLLM":
+            self._embedder = LiteLLMEmbedder()
+        else:
+            Logger.write(text=f"LLM connector {model_connector} not supported", type=ERROR)
+            raise Exception(f"LLM connector {model_connector} not supported")
 
     async def search(self, query: str, top_k: int = None) -> list[dict]:
         embeddings = await self._embedder.embed([query])
