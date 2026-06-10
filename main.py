@@ -72,7 +72,7 @@ async def lifespan(app: FastAPI):
     #Gestion de la suppression des sessions et des fichiers temporaires
     cleaner = asyncio.create_task(_session_cleaner())
     async with mcp_manager.run():
-        lumi_router.agent = Agent(connector=Config.get(key="LLM_CONNECTOR"))
+        lumi_router.agent = Agent(connector=Config.get(key="llm.connector"))
         yield
     cleaner.cancel()
 
@@ -82,8 +82,8 @@ async def lifespan(app: FastAPI):
 # ----------------------------------------------------------------
 
 app = FastAPI(
-    title=Config.get(key="SERVICE_NAME"),
-    description=Config.get(key="SERVICE_DESCRIPTION"),
+    title=Config.get(key="app.name"),
+    description=Config.get(key="app.description"),
     version=f"{StaticConfig.version()} ({StaticConfig.versionName()})",
     lifespan=lifespan,
 )
@@ -91,9 +91,9 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=Config.get(key="CORS_IPS"),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=Config.get(key="app.allowed_cors_ips"),
+    allow_methods=Config.get(key="app.allowed_cors_methods"),
+    allow_headers=Config.get(key="app.allowed_cors_headers"),
 )
 
 app.include_router(lumi_router.router)

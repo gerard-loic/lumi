@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 """
 Session — Gestion du cycle de vie des sessions (authentification + historique LLM)
@@ -22,6 +23,7 @@ class AuthSession:
 
 class AuthSessionManager:
     _sessions: list['AuthSession'] = []
+    _confirmation_queues: dict[str, asyncio.Queue] = {}
 
     @staticmethod
     def add(session_id: str, expires_at: int, authentication: dict):
@@ -54,6 +56,23 @@ class AuthSessionManager:
     @staticmethod
     def count() -> int:
         return len(AuthSessionManager._sessions)
+
+    @staticmethod
+    async def wait_confirmation(session_id: str, timeout: int = 120) -> int:
+        queue = asyncio.Queue(maxsize=1)
+        AuthSessionManager._confirmation_queues[session_id] = queue
+        try:
+            return await asyncio.wait_for(queue.get(), timeout=timeout)
+        finally:
+            AuthSessionManager._confirmation_queues.pop(session_id, None)
+
+    @staticmethod
+    def resolve_confirmation(session_id: str, option: int) -> bool:
+        queue = AuthSessionManager._confirmation_queues.get(session_id)
+        if not queue:
+            return False
+        queue.put_nowait(option)
+        return True
 
     @staticmethod
     def clear(all: bool = False):

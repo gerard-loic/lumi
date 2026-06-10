@@ -20,7 +20,7 @@ class Auth:
     @staticmethod
     def authenticate(authorization: dict):
         #On récupère le service utilisé pour gérer l'authentification
-        auth_service = ServiceManager.get(name=Config.get(key="authentication_service"))
+        auth_service = ServiceManager.get(name=Config.get(key="authentication.service"))
         result = auth_service.checkAuthentication(authorization=authorization)
         if result:
             #On authentifie tous les services
@@ -77,8 +77,8 @@ class Auth:
 
     @staticmethod
     def _create_token(payload: dict, expires_in: int = 3600) -> str:
-        secret = Config.get(key="jwt_secret")
-        algorithm = Config.get(key="jwt_algorithm")
+        secret = Config.get(key="authentication.jwt_secret")
+        algorithm = Config.get(key="authentication.jwt_algorithm")
 
         payload["iat"] = datetime.now(tz=timezone.utc)
         payload["exp"] = datetime.now(tz=timezone.utc) + timedelta(seconds=expires_in)
@@ -87,8 +87,8 @@ class Auth:
 
     @staticmethod
     def _verify_token(token: str) -> dict:
-        secret = Config.get(key="jwt_secret")
-        algorithm = Config.get(key="jwt_algorithm")
+        secret = Config.get(key="authentication.jwt_secret")
+        algorithm = Config.get(key="authentication.jwt_algorithm")
 
         try:
             return jwt.decode(token, secret, algorithms=[algorithm])
@@ -105,7 +105,7 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 class AdminAuth:
     @staticmethod
     def checkAdminCredentials(username: str, password: str) -> bool:
-        users = Config.get("ADMIN_AUTHORIZED_USERS")
+        users = Config.get("app.admin_users")
         for user in users:
             u_ok = secrets.compare_digest(username.encode(), user["username"].encode())
             p_ok = secrets.compare_digest(password.encode(), user["password"].encode())

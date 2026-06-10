@@ -4,7 +4,8 @@ from lib.mcp.client import mcp_manager, MCPToolError
 from lib.mcp.tools import MCPTool
 from lib.config.config import Config
 from lib.agent.llmconnector.litellm import LiteLLM
-from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent
+from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent
+from lib.session.session import AuthSessionManager as _SessionManager
 from lib.log.logger import Logger, ERROR, OK, WARNING
 from lib.session.session import AuthSessionManager
 
@@ -26,9 +27,9 @@ class Agent:
             raise Exception(f"LLM connector {connector} not supported.")
         
         #Prompt systeme
-        self._system   = Config.get(key="SYSTEM_PROMPT")
+        self._system   = Config.get(key="llm.system_prompt")
 
-        self._MAX_TOOL_ITERATIONS = Config.get(key="MAX_TOOL_ITERATIONS")
+        self._MAX_TOOL_ITERATIONS = Config.get(key="mcp.max_tool_iterations")
 
         Logger.write("[AGENT] MCP agent initialized", type=OK)
 
@@ -100,6 +101,26 @@ class Agent:
                     description = meta.get("description", tc.function.name)
                     if description == False:
                         description = tc.function.name
+
+                    #Verifier si l'outil nécessite une confirmation préalable
+                    if meta.get("confirmation", False) and session_id:
+                        yield ConfirmationEvent.get(
+                            question=meta.get("confirmation_question", False),
+                            options=meta.get("confirmation_options", False)
+                        )
+                        try:
+                            answer = await _SessionManager.wait_confirmation(session_id)
+                        except Exception:
+                            answer = -1
+                        if answer != meta.get("confirmation_validation_option", -1):
+                            yield ConfirmationRefusedEvent.get()
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tc.id,
+                                "content": "Action cancelled by user.",
+                            })
+                            continue
+
                     yield ToolEvent.get(tool_name=tc.function.name, status="PENDING", long_call=meta.get("slow", False), message=description)
                     try:
                         args = json.loads(tc.function.arguments)

@@ -8,7 +8,7 @@ from lib.agent.events import FileEvent
 from lib.http.auth import Auth
 from lib.session.session import AuthSessionManager
 from lib.mcp.tools import MCPTool
-from lib.mcp.tools import native_tool
+from lib.mcp.tools import native_tool, confirmation_tool
 
 class FichierExcel(BaseModel):
     url: str = Field(description="URL de téléchargement du fichier Excel généré.")
@@ -19,6 +19,7 @@ class ExcelService(MCPTool):
     description = "Génération de fichiers Excel"
 
     @native_tool
+    @confirmation_tool(question="Je vais exporter le fichier. Dois-je continuer ?", options=["Oui", "Non"], validation_option=0)
     def generer_fichier_excel(
         self,
         donnees_csv: Annotated[

@@ -6,7 +6,7 @@
 - [x] Meilleure gestion des sessions et données en cache (dans Agent)
 - [ ] revoir fichier de configuration
 - [x] Gestion du traitement long
-- [ ] Gestion de la confirmation avant action
+- [x] Gestion de la confirmation avant action
 - [ ] Implémentation des traductions
 - [x] Implémenter RAG
 - [x] Implémenter pré-traitement RAG
@@ -27,6 +27,7 @@
 - [ ] Support OCR ?
 - [x] Sur les outils, retourner le nom de l'outil dans le message
 - [ ] bug botcore
+- [ ] option pour retourner les infos des documents
 
 Idées usages
 -> transcription de réunions manuscrites

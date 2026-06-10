@@ -29,6 +29,16 @@ def native_tool(func=None):
         return decorator(func)
     return decorator
 
+def confirmation_tool(question:str, options:list, validation_option:int):
+    """Décorateur permettant à l'outil de demander une confirmation avec execution"""
+    def decorator(f):
+        f.__tool_confirmation__ = True
+        f.__tool_confirmation_question__ = question
+        f.__tool_confirmation_options__ = options
+        f.__tool_confirmation_validation_option__ = validation_option
+        return f
+    return decorator
+
 """
 MCPTool — classe parente outil MCP
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
@@ -85,7 +95,11 @@ class MCPTool:
         MCPTool._registry[method.__name__] = {
             "slow": getattr(method, "__slow_tool__", False),
             "description": getattr(method, "__tool_description__", False),
-            "native" : getattr(method, "__native_tool__", False)
+            "native" : getattr(method, "__native_tool__", False),
+            "confirmation" : getattr(method, "__tool_confirmation__", False),
+            "confirmation_question" : getattr(method, "__tool_confirmation_question__", False),
+            "confirmation_options" : getattr(method, "__tool_confirmation_options__", False),
+            "confirmation_validation_option" : getattr(method, "__tool_confirmation_validation_option__", False)
         }
 
         return wrapper
@@ -126,7 +140,7 @@ class ToolLoader:
                     continue
                 if cls.__module__ != modulename:
                     continue
-                native_enabled = Config.get("NATIVE_TOOLS_ENABLED")
+                native_enabled = Config.get("mcp.native_tools_enabled")
                 for tool_fn in cls.get_tools():
                     meta = MCPTool.get_meta(tool_fn.__name__)
                     if meta.get("native") and tool_fn.__name__ not in native_enabled:

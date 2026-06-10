@@ -3,7 +3,7 @@ VectorStore : façade statique pour l'accès au store vectoriel RAG
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 
 Sélectionne et délègue dynamiquement les opérations au connecteur configuré
-via RAG_STORAGE_CONNECTOR (ex. PgVector). Expose les opérations de base :
+via rag.connector (ex. PgVector). Expose les opérations de base :
 création de table, insertion, recherche par similarité, statistiques, et
 gestion des sources/collections.
 """
@@ -22,7 +22,7 @@ class VectorStore:
 
     @staticmethod
     def _connect():
-        rag_connector = Config.get("RAG_STORAGE_CONNECTOR")
+        rag_connector = Config.get("rag.connector")
         if rag_connector == "PgVector":
             VectorStore._connector = PgVector
         else:

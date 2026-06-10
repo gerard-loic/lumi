@@ -75,3 +75,15 @@ class RagEvent:
     @staticmethod
     def get(source:str, locations:list = []):
         return Event.get(eventType="rag", payload={"source":source, "locations":locations})
+    
+
+
+class ConfirmationEvent:
+    @staticmethod
+    def get(question:str, options:list):
+        return Event.get(eventType="confirmation", payload={"question":question,"options":options})
+
+class ConfirmationRefusedEvent:
+    @staticmethod
+    def get():
+        return Event.get(eventType="confirmation_refused")

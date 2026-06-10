@@ -15,9 +15,12 @@ class Config:
         
     @staticmethod
     def get(key:str):
-        if key in Config.conf:
-            return Config.conf[key]
-        raise Exception(f"Config {key} does not exist")
+        node = Config.conf
+        for part in key.split("."):
+            if not isinstance(node, dict) or part not in node:
+                raise Exception(f"Config {key} does not exist")
+            node = node[part]
+        return node
 
     @staticmethod
     def _loadConfFile(file_path:str):

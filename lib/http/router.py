@@ -3,9 +3,10 @@ from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
 from typing import Optional
-from lib.http.models import ChatRequest, ToolInfo, AuthRequest
+from lib.http.models import ChatRequest, ToolInfo, AuthRequest, ConfirmationRequest
 
 from lib.http.auth import Auth, AdminAuth
+from lib.session.session import AuthSessionManager
 from lib.mcp.client import mcp_manager
 from lib.mcp.services import ServiceManager
 from lib.log.logger import Logger, ERROR
@@ -33,6 +34,7 @@ class Router:
         self.router.add_api_route("/rag/stats", self.rag_stats, methods=["GET"])
         self.router.add_api_route("/rag/collections/{collection}", self.rag_delete_collection, methods=["DELETE"])
         self.router.add_api_route("/rag/collections/{collection}/documents/{source:path}", self.rag_delete_document, methods=["DELETE"])
+        self.router.add_api_route("/confirm/{session_id}", self.confirm, methods=["POST"])
 
     """
     Route [GET] /health : renvoie l'état de santé du service
@@ -130,6 +132,24 @@ class Router:
             Logger.write(f"[HTTP] [403] auth — Unauthorized", type=ERROR)
             raise HTTPException(status_code=403, detail="Unauthorized")
         return {"token": token}
+
+    """
+    Route [POST] /confirm/{session_id} : Réponse de confirmation à un outil en attente
+    """
+    async def confirm(self, session_id: str, request: ConfirmationRequest, authorization: str | None = Header(default=None)):
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Authorization header is missing")
+        try:
+            decodedToken = Auth.checkAuthentification(token=authorization)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail="Internal authentification error")
+        if not decodedToken:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        resolved = AuthSessionManager.resolve_confirmation(session_id, request.option)
+        if not resolved:
+            raise HTTPException(status_code=404, detail="No pending confirmation for this session")
+        return {"status": "ok"}
 
     def _check_admin_auth(self, credentials: HTTPBasicCredentials) -> None:
         if not AdminAuth.checkAdminCredentials(credentials.username, credentials.password):

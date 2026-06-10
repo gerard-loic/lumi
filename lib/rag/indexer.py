@@ -41,9 +41,9 @@ Flux principal :
 class Indexer:
     def __init__(self, collection: str = None):
         #Collection utilisée. Par défaut celle dans la conf
-        self._collection    = collection or Config.get("RAG_COLLECTION")
-        self._chunk_size    = Config.get("RAG_CHUNK_SIZE") # taille maximale (en tokens ou caractères) de chaque morceau de texte
-        self._chunk_overlap = Config.get("RAG_CHUNK_OVERLAP") #nombre de tokens/caractères qui se chevauchent entre deux chunks consécutifs
+        self._collection    = collection or Config.get("rag.collection")
+        self._chunk_size    = Config.get("rag.chunk_size") # taille maximale (en tokens ou caractères) de chaque morceau de texte
+        self._chunk_overlap = Config.get("rag.chunk_overlap") #nombre de tokens/caractères qui se chevauchent entre deux chunks consécutifs
         self._embedder      = Embedder()
 
     # Indexation depuis texte brut

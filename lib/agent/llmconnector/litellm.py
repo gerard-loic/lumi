@@ -8,9 +8,9 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class LiteLLM:
     def __init__(self):
-        self._model    = Config.get(key="LITELLM_MODEL")
-        self._api_base = Config.get(key="LITELLM_API_BASE")
-        self._api_key  = Config.get(key="LITELLM_API_KEY")
+        self._model    = Config.get(key="llm.litellm.model")
+        self._api_base = Config.get(key="llm.litellm.api_base")
+        self._api_key  = Config.get(key="llm.litellm.api_key")
         self._tools    = mcp_manager.tools_as_openai_format()
         print(f"[Agent LiteLLM] {len(self._tools)} outil(s) chargé(s) : {[t['function']['name'] for t in self._tools]}")
 
@@ -32,9 +32,9 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class LiteLLMEmbedder:
     def __init__(self):
-        self._model    = Config.get("LITELLM_EMBEDDING_MODEL")
-        self._api_base = Config.get("LITELLM_API_BASE")
-        self._api_key  = Config.get("LITELLM_API_KEY")
+        self._model    = Config.get("llm.litellm.embedding_model")
+        self._api_base = Config.get("llm.litellm.api_base")
+        self._api_key  = Config.get("llm.litellm.api_key")
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         response = await litellm.aembedding(

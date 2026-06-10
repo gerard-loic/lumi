@@ -12,10 +12,10 @@ from lib.agent.llmconnector.litellm import LiteLLMEmbedder
 
 class Retriever:
     def __init__(self, collection: str = None):
-        self._collection = collection or Config.get("RAG_COLLECTION")
-        self._top_k      = Config.get("RAG_TOP_K")
+        self._collection = collection or Config.get("rag.collection")
+        self._top_k      = Config.get("rag.top_k")
 
-        model_connector = Config.get("LLM_CONNECTOR")
+        model_connector = Config.get("llm.connector")
         if model_connector == "LiteLLM":
             self._embedder = LiteLLMEmbedder()
         else:

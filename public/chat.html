@@ -372,6 +372,66 @@
     .btn-primary:hover    { opacity: 0.85; }
     .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    /* ── Confirmation card ── */
+    .confirmation-card {
+      background: var(--surface);
+      border: 1px solid #00e5a040;
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 85%;
+      margin-bottom: 4px;
+      align-self: flex-start;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .confirmation-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .confirmation-question {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .confirmation-options {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .confirmation-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 7px 16px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      color: var(--text);
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s, background 0.2s;
+    }
+    .confirmation-btn:hover:not(:disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .confirmation-btn.selected {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .confirmation-btn:disabled:not(.selected) {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
     /* ── Empty state ── */
     .empty-state {
       flex: 1;
@@ -611,6 +671,51 @@
     return el;
   }
 
+  // ── Ajouter une carte de confirmation ────────────────────────────
+  function addConfirmationCard(msg, bubble, question, options) {
+    const card = document.createElement("div");
+    card.className = "confirmation-card";
+
+    const label = document.createElement("div");
+    label.className = "confirmation-label";
+    label.textContent = "⚠ Confirmation requise";
+
+    const q = document.createElement("div");
+    q.className = "confirmation-question";
+    q.textContent = question || "Voulez-vous continuer ?";
+
+    const btns = document.createElement("div");
+    btns.className = "confirmation-options";
+
+    (options || []).forEach((opt, idx) => {
+      const btn = document.createElement("button");
+      btn.className = "confirmation-btn";
+      btn.textContent = opt;
+      btn.onclick = async () => {
+        btns.querySelectorAll("button").forEach((b, i) => {
+          b.disabled = true;
+          if (i === idx) b.classList.add("selected");
+        });
+        await fetch(`${BASE_URL}/confirm/${session_id}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": authToken,
+          },
+          body: JSON.stringify({ option: idx }),
+        });
+      };
+      btns.appendChild(btn);
+    });
+
+    card.appendChild(label);
+    card.appendChild(q);
+    card.appendChild(btns);
+    msg.insertBefore(card, bubble);
+    scrollBottom();
+    return card;
+  }
+
   // ── Ajouter une ressource jointe (file / url) ─────────────────────
   function addResource(msg, event) {
     const isFile = event.type === "file";
@@ -694,6 +799,16 @@
               const el = toolIndicators.get(event.tools);
               if (el) el.classList.add("error");
             }
+            scrollBottom();
+
+          } else if (event.type === "confirmation") {
+            addConfirmationCard(msg, bubble, event.question, event.options);
+
+          } else if (event.type === "confirmation_refused") {
+            const el = document.createElement("div");
+            el.className = "tool-indicator error";
+            el.textContent = " Action annulée";
+            msg.insertBefore(el, bubble);
             scrollBottom();
 
           } else if (event.type === "file" || event.type === "url") {

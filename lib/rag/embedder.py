@@ -8,7 +8,7 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Embedder:
     def __init__(self):
-        model_connector = Config.get("LLM_CONNECTOR")
+        model_connector = Config.get("llm.connector")
         if model_connector == "LiteLLM":
             self.embedder = LiteLLMEmbedder()
         else:
