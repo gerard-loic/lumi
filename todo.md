@@ -1,8 +1,8 @@
 - [x] Simplifier l'écriture d'un service [EN COURS]
 - [ ] Revoir le fichier de configuration pour le prompt
 - [ ] Retour des urls et des fichiers [EN COURS]
-- [ ] Delestage du cache
-- [ ] Liaison des fichiers avec le cache
+- [x] Delestage du cache
+- [x] Liaison des fichiers avec le cache
 - [ ] Meilleure gestion des sessions et données en cache (dans Agent)
 - [ ] revoir fichier de configuration
 - [x] Gestion du traitement long

@@ -13,6 +13,7 @@ Lancer le service :
   python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +27,8 @@ from lib.config.config import Config, StaticConfig
 from lib.log.logger import Logger, WARNING
 from lib.agent.agent import Agent
 from lib.mcp.services import ServiceManager
+from lib.http.auth import AuthSessionManager
+from lib.files.filestore import FileStore
 
 # ----------------------------------------------------------------
 # Initialisation configuration
@@ -53,12 +56,25 @@ ServiceManager.init()
 lumi_router = Router()
 
 
+async def _session_cleaner():
+    while True:
+        await asyncio.sleep(60)
+        AuthSessionManager.clear()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Logger._patch_logging_handlers()
+
+    #Suppression des données rémanantes
+    FileStore.deleteAll()
+
+    #Gestion de la suppression des sessions et des fichiers temporaires
+    cleaner = asyncio.create_task(_session_cleaner())
     async with mcp_manager.run():
         lumi_router.agent = Agent(connector=Config.get(key="LLM_CONNECTOR"))
         yield
+    cleaner.cancel()
 
 
 # ----------------------------------------------------------------

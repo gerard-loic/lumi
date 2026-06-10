@@ -1,6 +1,8 @@
 import secrets
 from pathlib import Path
 from lib.config.config import Config
+import os
+from lib.http.auth import Auth, AuthSessionManager
 
 """
 FileStore — Gestion des fichiers temporaires
@@ -8,7 +10,7 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class FileStore:
     @staticmethod
-    def save(filename: str, content: bytes | str) -> str:
+    def save(filename: str, content: bytes | str)->str:
         tmpdir = Path(Config.get("TEMP_DIR"))
 
         tmpdir.mkdir(exist_ok=True)
@@ -19,4 +21,28 @@ class FileStore:
         else:
             dest.write_bytes(content)
         base_url = Config.get(key="SERVICE_URL")
+
+        #Enregistrement dans la session
+        session = AuthSessionManager.get(Auth.getSessionId())
+        if session:
+            session.addFile(key)
+
         return f"{base_url}/files/{key}/{filename}"
+
+    @staticmethod
+    def delete(key:str) -> bool:
+        file_path = f"{Config.get("TEMP_DIR")}/{key}"
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return True
+        return False
+
+    @staticmethod
+    def deleteAll() -> int:
+        tmpdir = Path(Config.get("TEMP_DIR"))
+        count = 0
+        for f in tmpdir.iterdir():
+            if f.is_file() and f.name != ".gitkeep":
+                f.unlink()
+                count += 1
+        return count
