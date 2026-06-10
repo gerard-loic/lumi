@@ -107,7 +107,10 @@ class Agent:
                 for tc in assistant_msg.tool_calls:
                     Logger.write(f"[AGENT] Call MCP tool {tc.function.name}...", type=WARNING)
                     meta = MCPTool.get_meta(tc.function.name)
-                    yield ToolEvent.get(tool_name=tc.function.name, status="PENDING", long_call=meta.get("slow", False), message=meta.get("slow_message", ""))
+                    description = meta.get("description", tc.function.name)
+                    if description == False:
+                        description = tc.function.name
+                    yield ToolEvent.get(tool_name=tc.function.name, status="PENDING", long_call=meta.get("slow", False), message=description)
                     try:
                         args = json.loads(tc.function.arguments)
                         result_text, tool_events = await mcp_manager.call_tool(tc.function.name, args)

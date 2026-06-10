@@ -5,6 +5,7 @@ temp/*
 tools/*
 !tools/.gitkeep
 !tools/excel.py
+!tools/rag.py
 logs/*
 !logs/.gitkeep
 services/*

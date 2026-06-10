@@ -6,7 +6,7 @@ from openpyxl import Workbook
 from lib.files.filestore import FileStore
 from lib.agent.events import FileEvent
 from lib.mcp.tools import MCPTool
-
+from lib.mcp.tools import native_tool
 
 class FichierExcel(BaseModel):
     url: str = Field(description="URL de téléchargement du fichier Excel généré.")
@@ -16,6 +16,7 @@ class ExcelService(MCPTool):
     name = "excel"
     description = "Génération de fichiers Excel"
 
+    @native_tool
     def generer_fichier_excel(
         self,
         donnees_csv: Annotated[

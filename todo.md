@@ -5,12 +5,13 @@
 - [ ] Liaison des fichiers avec le cache
 - [ ] Meilleure gestion des sessions et données en cache (dans Agent)
 - [ ] revoir fichier de configuration
-- [ ] Gestion de la confirmation et du traitement long
+- [x] Gestion du traitement long
+- [ ] Gestion de la confirmation avant action
 - [ ] Implémentation des traductions
 - [x] Implémenter RAG
 - [x] Implémenter pré-traitement RAG
 - [x] Implémenter version
-- [ ] Authentification gestion RAG
+- [x] Authentification gestion RAG
 - [ ] RAG local sur un fichier
 - [ ] Envoi de fichiers à l'agent
 - [x] Citer ou nom les sources
@@ -18,13 +19,14 @@
 - [x] Mise à jour document RAG
 - [ ] Problème de non réponse du LLM (réponse vide)
 - [x] Refactor RAG
-- [ ] Activer ou nom certains outils MCP de base
+- [x] Activer ou nom certains outils MCP de base
 - [ ] Limiter l'histo envoyé à N messages
 - [ ] Limiter la sortie ?
 - [ ] Critique du code
 - [ ] modifier readme
 - [ ] Support OCR ?
-- [ ] Sur les outils, retourner le nom de l'outil dans le message
+- [x] Sur les outils, retourner le nom de l'outil dans le message
+- [ ] bug botcore
 
 Idées usages
 -> transcription de réunions manuscrites

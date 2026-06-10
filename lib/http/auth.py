@@ -4,6 +4,7 @@ from lib.mcp.services import ServiceManager, Service
 from lib.config.config import Config
 import sys
 import secrets
+from lib.log.logger import Logger, ERROR
 
 
 """
@@ -92,3 +93,20 @@ class Auth:
             raise Exception("Token expiré")
         except jwt.InvalidTokenError as e:
             raise Exception(f"Token invalide : {e}")
+        
+
+"""
+Auth — Gestion de l'authentification sur les routes d'administration
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class AdminAuth:
+    @staticmethod
+    def checkAdminCredentials(username: str, password: str) -> bool:
+        users = Config.get("ADMIN_AUTHORIZED_USERS")
+        for user in users:
+            u_ok = secrets.compare_digest(username.encode(), user["username"].encode())
+            p_ok = secrets.compare_digest(password.encode(), user["password"].encode())
+            if u_ok and p_ok:
+                return True
+        Logger.write(f"[HTTP] [401] rag — Unauthorized access attempt for user '{username}'", type=ERROR)
+        return False

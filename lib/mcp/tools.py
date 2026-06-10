@@ -2,16 +2,32 @@ import os
 import inspect
 import importlib.util
 from mcp.server.fastmcp import FastMCP
+from lib.config.config import Config
 
-
-def slow_tool(message: str = ""):
+def slow_tool(func=None):
     """Décorateur signalant qu'un outil peut être lent à s'exécuter."""
-    def decorator(func):
-        func.__slow_tool__ = True
-        func.__slow_tool_message__ = message
-        return func
+    def decorator(f):
+        f.__slow_tool__ = True
+        return f
+    if func is not None:
+        return decorator(func)
     return decorator
 
+def tool_description(name:str):
+    """Décorateur permettant de retourner un descriptif de l'outil appelé"""
+    def decorator(f):
+        f.__tool_description__ = name
+        return f
+    return decorator
+
+def native_tool(func=None):
+    """Décorateur signalant qu'un outil est un outil natif"""
+    def decorator(f):
+        f.__native_tool__ = True
+        return f
+    if func is not None:
+        return decorator(func)
+    return decorator
 
 """
 MCPTool — classe parente outil MCP
@@ -68,7 +84,8 @@ class MCPTool:
 
         MCPTool._registry[method.__name__] = {
             "slow": getattr(method, "__slow_tool__", False),
-            "slow_message": getattr(method, "__slow_tool_message__", ""),
+            "description": getattr(method, "__tool_description__", False),
+            "native" : getattr(method, "__native_tool__", False)
         }
 
         return wrapper
@@ -109,5 +126,9 @@ class ToolLoader:
                     continue
                 if cls.__module__ != modulename:
                     continue
+                native_enabled = Config.get("NATIVE_TOOLS_ENABLED")
                 for tool_fn in cls.get_tools():
+                    meta = MCPTool.get_meta(tool_fn.__name__)
+                    if meta.get("native") and tool_fn.__name__ not in native_enabled:
+                        continue
                     app.tool()(tool_fn)

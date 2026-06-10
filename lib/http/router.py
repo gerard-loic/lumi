@@ -1,16 +1,18 @@
-from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form, Depends
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
 from typing import Optional
-
 from lib.http.models import ChatRequest, ToolInfo, AuthRequest
 
-from lib.http.auth import Auth
+from lib.http.auth import Auth, AdminAuth
 from lib.mcp.client import mcp_manager
 from lib.mcp.services import ServiceManager
 from lib.log.logger import Logger, ERROR
 from lib.config.config import StaticConfig
 from lib.rag.raghelper import RagHelper
+
+_rag_basic_auth = HTTPBasic()
 
 """
 Router — Routeur endpoints serveur API
@@ -35,7 +37,11 @@ class Router:
     """
     Route [GET] /health : renvoie l'état de santé du service
     """
-    async def health(self):
+    async def health(
+            self,
+            credentials: HTTPBasicCredentials = Depends(_rag_basic_auth),
+    ):
+        self._check_admin_auth(credentials)
         out = {
             "status" : "ok",
             "services" : [],
@@ -50,7 +56,11 @@ class Router:
     """
     Route [GET] /tools : renvoie les outils MCP actifs
     """
-    async def list_tools(self) -> list[ToolInfo]:
+    async def list_tools(
+            self,
+            credentials: HTTPBasicCredentials = Depends(_rag_basic_auth),
+    ) -> list[ToolInfo]:
+        self._check_admin_auth(credentials)
         try:
             return [ToolInfo(name=t.name, description=t.description) for t in mcp_manager.tools]
         except Exception as e:
@@ -121,17 +131,23 @@ class Router:
             raise HTTPException(status_code=403, detail="Unauthorized")
         return {"token": token}
 
+    def _check_admin_auth(self, credentials: HTTPBasicCredentials) -> None:
+        if not AdminAuth.checkAdminCredentials(credentials.username, credentials.password):
+            raise HTTPException(status_code=401, headers={"WWW-Authenticate": "Basic"}, detail="Unauthorized")
+
     """
     Route [POST] /rag/documents : Indexe un document dans la base de connaissances
     Accepte soit du texte brut (champ `text`), soit un fichier (champ `file`).
     """
     async def rag_index(
         self,
+        credentials: HTTPBasicCredentials = Depends(_rag_basic_auth),
         text:       Optional[str]        = Form(default=None),
         file:       Optional[UploadFile] = File(default=None),
         source:     Optional[str]        = Form(default=None),
         collection: Optional[str]        = Form(default=None),
     ):
+        self._check_admin_auth(credentials)
         if not text and not file:
             raise HTTPException(status_code=400, detail="Provide either 'text' or 'file'")
 
@@ -149,11 +165,13 @@ class Router:
     """
     async def rag_update(
         self,
+        credentials: HTTPBasicCredentials = Depends(_rag_basic_auth),
         source:     Optional[str]        = Form(default=None),
         text:       Optional[str]        = Form(default=None),
         file:       Optional[UploadFile] = File(default=None),
         collection: Optional[str]        = Form(default=None),
     ):
+        self._check_admin_auth(credentials)
         if not text and not file:
             raise HTTPException(status_code=400, detail="Provide either 'text' or 'file'")
 
@@ -170,7 +188,8 @@ class Router:
     """
     Route [GET] /rag/stats : Statistiques sur le contenu de la base vectorielle
     """
-    async def rag_stats(self):
+    async def rag_stats(self, credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)):
+        self._check_admin_auth(credentials)
         from lib.rag.vectorstore import VectorStore
         try:
             return await VectorStore.stats()
@@ -181,7 +200,8 @@ class Router:
     """
     Route [DELETE] /rag/collections/{collection}/documents/{source} : Supprime un document par sa source
     """
-    async def rag_delete_document(self, collection: str, source: str):
+    async def rag_delete_document(self, collection: str, source: str, credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)):
+        self._check_admin_auth(credentials)
         from lib.rag.vectorstore import VectorStore
         try:
             deleted = await VectorStore.deleteBySource(collection, source)
@@ -197,7 +217,8 @@ class Router:
     """
     Route [DELETE] /rag/collections/{collection} : Supprime tous les documents d'une collection
     """
-    async def rag_delete_collection(self, collection: str):
+    async def rag_delete_collection(self, collection: str, credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)):
+        self._check_admin_auth(credentials)
         from lib.rag.indexer import Indexer
         try:
             indexer = Indexer(collection=collection)
