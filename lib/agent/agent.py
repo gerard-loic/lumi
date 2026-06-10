@@ -30,6 +30,7 @@ class Agent:
         self._system   = Config.get(key="llm.system_prompt")
 
         self._MAX_TOOL_ITERATIONS = Config.get(key="mcp.max_tool_iterations")
+        self._MEMORY_MESSAGES     = Config.get(key="llm.memory_messages")
 
         Logger.write("[AGENT] MCP agent initialized", type=OK)
 
@@ -38,7 +39,7 @@ class Agent:
     """
     async def chatStream(self, message: str, authorization: dict, session_id: Optional[str] = None) -> AsyncGenerator[str, None]:
         try:
-            history = AuthSessionManager.get_history(session_id)
+            history = AuthSessionManager.get_history(session_id)[-self._MEMORY_MESSAGES:]
 
             messages = [
                 {"role": "system", "content": self._system},
