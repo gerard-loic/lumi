@@ -2,6 +2,7 @@ import asyncio
 import json
 import psycopg2
 import psycopg2.extras
+from psycopg2 import sql
 from pgvector.psycopg2 import register_vector
 from lib.config.config import Config
 
@@ -24,32 +25,41 @@ class PgVector:
         return conn
 
     @staticmethod
+    def _table() -> sql.Identifier:
+        return sql.Identifier(Config.get("rag.pgvector.table"))
+
+    @staticmethod
     async def ensureTable() -> None:
-        dim = Config.get("rag.embedding_dim")
+        dim = int(Config.get("rag.embedding_dim"))
 
         def _run():
+            table_name = Config.get("rag.pgvector.table")
+            table    = sql.Identifier(table_name)
+            hnsw_idx = sql.Identifier(f"{table_name}_hnsw_idx")
+            coll_idx = sql.Identifier(f"{table_name}_collection_idx")
+
             conn = PgVector._connect()
             try:
                 with conn.cursor() as cur:
                     cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-                    cur.execute(f"""
-                        CREATE TABLE IF NOT EXISTS {Config.get("rag.pgvector.table")} (
+                    cur.execute(sql.SQL("""
+                        CREATE TABLE IF NOT EXISTS {} (
                             id         SERIAL PRIMARY KEY,
                             collection TEXT    NOT NULL,
                             content    TEXT    NOT NULL,
                             metadata   JSONB   DEFAULT '{{}}',
-                            embedding  VECTOR({dim})
+                            embedding  VECTOR({})
                         )
-                    """)
-                    cur.execute(f"""
-                        CREATE INDEX IF NOT EXISTS {Config.get("rag.pgvector.table")}_hnsw_idx
-                        ON {Config.get("rag.pgvector.table")}
+                    """).format(table, sql.SQL(str(dim))))
+                    cur.execute(sql.SQL("""
+                        CREATE INDEX IF NOT EXISTS {}
+                        ON {}
                         USING hnsw (embedding vector_cosine_ops)
-                    """)
-                    cur.execute(f"""
-                        CREATE INDEX IF NOT EXISTS {Config.get("rag.pgvector.table")}_collection_idx
-                        ON {Config.get("rag.pgvector.table")} (collection)
-                    """)
+                    """).format(hnsw_idx, table))
+                    cur.execute(sql.SQL("""
+                        CREATE INDEX IF NOT EXISTS {}
+                        ON {} (collection)
+                    """).format(coll_idx, table))
                     conn.commit()
             finally:
                 conn.close()
@@ -63,8 +73,10 @@ class PgVector:
             try:
                 with conn.cursor() as cur:
                     cur.execute(
-                        f"INSERT INTO {Config.get("rag.pgvector.table")} (collection, content, metadata, embedding)"
-                        " VALUES (%s, %s, %s, %s)",
+                        sql.SQL(
+                            "INSERT INTO {} (collection, content, metadata, embedding)"
+                            " VALUES (%s, %s, %s, %s)"
+                        ).format(PgVector._table()),
                         (collection, content, json.dumps(metadata), embedding),
                     )
                     conn.commit()
@@ -80,11 +92,13 @@ class PgVector:
             try:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                     cur.execute(
-                        f"""SELECT content, metadata, 1 - (embedding <=> %s::vector) AS score
-                            FROM {Config.get("rag.pgvector.table")}
+                        sql.SQL("""
+                            SELECT content, metadata, 1 - (embedding <=> %s::vector) AS score
+                            FROM {}
                             WHERE collection = %s
                             ORDER BY embedding <=> %s::vector
-                            LIMIT %s""",
+                            LIMIT %s
+                        """).format(PgVector._table()),
                         (embedding, collection, embedding, top_k),
                     )
                     rows = cur.fetchall()
@@ -107,12 +121,14 @@ class PgVector:
             conn = PgVector._connect()
             try:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(f"""
-                        SELECT collection, COUNT(*) AS chunks
-                        FROM {Config.get("rag.pgvector.table")}
-                        GROUP BY collection
-                        ORDER BY collection
-                    """)
+                    cur.execute(
+                        sql.SQL("""
+                            SELECT collection, COUNT(*) AS chunks
+                            FROM {}
+                            GROUP BY collection
+                            ORDER BY collection
+                        """).format(PgVector._table())
+                    )
                     rows = cur.fetchall()
                 collections = [{"name": r["collection"], "chunks": r["chunks"]} for r in rows]
                 total = sum(c["chunks"] for c in collections)
@@ -129,7 +145,9 @@ class PgVector:
             try:
                 with conn.cursor() as cur:
                     cur.execute(
-                        f"SELECT 1 FROM {Config.get("rag.pgvector.table")} WHERE collection = %s AND metadata->>'source' = %s LIMIT 1",
+                        sql.SQL(
+                            "SELECT 1 FROM {} WHERE collection = %s AND metadata->>'source' = %s LIMIT 1"
+                        ).format(PgVector._table()),
                         (collection, source),
                     )
                     return cur.fetchone() is not None
@@ -145,7 +163,9 @@ class PgVector:
             try:
                 with conn.cursor() as cur:
                     cur.execute(
-                        f"DELETE FROM {Config.get("rag.pgvector.table")} WHERE collection = %s AND metadata->>'source' = %s",
+                        sql.SQL(
+                            "DELETE FROM {} WHERE collection = %s AND metadata->>'source' = %s"
+                        ).format(PgVector._table()),
                         (collection, source),
                     )
                     count = cur.rowcount
@@ -163,7 +183,9 @@ class PgVector:
             try:
                 with conn.cursor() as cur:
                     cur.execute(
-                        f"DELETE FROM {Config.get("rag.pgvector.table")} WHERE collection = %s",
+                        sql.SQL(
+                            "DELETE FROM {} WHERE collection = %s"
+                        ).format(PgVector._table()),
                         (collection,),
                     )
                     count = cur.rowcount

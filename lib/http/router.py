@@ -163,6 +163,23 @@ class Router:
     Route [GET] /files/{key}/{filename} : renvoie un fichier
     """
     async def get_file(self, key: str, filename: str, authorization: str | None = Header(default=None)):
+        token = None
+        if authorization and authorization.startswith("Bearer "):
+            token = authorization[7:]
+        if not token:
+            raise HTTPException(status_code=401, detail="Token manquant")
+
+        decoded = Auth.checkAuthentification(token=token)
+        if not decoded:
+            Logger.write(f"[HTTP] [403] get_file — Token invalide ou session expirée", type=ERROR)
+            raise HTTPException(status_code=403, detail="Non autorisé")
+
+        session_id = decoded.get("session_id")
+        session = AuthSessionManager.get(session_id)
+        if not session or key not in session.files:
+            Logger.write(f"[HTTP] [403] get_file — Clé {key} absente de la session {session_id}", type=ERROR)
+            raise HTTPException(status_code=403, detail="Accès refusé")
+
         temp_root = Path("temp").resolve()
         file_path = (temp_root / key).resolve()
         if not file_path.is_relative_to(temp_root):

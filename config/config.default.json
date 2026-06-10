@@ -74,7 +74,7 @@
     "rag" : {
         "collection" : "demo",
         "embedding_dim" : 1024,
-        "tok_k" : 5,
+        "top_k" : 5,
         "chunk_size" : 500,
         "chunk_overlap" : 50,
         "connector" : "PgVector",

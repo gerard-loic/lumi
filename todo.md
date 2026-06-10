@@ -20,10 +20,10 @@
 - [ ] Problème de non réponse du LLM (réponse vide)
 - [x] Refactor RAG
 - [x] Activer ou nom certains outils MCP de base
-- [ ] Limiter l'histo envoyé à N messages
+- [x] Limiter l'histo envoyé à N messages
 - [ ] Limiter la sortie ?
 - [ ] Critique du code
-- [ ] modifier readme
+- [x] modifier readme
 - [ ] Support OCR ?
 - [x] Sur les outils, retourner le nom de l'outil dans le message
 - [ ] bug botcore
