@@ -2,7 +2,8 @@ import secrets
 from pathlib import Path
 from lib.config.config import Config
 import os
-from lib.http.auth import Auth, AuthSessionManager
+from lib.http.auth import Auth
+from lib.session.session import AuthSessionManager
 
 """
 FileStore — Gestion des fichiers temporaires

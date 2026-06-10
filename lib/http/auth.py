@@ -6,6 +6,7 @@ from lib.config.config import Config
 import sys
 import secrets
 from lib.log.logger import Logger, ERROR
+from lib.session.session import AuthSession, AuthSessionManager
 """
 Auth — Gestion de l'authentification sur l'agent
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
@@ -114,47 +115,3 @@ class AdminAuth:
         return False
 
 
-class AuthSession:
-    def __init__(self, session_id:str, expires_at:int, authentication:dict):
-        self.session_id = session_id
-        self.expires_at = expires_at
-        self.authentication = authentication
-        self.files = []
-
-    def clear(self):
-        from lib.files.filestore import FileStore
-        for file in self.files:
-            FileStore.delete(key=file)
-
-    def addFile(self, key:str):
-        self.files.append(key)
-
-
-class AuthSessionManager:
-    _sessions = []
-
-    @staticmethod
-    def add(session_id:str, expires_at:int, authentication:dict):
-        AuthSessionManager._sessions.append(AuthSession(session_id=session_id, expires_at=expires_at, authentication=authentication))
-
-    @staticmethod
-    def get(session_id:str) -> 'AuthSession | None':
-        for session in AuthSessionManager._sessions:
-            if session.session_id == session_id:
-                return session
-        return None
-
-    @staticmethod
-    def count() -> int:
-        return len(AuthSessionManager._sessions)
-
-    @staticmethod
-    def clear(all:bool=False):
-        current_ts = datetime.now(tz=timezone.utc).timestamp()
-        remaining = []
-        for session in AuthSessionManager._sessions:
-            if all or session.expires_at < current_ts:
-                session.clear()
-            else:
-                remaining.append(session)
-        AuthSessionManager._sessions = remaining

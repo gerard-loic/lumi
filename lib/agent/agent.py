@@ -6,6 +6,7 @@ from lib.config.config import Config
 from lib.agent.llmconnector.litellm import LiteLLM
 from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent
 from lib.log.logger import Logger, ERROR, OK, WARNING
+from lib.session.session import AuthSessionManager
 
 """
 Agent — Agent d'orchestration / communication LLM
@@ -27,27 +28,16 @@ class Agent:
         #Prompt systeme
         self._system   = Config.get(key="SYSTEM_PROMPT")
 
-        # Historique des conversations : session_id -> liste de messages {role, content}
-        self._sessions: dict[str, list[dict]] = {}
         self._MAX_TOOL_ITERATIONS = Config.get(key="MAX_TOOL_ITERATIONS")
 
         Logger.write("[AGENT] MCP agent initialized", type=OK)
-
-    def _get_history(self, session_id: Optional[str]) -> list[dict]:
-        if not session_id:
-            return []
-        return self._sessions.get(session_id, [])
-
-    def _save_history(self, session_id: Optional[str], history: list[dict]) -> None:
-        if session_id:
-            self._sessions[session_id] = history
 
     """
     Gestion d'une connexion SSE (correspondant à une requête client)
     """
     async def chatStream(self, message: str, authorization: dict, session_id: Optional[str] = None) -> AsyncGenerator[str, None]:
         try:
-            history = self._get_history(session_id)
+            history = AuthSessionManager.get_history(session_id)
 
             messages = [
                 {"role": "system", "content": self._system},
@@ -188,7 +178,7 @@ class Agent:
                 {"role": "user",      "content": message},
                 {"role": "assistant", "content": assistant_reply},
             ]
-            self._save_history(session_id, new_history)
+            AuthSessionManager.save_history(session_id, new_history)
 
             yield DoneEvent.get()
         except Exception as e:

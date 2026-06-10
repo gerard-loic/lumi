@@ -3,7 +3,7 @@
 - [ ] Retour des urls et des fichiers [EN COURS]
 - [x] Delestage du cache
 - [x] Liaison des fichiers avec le cache
-- [ ] Meilleure gestion des sessions et données en cache (dans Agent)
+- [x] Meilleure gestion des sessions et données en cache (dans Agent)
 - [ ] revoir fichier de configuration
 - [x] Gestion du traitement long
 - [ ] Gestion de la confirmation avant action

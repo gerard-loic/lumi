@@ -27,7 +27,7 @@ from lib.config.config import Config, StaticConfig
 from lib.log.logger import Logger, WARNING
 from lib.agent.agent import Agent
 from lib.mcp.services import ServiceManager
-from lib.http.auth import AuthSessionManager
+from lib.session.session import AuthSessionManager
 from lib.files.filestore import FileStore
 
 # ----------------------------------------------------------------
