@@ -1,19 +1,39 @@
 {
-    "APP_URL" : "http://api.nexora.diatem.local",
+
+    "app" : {
+       "name" : "Nom du service",
+       "description" : "Description du service",
+       "allowed_cors_ips" : ["*"],
+       "allowed_cors_methods" : ["*"],
+       "allowed_cors_headers" : ["*"],
+       "url" : "http://localhost:8001",
+       "admin_users" : [
+            {
+                "username" : "username",
+                "password" : "password"
+            }
+       ]
+    },
+
+    "authentication" : {
+        "service" : "nomserviceapi",
+        "jwt_secret" : "cle-secrete-jwt",
+        "jwt_algorithm": "HS256"
+    },
 
     "services" : {
-        "api" : {
+        "nomserviceapi" : {
             "handler" : "LumePackAPI",
-            "url" : "http://api.fr",
+            "url" : "http://host.local",
             "timeout" : 60
         },
         "bdd" : {
             "handler" : "PostgreSQL",
             "host" : "0.0.0.0",
             "port" : 5432,
-            "database" : "bdd",
-            "username" : "user",
-            "password" : "mdp"
+            "database" : "bddname",
+            "username" : "username",
+            "password" : "password"
         }
     },
 
@@ -27,36 +47,41 @@
         }
     },
 
-    "authentication_service" : "nom_service",
-    "jwt_secret": "une-clé-secrète-longue-et-aléatoire",
-    "jwt_algorithm": "HS256",
+    "llm" : {
+        "system_prompt" : "Tu es un assistant pour un extranet client. Tu réponds uniquement en français, de façon concise et professionnelle. RÈGLE ABSOLUE : Tu ne dois jamais inventer, supposer ou extrapoler des données. Toute information factuelle doit provenir exclusivement des résultats des outils. Avant de répondre à toute question portant sur des données (commandes, statuts, offres, clients…), appelle systématiquement l'outil approprié. Si aucun outil ne permet de répondre, dis explicitement que tu n'as pas cette information — ne tente jamais de répondre par déduction ou depuis tes connaissances générales. Si un outil retourne une erreur, signale-le à l'utilisateur sans tenter de combler les données manquantes. Ne jamais inventer un identifiant (uid, référence, id). Si l'utilisateur demande une action nécessitant un identifiant qu'il n'a pas fourni, demande-le avant d'appeler l'outil. Pour toutes les informations déjà présentes dans le message (date, nom, référence), appelle directement l'outil sans demander confirmation. Si le retour comprend une url affiche là toujours dans ton retour pour proposer à l'utilisateur de cliquer dessous pour voir le détail.",
+        "connector" : "LiteLLM",
+        "litellm" : {
+            "model" : "openai/openai/gpt-oss-120b",
+            "embedding_model" : "openai/Qwen/Qwen3-Embedding-0.6B",
+            "api_base" : "https://service.fr/v1",
+            "api_key" : "cle-api"
+        }
+    },
+
+    "mcp" : {
+        "max_tool_iterations" : 10,
+        "native_tools_enabled" : [
+            "search_knowledge_base",
+            "generer_fichier_excel"
+        ]
+    },
+
+    "files" : {
+        "temp_dir" : "temp"
+    },
+
+    "rag" : {
+        "collection" : "demo",
+        "embedding_dim" : 1024,
+        "tok_k" : 5,
+        "chunk_size" : 500,
+        "chunk_overlap" : 50,
+        "connector" : "PgVector",
+        "pgvector" : {
+            "table" : "rag_documents"
+        }
+    }
 
 
-    "SERVICE_NAME" : "Lumi",
-    "SERVICE_DESCRIPTION":"Service de chatbot LLM Lumi",
-    "SERVICE_VERSION" : "1.0.0",
-
-    "CORS_IPS" : ["*"],
-
-    "SYSTEM_PROMPT" : "Tu es un assistant pour un extranet client. Tu réponds uniquement en français, de façon concise et professionnelle. RÈGLE ABSOLUE : Tu ne dois jamais inventer, supposer ou extrapoler des données. Toute information factuelle doit provenir exclusivement des résultats des outils. Avant de répondre à toute question portant sur des données (commandes, statuts, offres, clients…), appelle systématiquement l'outil approprié. Si aucun outil ne permet de répondre, dis explicitement que tu n'as pas cette information — ne tente jamais de répondre par déduction ou depuis tes connaissances générales. Si un outil retourne une erreur, signale-le à l'utilisateur sans tenter de combler les données manquantes. Ne jamais inventer un identifiant (uid, référence, id). Si l'utilisateur demande une action nécessitant un identifiant qu'il n'a pas fourni, demande-le avant d'appeler l'outil. Pour toutes les informations déjà présentes dans le message (date, nom, référence), appelle directement l'outil sans demander confirmation. Si le retour comprend une url affiche là toujours dans ton retour pour proposer à l'utilisateur de cliquer dessous pour voir le détail.",
-
-    "SERVICE_URL" : "http://localhost:8001",
-    "FILE_BEARER_TOKEN" : "cle_secrete_fixe_temp",
-
-    "LLM_CONNECTOR" : "LiteLLM",
-    "LITELLM_MODEL" : "openai/openai/gpt-oss-120b",
-    "LITELLM_API_BASE" : "https://lien/",
-    "LITELLM_API_KEY" : "cle",
-
-    "MAX_TOOL_ITERATIONS" : 10,
-
-    "TEMP_DIR" : "temp",
-
-    "LITELLM_EMBEDDING_MODEL" : "openai/text-embedding-3-small",
-    "RAG_RETURN_SOURCES"      : true,
-    "RAG_COLLECTION"          : "default",
-    "RAG_EMBEDDING_DIM"       : 1536,
-    "RAG_TOP_K"               : 5,
-    "RAG_CHUNK_SIZE"          : 500,
-    "RAG_CHUNK_OVERLAP"       : 50
+    
 }

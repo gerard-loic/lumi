@@ -19,7 +19,6 @@
       --muted:     #666;
       --user-bg:   #1e2a24;
       --bot-bg:    #1a1a1a;
-      --api:       http://localhost:8000;
     }
 
     html, body {
@@ -540,15 +539,14 @@
 
 <script>
   // ── Config ──────────────────────────────────────────────────────
-  const BASE_URL   = "http://127.0.0.1:8001";
-  const API_URL    = BASE_URL + "/chat";
-  const AUTH_URL   = BASE_URL + "/auth";
+  const BASE_URL = "http://127.0.0.1:8001";
+  const WS_URL   = "ws://127.0.0.1:8001/ws";
+  const AUTH_URL = BASE_URL + "/auth";
 
-  const min = 10000000;
-  const max = 99999999;
-  const session_id = "SESS" + (Math.random() * (max - min) + min);
-
-  let authToken = null;
+  let authToken  = null;
+  let ws         = null;
+  let isStreaming = false;
+  let currentCtx  = null; // contexte du message bot en cours de streaming
 
   // ── Éléments DOM ────────────────────────────────────────────────
   const messagesEl  = document.getElementById("messages");
@@ -559,6 +557,9 @@
   const authBodyEl  = document.getElementById("authBody");
   const authErrorEl = document.getElementById("authError");
   const authBtn     = document.getElementById("authBtn");
+
+  // Désactiver l'envoi jusqu'à connexion WS établie
+  sendBtn.disabled = true;
 
   // ── Authentification ─────────────────────────────────────────────
   async function authenticate() {
@@ -591,6 +592,7 @@
       const data = await resp.json();
       authToken = data.token;
       authModal.classList.add("hidden");
+      sendBtn.disabled = false;
       inputEl.focus();
     } catch (err) {
       authErrorEl.textContent = `Erreur réseau : ${err.message}`;
@@ -598,13 +600,110 @@
     }
   }
 
-  // Soumettre la modale avec Entrée dans le textarea
+  // Soumettre la modale avec Ctrl+Entrée
   authBodyEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.ctrlKey) {
       e.preventDefault();
       authenticate();
     }
   });
+
+  // ── WebSocket ────────────────────────────────────────────────────
+  function connectWebSocket(message) {
+    ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(authToken)}`);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ type: "message", message }));
+    };
+
+    ws.onmessage = (event) => {
+      if (!currentCtx) return;
+      const { bubble, textNode, cursor, msg, toolIndicators } = currentCtx;
+
+      let data;
+      try { data = JSON.parse(event.data); } catch { return; }
+
+      if (data.type === "token") {
+        textNode.textContent += data.content;
+        scrollBottom();
+
+      } else if (data.type === "tool_call") {
+        if (data.status === "PENDING") {
+          const el = addToolIndicator(msg, bubble, data.tools);
+          toolIndicators.set(data.tools, el);
+        } else if (data.status === "OK") {
+          const el = toolIndicators.get(data.tools);
+          if (el) el.classList.add("done");
+        } else if (data.status === "ERROR") {
+          const el = toolIndicators.get(data.tools);
+          if (el) el.classList.add("error");
+        }
+        scrollBottom();
+
+      } else if (data.type === "confirmation") {
+        addConfirmationCard(msg, bubble, data.question, data.options);
+
+      } else if (data.type === "confirmation_refused") {
+        const el = document.createElement("div");
+        el.className = "tool-indicator error";
+        el.textContent = " Action annulée";
+        msg.insertBefore(el, bubble);
+        scrollBottom();
+
+      } else if (data.type === "file" || data.type === "url") {
+        addResource(msg, data);
+        scrollBottom();
+
+      } else if (data.type === "error") {
+        cursor.remove();
+        if (!textNode.textContent) {
+          textNode.textContent = data.message || "Une erreur est survenue.";
+          bubble.style.borderColor = "#ff4d4d40";
+          bubble.style.color = "#ff6b6b";
+        }
+        scrollBottom();
+        endStream();
+
+      } else if (data.type === "end") {
+        cursor.remove();
+        endStream();
+      }
+    };
+
+    ws.onclose = (event) => {
+      ws = null;
+      // Fermeture normale après end — ne rien faire
+      if (event.code === 1000) return;
+      // Token invalide ou expiré → retour à la modale
+      if (event.code === 4001 || event.code === 4003) {
+        authToken = null;
+        sendBtn.disabled = true;
+        authBtn.disabled = false;
+        authModal.classList.remove("hidden");
+      }
+      // Déconnexion inattendue pendant un stream
+      if (isStreaming && currentCtx) {
+        currentCtx.cursor.remove();
+        currentCtx.textNode.textContent += "\n[Connexion interrompue]";
+        endStream();
+      }
+    };
+
+    ws.onerror = () => {
+      if (isStreaming && currentCtx) {
+        currentCtx.cursor.remove();
+        endStream();
+      }
+    };
+  }
+
+  function endStream() {
+    isStreaming = false;
+    currentCtx = null;
+    if (ws) ws.close();
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
 
   // ── Auto-resize textarea ─────────────────────────────────────────
   inputEl.addEventListener("input", () => {
@@ -628,7 +727,8 @@
 
   // ── Ajouter un message utilisateur ───────────────────────────────
   function addUserMessage(text) {
-    if (emptyState) emptyState.remove();
+    const empty = document.getElementById("emptyState");
+    if (empty) empty.remove();
 
     const msg = document.createElement("div");
     msg.className = "message user";
@@ -648,8 +748,8 @@
     const bubble = document.createElement("div");
     bubble.className = "bubble";
 
-    const textNode  = document.createTextNode("");
-    const cursor    = document.createElement("span");
+    const textNode = document.createTextNode("");
+    const cursor   = document.createElement("span");
     cursor.className = "cursor";
 
     bubble.appendChild(textNode);
@@ -662,7 +762,7 @@
     return { bubble, textNode, cursor, msg };
   }
 
-  // ── Ajouter un indicateur d'outil (au-dessus de la bubble) ──────
+  // ── Ajouter un indicateur d'outil ────────────────────────────────
   function addToolIndicator(msg, bubble, toolName) {
     const el = document.createElement("div");
     el.className = "tool-indicator";
@@ -691,19 +791,14 @@
       const btn = document.createElement("button");
       btn.className = "confirmation-btn";
       btn.textContent = opt;
-      btn.onclick = async () => {
+      btn.onclick = () => {
         btns.querySelectorAll("button").forEach((b, i) => {
           b.disabled = true;
           if (i === idx) b.classList.add("selected");
         });
-        await fetch(`${BASE_URL}/confirm/${session_id}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": authToken,
-          },
-          body: JSON.stringify({ option: idx }),
-        });
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "confirmation", option: idx }));
+        }
       };
       btns.appendChild(btn);
     });
@@ -716,7 +811,7 @@
     return card;
   }
 
-  // ── Ajouter une ressource jointe (file / url) ─────────────────────
+  // ── Ajouter une ressource jointe (file / url) ────────────────────
   function addResource(msg, event) {
     const isFile = event.type === "file";
     const el = document.createElement(event.url ? "a" : "span");
@@ -732,113 +827,20 @@
   }
 
   // ── Envoi du message ─────────────────────────────────────────────
-  async function sendMessage() {
+  function sendMessage() {
     const text = inputEl.value.trim();
-    if (!text || sendBtn.disabled || !authToken) return;
+    if (!text || isStreaming || !authToken) return;
 
-    // Reset input
     inputEl.value = "";
     inputEl.style.height = "auto";
     sendBtn.disabled = true;
 
     addUserMessage(text);
-    const { bubble, textNode, cursor, msg } = addBotMessage();
+    const refs = addBotMessage();
+    currentCtx = { ...refs, toolIndicators: new Map() };
+    isStreaming = true;
 
-    try {
-      const response = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": authToken,
-        },
-        body: JSON.stringify({ message: text, session_id: session_id }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const reader  = response.body.getReader();
-      const decoder = new TextDecoder();
-      let   buffer  = "";
-      const toolIndicators = new Map(); // tool_name -> element
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop(); // garder le fragment incomplet
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-
-          const raw = line.slice(6).trim();
-          if (raw === "[DONE]") {
-            cursor.remove();
-            break;
-          }
-
-          let event;
-          try { event = JSON.parse(raw); }
-          catch { continue; }
-
-          if (event.type === "token") {
-            textNode.textContent += event.content;
-            scrollBottom();
-
-          } else if (event.type === "tool_call") {
-            if (event.status === "PENDING") {
-              const el = addToolIndicator(msg, bubble, event.tools);
-              toolIndicators.set(event.tools, el);
-            } else if (event.status === "OK") {
-              const el = toolIndicators.get(event.tools);
-              if (el) el.classList.add("done");
-            } else if (event.status === "ERROR") {
-              const el = toolIndicators.get(event.tools);
-              if (el) el.classList.add("error");
-            }
-            scrollBottom();
-
-          } else if (event.type === "confirmation") {
-            addConfirmationCard(msg, bubble, event.question, event.options);
-
-          } else if (event.type === "confirmation_refused") {
-            const el = document.createElement("div");
-            el.className = "tool-indicator error";
-            el.textContent = " Action annulée";
-            msg.insertBefore(el, bubble);
-            scrollBottom();
-
-          } else if (event.type === "file" || event.type === "url") {
-            addResource(msg, event);
-            scrollBottom();
-
-          } else if (event.type === "error") {
-            cursor.remove();
-            if (!textNode.textContent) {
-              textNode.textContent = event.message || "Une erreur est survenue.";
-              bubble.style.borderColor = "#ff4d4d40";
-              bubble.style.color = "#ff6b6b";
-            }
-            scrollBottom();
-
-          } else if (event.type === "end") {
-            cursor.remove();
-          }
-        }
-      }
-
-    } catch (err) {
-      cursor.remove();
-      textNode.textContent = `Erreur : ${err.message}`;
-      bubble.style.borderColor = "#ff4d4d40";
-      bubble.style.color = "#ff6b6b";
-    }
-
-    sendBtn.disabled = false;
-    inputEl.focus();
+    connectWebSocket(text);
   }
 
   // ── Helpers ──────────────────────────────────────────────────────

@@ -2,12 +2,11 @@
 Lumi chatbot service
 ----------------------------------------------------------------
 Routes :
-  POST /chat        : réponse streamée SSE (usage production)
+  WS   /ws          : conversation streamée WebSocket (usage production)
   GET  /tools       : liste les outils MCP disponibles (debug)
   GET  /health      : healthcheck
   GET  /files/{key}/{filename} : télécharge un fichier mis à disposition par l'agent
   POST /auth        : authentification au service
-
 
 Lancer le service :
   python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload

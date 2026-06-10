@@ -1,15 +1,16 @@
-from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form, Depends
-from fastapi.responses import StreamingResponse, FileResponse
+import asyncio
+from fastapi import APIRouter, HTTPException, Header, UploadFile, File, Form, Depends, WebSocket, WebSocketDisconnect, Query
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
 from typing import Optional
-from lib.http.models import ChatRequest, ToolInfo, AuthRequest, ConfirmationRequest
+from lib.http.models import ToolInfo, AuthRequest
 
 from lib.http.auth import Auth, AdminAuth
 from lib.session.session import AuthSessionManager
 from lib.mcp.client import mcp_manager
 from lib.mcp.services import ServiceManager
-from lib.log.logger import Logger, ERROR
+from lib.log.logger import Logger, ERROR, WARNING
 from lib.config.config import StaticConfig
 from lib.rag.raghelper import RagHelper
 
@@ -23,10 +24,11 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 class Router:
     def __init__(self):
         self.agent = None
+        self._active_ws = 0
         self.router = APIRouter()
         self.router.add_api_route("/health", self.health, methods=["GET"])
         self.router.add_api_route("/tools", self.list_tools, methods=["GET"], response_model=list[ToolInfo])
-        self.router.add_api_route("/chat", self.chat, methods=["POST"])
+        self.router.add_api_websocket_route("/ws", self.ws_chat)
         self.router.add_api_route("/files/{key}/{filename}", self.get_file, methods=["GET"])
         self.router.add_api_route("/auth", self.auth, methods=["POST"])
         self.router.add_api_route("/rag/documents", self.rag_index, methods=["POST"])
@@ -34,7 +36,6 @@ class Router:
         self.router.add_api_route("/rag/stats", self.rag_stats, methods=["GET"])
         self.router.add_api_route("/rag/collections/{collection}", self.rag_delete_collection, methods=["DELETE"])
         self.router.add_api_route("/rag/collections/{collection}/documents/{source:path}", self.rag_delete_document, methods=["DELETE"])
-        self.router.add_api_route("/confirm/{session_id}", self.confirm, methods=["POST"])
 
     """
     Route [GET] /health : renvoie l'état de santé du service
@@ -47,6 +48,7 @@ class Router:
         out = {
             "status" : "ok",
             "services" : [],
+            "active_ws" : self._active_ws,
             "version" : StaticConfig.version(),
             "version_name" : StaticConfig.versionName()
         }
@@ -70,40 +72,92 @@ class Router:
             raise HTTPException(status_code=503, detail="Unable reading tools")
 
     """
-    Route [POST] /chat : conversation avec l'agent (streamée)
-    header Authorization avec token issu de /auth
-    """
-    async def chat(self, request: ChatRequest, authorization: str | None = Header(default=None)):
-        if not authorization:
-            Logger.write(f"[HTTP] [401] chat — Authorization header is missing", type=ERROR)
-            raise HTTPException(status_code=401, detail="Authorization header is missing")
-        if not request.message.strip():
-            Logger.write(f"[HTTP] [400] chat — Message is empty", type=ERROR)
-            raise HTTPException(status_code=400, detail="Message is empty")
+    Route [WS] /ws : conversation avec l'agent via WebSocket
+    Paramètre : token (query string) issu de /auth
 
-        #Vérification du token d'authentification
+    Protocole messages entrants (JSON) :
+      {"type": "message", "message": "..."}   — envoi d'un message à l'agent
+      {"type": "confirmation", "option": N}   — réponse à une demande de confirmation
+
+    Protocole messages sortants (JSON) :
+      {"type": "token",              "content": "..."}
+      {"type": "tool_call",          "tools": "...", "status": "PENDING|OK|ERROR", ...}
+      {"type": "confirmation",       "question": "...", "options": [...]}
+      {"type": "confirmation_refused"}
+      {"type": "rag",                "source": "...", "locations": [...]}
+      {"type": "file",               "name": "...", "url": "..."}
+      {"type": "url",                "name": "...", "url": "..."}
+      {"type": "error",              "error_code": "...", "message": "...", "details": "..."}
+      {"type": "end"}
+    """
+    async def ws_chat(self, websocket: WebSocket, token: str = Query(...)):
+        if not token:
+            await websocket.close(code=4001, reason="Token manquant")
+            return
+
         try:
-            decodedToken = Auth.checkAuthentification(token=authorization)
+            decodedToken = Auth.checkAuthentification(token=token)
         except Exception as e:
-            Logger.write(f"[HTTP] [500] chat — Internal authentification error : error while reading authentification token : {e}", type=ERROR)
-            raise HTTPException(status_code=500, detail="Internal authentification error")
+            Logger.write(f"[HTTP] [WS] ws_chat — Erreur de vérification du token : {e}", type=ERROR)
+            await websocket.close(code=4001, reason="Erreur d'authentification")
+            return
 
         if not decodedToken:
-            Logger.write(f"[HTTP] [403] chat — Not authorized", type=ERROR)
-            raise HTTPException(status_code=403, detail="Not authorized")
+            Logger.write("[HTTP] [WS] ws_chat — Token invalide ou session expirée", type=ERROR)
+            await websocket.close(code=4003, reason="Non autorisé")
+            return
 
         if self.agent is None:
-            Logger.write("[HTTP] [503] chat — Service agent not available", type=ERROR)
-            raise HTTPException(status_code=503, detail="Service agent not available")
+            Logger.write("[HTTP] [WS] ws_chat — Agent non disponible", type=ERROR)
+            await websocket.close(code=4503, reason="Agent non disponible")
+            return
 
-        return StreamingResponse(
-            self.agent.chatStream(request.message, decodedToken, request.session_id),
-            media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
-            },
-        )
+        await websocket.accept()
+        self._active_ws += 1
+
+        session_id: str | None = decodedToken.get("session_id")
+        active_stream: asyncio.Task | None = None
+
+        try:
+            while True:
+                try:
+                    data = await websocket.receive_json()
+                except Exception:
+                    break
+
+                msg_type = data.get("type", "message")
+
+                if msg_type == "confirmation":
+                    AuthSessionManager.resolve_confirmation(session_id, data.get("option", -1))
+
+                elif msg_type == "message":
+                    message = data.get("message", "").strip()
+                    if not message:
+                        continue
+
+                    if active_stream and not active_stream.done():
+                        active_stream.cancel()
+
+                    async def _stream(msg=message, sid=session_id, auth=decodedToken):
+                        try:
+                            async for event in self.agent.chatStream(msg, auth, sid):
+                                await websocket.send_text(event)
+                            await websocket.close(code=1000)
+                        except asyncio.CancelledError:
+                            pass
+                        except Exception as e:
+                            Logger.write(f"[HTTP] [WS] ws_chat — Erreur streaming : {e}", type=ERROR)
+
+                    active_stream = asyncio.create_task(_stream())
+
+        except WebSocketDisconnect:
+            Logger.write("[HTTP] [WS] ws_chat — Client déconnecté", type=WARNING)
+        except Exception as e:
+            Logger.write(f"[HTTP] [WS] ws_chat — Erreur inattendue : {e}", type=ERROR)
+        finally:
+            self._active_ws -= 1
+            if active_stream:
+                active_stream.cancel()
 
     """
     Route [GET] /files/{key}/{filename} : renvoie un fichier
@@ -133,24 +187,6 @@ class Router:
             raise HTTPException(status_code=403, detail="Unauthorized")
         return {"token": token}
 
-    """
-    Route [POST] /confirm/{session_id} : Réponse de confirmation à un outil en attente
-    """
-    async def confirm(self, session_id: str, request: ConfirmationRequest, authorization: str | None = Header(default=None)):
-        if not authorization:
-            raise HTTPException(status_code=401, detail="Authorization header is missing")
-        try:
-            decodedToken = Auth.checkAuthentification(token=authorization)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail="Internal authentification error")
-        if not decodedToken:
-            raise HTTPException(status_code=403, detail="Not authorized")
-
-        resolved = AuthSessionManager.resolve_confirmation(session_id, request.option)
-        if not resolved:
-            raise HTTPException(status_code=404, detail="No pending confirmation for this session")
-        return {"status": "ok"}
-
     def _check_admin_auth(self, credentials: HTTPBasicCredentials) -> None:
         if not AdminAuth.checkAdminCredentials(credentials.username, credentials.password):
             raise HTTPException(status_code=401, headers={"WWW-Authenticate": "Basic"}, detail="Unauthorized")
@@ -177,7 +213,7 @@ class Router:
             source=source,
             collection=collection
         )
-        
+
 
     """
     Route [PUT] /rag/documents : Met à jour un document existant identifié par son `source`

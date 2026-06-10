@@ -2,14 +2,6 @@ from pydantic import BaseModel
 from typing import Optional
 
 """
-ChatRequest — Format requête HTTP chat
-Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
-"""
-class ChatRequest(BaseModel):
-    message: str
-    session_id: Optional[str] = None
-
-"""
 ToolInfo — Format requête HTTP tools
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
@@ -32,10 +24,3 @@ class IndexRequest(BaseModel):
     text: str
     source: Optional[str] = None
     collection: Optional[str] = None
-
-"""
-ConfirmationRequest — Format requête HTTP réponse de confirmation outil
-Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
-"""
-class ConfirmationRequest(BaseModel):
-    option: int

@@ -8,9 +8,9 @@ class Event:
     @staticmethod
     def get(eventType:str, payload: dict=None):
         if payload == None:
-            return f"data: {json.dumps({'type': eventType})}\n\n"
+            return json.dumps({'type': eventType})
         else:
-            return f"data: {json.dumps({'type': eventType, **payload})}\n\n"
+            return json.dumps({'type': eventType, **payload})
 
 """
 ErrorEvent — Evenement lorsqu'une erreur est relevée

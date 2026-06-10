@@ -4,7 +4,7 @@
 - [x] Delestage du cache
 - [x] Liaison des fichiers avec le cache
 - [x] Meilleure gestion des sessions et données en cache (dans Agent)
-- [ ] revoir fichier de configuration
+- [x] revoir fichier de configuration
 - [x] Gestion du traitement long
 - [x] Gestion de la confirmation avant action
 - [ ] Implémentation des traductions
