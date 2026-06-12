@@ -11,7 +11,7 @@ from lib.session.session import AuthSessionManager
 from lib.mcp.client import mcp_manager
 from lib.mcp.services import ServiceManager
 from lib.log.logger import Logger, ERROR, WARNING
-from lib.config.config import StaticConfig
+from lib.config.config import Config, StaticConfig
 from lib.rag.raghelper import RagHelper
 
 _rag_basic_auth = HTTPBasic()
@@ -99,29 +99,40 @@ class Router:
             decodedToken = Auth.checkAuthentification(token=token)
         except Exception as e:
             Logger.write(f"[HTTP] [WS] ws_chat — Erreur de vérification du token : {e}", type=ERROR)
-            await websocket.close(code=4001, reason="Erreur d'authentification")
+            await websocket.close(code=4001, reason="Authentication error")
             return
 
         if not decodedToken:
             Logger.write("[HTTP] [WS] ws_chat — Token invalide ou session expirée", type=ERROR)
-            await websocket.close(code=4003, reason="Non autorisé")
+            await websocket.close(code=4003, reason="Unauthorized")
             return
 
         if self.agent is None:
             Logger.write("[HTTP] [WS] ws_chat — Agent non disponible", type=ERROR)
-            await websocket.close(code=4503, reason="Agent non disponible")
+            await websocket.close(code=4503, reason="Agent non available")
+            return
+
+        session_id: str | None = decodedToken.get("session_id")
+
+        if not AuthSessionManager.claim_ws(session_id):
+            Logger.write(f"[HTTP] [WS] ws_chat — Session {session_id} déjà connectée", type=WARNING)
+            await websocket.close(code=4409, reason="Session already connected")
             return
 
         await websocket.accept()
         self._active_ws += 1
 
-        session_id: str | None = decodedToken.get("session_id")
+        inactivity_timeout: int = Config.get(key="app.ws_inactivity_timeout")
         active_stream: asyncio.Task | None = None
 
         try:
             while True:
                 try:
-                    data = await websocket.receive_json()
+                    data = await asyncio.wait_for(websocket.receive_json(), timeout=inactivity_timeout)
+                except asyncio.TimeoutError:
+                    Logger.write(f"[HTTP] [WS] ws_chat — Timeout d'inactivité ({inactivity_timeout}s) pour la session {session_id}", type=WARNING)
+                    await websocket.close(code=1001, reason="Inactivity timeout")
+                    break
                 except Exception:
                     break
 
@@ -142,7 +153,6 @@ class Router:
                         try:
                             async for event in self.agent.chatStream(msg, auth, sid):
                                 await websocket.send_text(event)
-                            await websocket.close(code=1000)
                         except asyncio.CancelledError:
                             pass
                         except Exception as e:
@@ -156,6 +166,7 @@ class Router:
             Logger.write(f"[HTTP] [WS] ws_chat — Erreur inattendue : {e}", type=ERROR)
         finally:
             self._active_ws -= 1
+            AuthSessionManager.release_ws(session_id)
             if active_stream:
                 active_stream.cancel()
 

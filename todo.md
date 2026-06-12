@@ -1,33 +1,24 @@
-- [x] Simplifier l'écriture d'un service [EN COURS]
 - [ ] Revoir le fichier de configuration pour le prompt
 - [ ] Retour des urls et des fichiers [EN COURS]
-- [x] Delestage du cache
-- [x] Liaison des fichiers avec le cache
-- [x] Meilleure gestion des sessions et données en cache (dans Agent)
-- [x] revoir fichier de configuration
-- [x] Gestion du traitement long
-- [x] Gestion de la confirmation avant action
 - [ ] Implémentation des traductions
-- [x] Implémenter RAG
-- [x] Implémenter pré-traitement RAG
-- [x] Implémenter version
-- [x] Authentification gestion RAG
 - [ ] RAG local sur un fichier
 - [ ] Envoi de fichiers à l'agent
-- [x] Citer ou nom les sources
-- [x] Stats d'utilisation de la base RAG
-- [x] Mise à jour document RAG
 - [ ] Problème de non réponse du LLM (réponse vide)
-- [x] Refactor RAG
-- [x] Activer ou nom certains outils MCP de base
-- [x] Limiter l'histo envoyé à N messages
 - [ ] Limiter la sortie ?
 - [ ] Critique du code
-- [x] modifier readme
 - [ ] Support OCR ?
-- [x] Sur les outils, retourner le nom de l'outil dans le message
 - [ ] bug botcore
 - [ ] option pour retourner les infos des documents
+- [ ] Modification socket : ne pas kill à la fin mais au bout de N minutes
+- [ ] Sécurité : limites
+- [ ] Confirmations : prévoir des options plus riches (objets)
+- [ ] Bug sur les retours de confirmations (message refusé après sélection d'un oui ? ou pas de validation du tout)
+- [ ] chat.html : pb des fichiers
+- [ ] Sécurité : pas d'ouverture de N sockets sur la même session
+- [ ] Follow-up 
+- [ ] Limitation des résultats
+- [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
+- [ ] Critique de la réponse par un modèle
 
 Idées usages
 -> transcription de réunions manuscrites
@@ -40,3 +31,22 @@ Idées usages
 - [x] Gestion des erreir sur l'agent
 - [x] Gestion des erreurs sur le http
 - [x] Refactor
+- [x] Delestage du cache
+- [x] Liaison des fichiers avec le cache
+- [x] Meilleure gestion des sessions et données en cache (dans Agent)
+- [x] revoir fichier de configuration
+- [x] Gestion du traitement long
+- [x] Gestion de la confirmation avant action
+- [x] Implémenter RAG
+- [x] Implémenter pré-traitement RAG
+- [x] Implémenter version
+- [x] Authentification gestion RAG
+- [x] Simplifier l'écriture d'un service
+- [x] Citer ou nom les sources
+- [x] Stats d'utilisation de la base RAG
+- [x] Mise à jour document RAG
+- [x] Refactor RAG
+- [x] Activer ou nom certains outils MCP de base
+- [x] Limiter l'histo envoyé à N messages
+- [x] modifier readme
+- [x] Sur les outils, retourner le nom de l'outil dans le message

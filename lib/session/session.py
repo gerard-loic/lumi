@@ -11,6 +11,7 @@ class AuthSession:
         self.authentication = authentication
         self.files:   list[str]  = []
         self.history: list[dict] = []
+        self.ws_connected: bool  = False
 
     def clear(self):
         from lib.files.filestore import FileStore
@@ -73,6 +74,20 @@ class AuthSessionManager:
             return False
         queue.put_nowait(option)
         return True
+
+    @staticmethod
+    def claim_ws(session_id: str) -> bool:
+        session = AuthSessionManager.get(session_id)
+        if not session or session.ws_connected:
+            return False
+        session.ws_connected = True
+        return True
+
+    @staticmethod
+    def release_ws(session_id: str) -> None:
+        session = AuthSessionManager.get(session_id)
+        if session:
+            session.ws_connected = False
 
     @staticmethod
     def clear(all: bool = False):

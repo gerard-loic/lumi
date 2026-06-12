@@ -546,7 +546,7 @@
   let authToken  = null;
   let ws         = null;
   let isStreaming = false;
-  let currentCtx  = null; // contexte du message bot en cours de streaming
+  let currentCtx  = null;
 
   // ── Éléments DOM ────────────────────────────────────────────────
   const messagesEl  = document.getElementById("messages");
@@ -558,7 +558,6 @@
   const authErrorEl = document.getElementById("authError");
   const authBtn     = document.getElementById("authBtn");
 
-  // Désactiver l'envoi jusqu'à connexion WS établie
   sendBtn.disabled = true;
 
   // ── Authentification ─────────────────────────────────────────────
@@ -592,8 +591,8 @@
       const data = await resp.json();
       authToken = data.token;
       authModal.classList.add("hidden");
-      sendBtn.disabled = false;
       inputEl.focus();
+      connectWebSocket(); // connexion établie une fois pour toute la session
     } catch (err) {
       authErrorEl.textContent = `Erreur réseau : ${err.message}`;
       authBtn.disabled = false;
@@ -609,79 +608,59 @@
   });
 
   // ── WebSocket ────────────────────────────────────────────────────
-  function connectWebSocket(message) {
+  function connectWebSocket(onOpen = null) {
+    // Déjà ouverte
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      onOpen?.();
+      return;
+    }
+
+    // Connexion en cours — empiler le callback
+    if (ws && ws.readyState === WebSocket.CONNECTING) {
+      const prev = ws._pendingOpen;
+      ws._pendingOpen = () => { prev?.(); onOpen?.(); };
+      return;
+    }
+
     ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(authToken)}`);
+    ws._pendingOpen = onOpen;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "message", message }));
+      sendBtn.disabled = false;
+      ws._pendingOpen?.();
+      ws._pendingOpen = null;
     };
 
-    ws.onmessage = (event) => {
-      if (!currentCtx) return;
-      const { bubble, textNode, cursor, msg, toolIndicators } = currentCtx;
-
-      let data;
-      try { data = JSON.parse(event.data); } catch { return; }
-
-      if (data.type === "token") {
-        textNode.textContent += data.content;
-        scrollBottom();
-
-      } else if (data.type === "tool_call") {
-        if (data.status === "PENDING") {
-          const el = addToolIndicator(msg, bubble, data.tools);
-          toolIndicators.set(data.tools, el);
-        } else if (data.status === "OK") {
-          const el = toolIndicators.get(data.tools);
-          if (el) el.classList.add("done");
-        } else if (data.status === "ERROR") {
-          const el = toolIndicators.get(data.tools);
-          if (el) el.classList.add("error");
-        }
-        scrollBottom();
-
-      } else if (data.type === "confirmation") {
-        addConfirmationCard(msg, bubble, data.question, data.options);
-
-      } else if (data.type === "confirmation_refused") {
-        const el = document.createElement("div");
-        el.className = "tool-indicator error";
-        el.textContent = " Action annulée";
-        msg.insertBefore(el, bubble);
-        scrollBottom();
-
-      } else if (data.type === "file" || data.type === "url") {
-        addResource(msg, data);
-        scrollBottom();
-
-      } else if (data.type === "error") {
-        cursor.remove();
-        if (!textNode.textContent) {
-          textNode.textContent = data.message || "Une erreur est survenue.";
-          bubble.style.borderColor = "#ff4d4d40";
-          bubble.style.color = "#ff6b6b";
-        }
-        scrollBottom();
-        endStream();
-
-      } else if (data.type === "end") {
-        cursor.remove();
-        endStream();
-      }
-    };
+    ws.onmessage = handleWsMessage;
 
     ws.onclose = (event) => {
       ws = null;
-      // Fermeture normale après end — ne rien faire
-      if (event.code === 1000) return;
-      // Token invalide ou expiré → retour à la modale
+
+      // Token invalide ou session expirée → retour à la modale
       if (event.code === 4001 || event.code === 4003) {
         authToken = null;
         sendBtn.disabled = true;
         authBtn.disabled = false;
         authModal.classList.remove("hidden");
+        if (isStreaming && currentCtx) {
+          currentCtx.cursor.remove();
+          endStream();
+        }
+        return;
       }
-      // Déconnexion inattendue pendant un stream
+
+      // Session déjà ouverte dans un autre onglet
+      if (event.code === 4409) {
+        sendBtn.disabled = true;
+        appendSystemMessage("Session déjà active dans un autre onglet. Fermez-le et actualisez.");
+        if (isStreaming && currentCtx) {
+          currentCtx.cursor.remove();
+          endStream();
+        }
+        return;
+      }
+
+      // Timeout d'inactivité (1001) ou perte réseau → ws = null, on reconnectera au prochain envoi
       if (isStreaming && currentCtx) {
         currentCtx.cursor.remove();
         currentCtx.textNode.textContent += "\n[Connexion interrompue]";
@@ -689,20 +668,70 @@
       }
     };
 
-    ws.onerror = () => {
-      if (isStreaming && currentCtx) {
-        currentCtx.cursor.remove();
-        endStream();
+    ws.onerror = () => { /* onclose sera appelé juste après */ };
+  }
+
+  // ── Gestion des messages entrants ────────────────────────────────
+  function handleWsMessage(event) {
+    if (!currentCtx) return;
+    const { bubble, textNode, cursor, msg, toolIndicators } = currentCtx;
+
+    let data;
+    try { data = JSON.parse(event.data); } catch { return; }
+
+    if (data.type === "token") {
+      textNode.textContent += data.content;
+      scrollBottom();
+
+    } else if (data.type === "tool_call") {
+      if (data.status === "PENDING") {
+        const el = addToolIndicator(msg, bubble, data.tools);
+        toolIndicators.set(data.tools, el);
+      } else if (data.status === "OK") {
+        const el = toolIndicators.get(data.tools);
+        if (el) el.classList.add("done");
+      } else if (data.status === "ERROR") {
+        const el = toolIndicators.get(data.tools);
+        if (el) el.classList.add("error");
       }
-    };
+      scrollBottom();
+
+    } else if (data.type === "confirmation") {
+      addConfirmationCard(msg, bubble, data.question, data.options);
+
+    } else if (data.type === "confirmation_refused") {
+      const el = document.createElement("div");
+      el.className = "tool-indicator error";
+      el.textContent = " Action annulée";
+      msg.insertBefore(el, bubble);
+      scrollBottom();
+
+    } else if (data.type === "file" || data.type === "url") {
+      addResource(msg, data);
+      scrollBottom();
+
+    } else if (data.type === "error") {
+      cursor.remove();
+      if (!textNode.textContent) {
+        textNode.textContent = data.message || "Une erreur est survenue.";
+        bubble.style.borderColor = "#ff4d4d40";
+        bubble.style.color = "#ff6b6b";
+      }
+      scrollBottom();
+      endStream();
+
+    } else if (data.type === "end") {
+      cursor.remove();
+      endStream();
+    }
   }
 
   function endStream() {
     isStreaming = false;
     currentCtx = null;
-    if (ws) ws.close();
     sendBtn.disabled = false;
     inputEl.focus();
+    // La connexion WS reste ouverte
   }
 
   // ── Auto-resize textarea ─────────────────────────────────────────
@@ -826,6 +855,19 @@
     return el;
   }
 
+  // ── Message système (info / erreur non liée à un échange) ────────
+  function appendSystemMessage(text) {
+    const msg = document.createElement("div");
+    msg.className = "message bot";
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    bubble.style.cssText = "color:var(--muted);font-style:italic;border-color:transparent";
+    bubble.textContent = text;
+    msg.appendChild(bubble);
+    messagesEl.appendChild(msg);
+    scrollBottom();
+  }
+
   // ── Envoi du message ─────────────────────────────────────────────
   function sendMessage() {
     const text = inputEl.value.trim();
@@ -840,7 +882,14 @@
     currentCtx = { ...refs, toolIndicators: new Map() };
     isStreaming = true;
 
-    connectWebSocket(text);
+    const doSend = () => ws.send(JSON.stringify({ type: "message", message: text }));
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      doSend();
+    } else {
+      // WS fermée (timeout inactivité ou perte réseau) → reconnexion transparente
+      connectWebSocket(doSend);
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────
