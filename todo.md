@@ -1,25 +1,25 @@
 - [ ] Revoir le fichier de configuration pour le prompt
-- [ ] Retour des urls et des fichiers [EN COURS]
+- [ ] Retour des urls et des fichiers 
 - [ ] Implémentation des traductions
 - [ ] RAG local sur un fichier
 - [ ] Envoi de fichiers à l'agent
-- [ ] Problème de non réponse du LLM (réponse vide)
+- [x] Problème de non réponse du LLM (réponse vide)
 - [ ] Limiter la sortie ?
 - [ ] Critique du code
 - [ ] Support OCR ?
 - [ ] bug botcore
 - [ ] option pour retourner les infos des documents
-- [x] Modification socket : ne pas kill à la fin mais au bout de N minutes
-- [ ] Sécurité : limites
 - [ ] Confirmations : prévoir des options plus riches (objets)
 - [ ] Bug sur les retours de confirmations (message refusé après sélection d'un oui ? ou pas de validation du tout)
 - [ ] chat.html : pb des fichiers
-- [x] Sécurité : pas d'ouverture de N sockets sur la même session
 - [ ] Follow-up 
 - [ ] Limitation des résultats
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
 - [ ] Critique de la réponse par un modèle
-- [ ] ne pas pouvoir envoyer une question si un échange est déjà en cours
+- [ ] Filtres de contenus
+- [ ] Fonction "instruction" dans le tool MCP
+- [ ] Pb confirmation avec l'abandon de l'action [EN COURS]
+- [ ] Pbs de l'affichage du retour des liens
 
 Idées usages
 -> transcription de réunions manuscrites
@@ -51,3 +51,7 @@ Idées usages
 - [x] Limiter l'histo envoyé à N messages
 - [x] modifier readme
 - [x] Sur les outils, retourner le nom de l'outil dans le message
+- [x] Modification socket : ne pas kill à la fin mais au bout de N minutes
+- [x] Sécurité : limites
+- [x] ne pas pouvoir envoyer une question si un échange est déjà en cours
+- [x] ne pas pouvoir envoyer une question si un échange est déjà en cours

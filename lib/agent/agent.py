@@ -10,6 +10,7 @@ from lib.log.logger import Logger, ERROR, OK, WARNING
 from lib.session.session import AuthSessionManager
 from lib.http.auth import Auth
 from lib.files.localdata import LocalData
+from lib.agent.filters.llmfilter import LLMFilterManager
 
 """
 Agent — Agent d'orchestration / communication LLM
@@ -42,6 +43,9 @@ class Agent:
     Gestion d'une connexion SSE (correspondant à une requête client)
     """
     async def chatStream(self, message: str, authorization: dict, session_id: Optional[str] = None) -> AsyncGenerator[str, None]:
+        #On filtre le message entrant
+        message = LLMFilterManager.filter(text=message)
+        
         try:
 
             history = AuthSessionManager.get_history(session_id)[-self._MEMORY_MESSAGES:]
@@ -182,19 +186,31 @@ class Agent:
                 Logger.write("[AGENT] Call LLM OK !", type=OK)
 
             # ----------------------------------------------------------------
-            # ÉTAPE 3 — Réponse finale streamée token par token
+            # ÉTAPE 3 — Réponse finale streamée token par token (1 retry si vide)
             # ----------------------------------------------------------------
-            Logger.write("[AGENT] Call LLM for final answer...", type=WARNING)
             assistant_reply_tokens = []
-            try:
-                async for chunk in await self._connector.callLLM(messages=messages, stream=True):
-                    token = chunk.choices[0].delta.content
-                    if token:
-                        assistant_reply_tokens.append(token)
-                        yield TokenEvent.get(token=token)
-            except Exception as e:
-                Logger.write(f"[AGENT] LLM streaming error : {str(e)}", type=ERROR)
-                yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM streaming error", details=str(e))
+            for attempt in range(2):
+                Logger.write(f"[AGENT] Call LLM for final answer (attempt {attempt + 1})...", type=WARNING)
+                try:
+                    async for chunk in await self._connector.callLLM(messages=messages, stream=True):
+                        token = chunk.choices[0].delta.content
+                        if token:
+                            assistant_reply_tokens.append(token)
+                            yield TokenEvent.get(token=token)
+                except Exception as e:
+                    Logger.write(f"[AGENT] LLM streaming error : {str(e)}", type=ERROR)
+                    yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM streaming error", details=str(e))
+                    yield DoneEvent.get()
+                    return
+
+                if assistant_reply_tokens:
+                    break
+                if attempt == 0:
+                    Logger.write("[AGENT] LLM returned empty response, retrying...", type=WARNING)
+
+            if not assistant_reply_tokens:
+                Logger.write("[AGENT] LLM returned empty response after retry", type=ERROR)
+                yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty response from LLM")
                 yield DoneEvent.get()
                 return
 
