@@ -9,16 +9,17 @@
 - [ ] Support OCR ?
 - [ ] bug botcore
 - [ ] option pour retourner les infos des documents
-- [ ] Modification socket : ne pas kill à la fin mais au bout de N minutes
+- [x] Modification socket : ne pas kill à la fin mais au bout de N minutes
 - [ ] Sécurité : limites
 - [ ] Confirmations : prévoir des options plus riches (objets)
 - [ ] Bug sur les retours de confirmations (message refusé après sélection d'un oui ? ou pas de validation du tout)
 - [ ] chat.html : pb des fichiers
-- [ ] Sécurité : pas d'ouverture de N sockets sur la même session
+- [x] Sécurité : pas d'ouverture de N sockets sur la même session
 - [ ] Follow-up 
 - [ ] Limitation des résultats
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
 - [ ] Critique de la réponse par un modèle
+- [ ] ne pas pouvoir envoyer une question si un échange est déjà en cours
 
 Idées usages
 -> transcription de réunions manuscrites

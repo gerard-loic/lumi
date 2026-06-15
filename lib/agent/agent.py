@@ -8,6 +8,8 @@ from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent, Confi
 from lib.session.session import AuthSessionManager as _SessionManager
 from lib.log.logger import Logger, ERROR, OK, WARNING
 from lib.session.session import AuthSessionManager
+from lib.http.auth import Auth
+from lib.files.localdata import LocalData
 
 """
 Agent — Agent d'orchestration / communication LLM
@@ -18,6 +20,8 @@ Stratégie :
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Agent:
+    currentStreamUID = None
+
     def __init__(self, connector:str):
         #Initialisation du connecteur LLM
         if connector=="LiteLLM":
@@ -39,6 +43,7 @@ class Agent:
     """
     async def chatStream(self, message: str, authorization: dict, session_id: Optional[str] = None) -> AsyncGenerator[str, None]:
         try:
+
             history = AuthSessionManager.get_history(session_id)[-self._MEMORY_MESSAGES:]
 
             messages = [
@@ -202,6 +207,7 @@ class Agent:
             ]
             AuthSessionManager.save_history(session_id, new_history)
 
+            LocalData.logLLMUsage(session_uid=Auth.getSessionId(), token_used=0)
             yield DoneEvent.get()
         except Exception as e:
             Logger.write(f"[AGENT] Unexpected error : {str(e)}", type=ERROR)

@@ -2,6 +2,8 @@
 .env
 temp/*
 !temp/.gitkeep
+data/*
+!data/.gitkeep
 tools/*
 !tools/.gitkeep
 !tools/excel.py

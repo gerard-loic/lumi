@@ -1,6 +1,40 @@
 import litellm
 from lib.config.config import Config
 from lib.mcp.client import mcp_manager
+from lib.files.localdata import LocalData
+from lib.http.auth import Auth
+
+class LiteLLMTrackingCallback(litellm.integrations.custom_logger.CustomLogger):
+    def __init__(self):
+        self.total_prompt_tokens     = 0
+        self.total_completion_tokens = 0
+        self.total_tokens            = 0
+        super().__init__()
+
+    def log_success_event(self, kwargs, response_obj, start_time, end_time):
+        usage = getattr(response_obj, "usage", None)
+        if usage:
+            self.total_prompt_tokens     += getattr(usage, "prompt_tokens", 0)
+            self.total_completion_tokens += getattr(usage, "completion_tokens", 0)
+            self.total_tokens            += getattr(usage, "total_tokens", 0)
+            if getattr(usage, "total_tokens", 0) > 0:
+                LocalData.logLLMUsage(session_uid=Auth.getSessionId(), token_used=getattr(usage, "total_tokens", 0))
+
+    async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
+        self.log_success_event(kwargs, response_obj, start_time, end_time)
+
+    def get_usage(self) -> dict:
+        return {
+            "prompt_tokens":     self.total_prompt_tokens,
+            "completion_tokens": self.total_completion_tokens,
+            "total_tokens":      self.total_tokens,
+        }
+
+    def reset(self):
+        self.total_prompt_tokens     = 0
+        self.total_completion_tokens = 0
+        self.total_tokens            = 0
+
 
 """
 LiteLLM — Gestion communication modèle LLM avec LiteLLM
@@ -12,6 +46,10 @@ class LiteLLM:
         self._api_base = Config.get(key="llm.litellm.api_base")
         self._api_key  = Config.get(key="llm.litellm.api_key")
         self._tools    = mcp_manager.tools_as_openai_format()
+
+        self._tracking = LiteLLMTrackingCallback()
+        litellm.callbacks = [self._tracking]
+
         print(f"[Agent LiteLLM] {len(self._tools)} outil(s) chargé(s) : {[t['function']['name'] for t in self._tools]}")
 
     async def callLLM(self, messages:str, stream:bool):
@@ -24,7 +62,7 @@ class LiteLLM:
             api_key=self._api_key,
         )
         return response
-    
+
 
 """
 Embedder — Génération de vecteurs d'embedding via LiteLLM
@@ -44,4 +82,5 @@ class LiteLLMEmbedder:
             api_key=self._api_key,
         )
         return [item["embedding"] for item in response.data]
+
 

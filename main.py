@@ -28,6 +28,7 @@ from lib.agent.agent import Agent
 from lib.mcp.services import ServiceManager
 from lib.session.session import AuthSessionManager
 from lib.files.filestore import FileStore
+from lib.files.localdata import LocalData
 
 # ----------------------------------------------------------------
 # Initialisation configuration
@@ -38,6 +39,11 @@ Config.init()
 # Initialisation logger
 # ----------------------------------------------------------------
 Logger.init(configuration=Config.get(key="logger"))
+
+# ----------------------------------------------------------------
+# Initialisation localdata
+# ----------------------------------------------------------------
+LocalData.init()
 
 print("###############################################################################")
 print('# LUMI - IA agent with MCP toolkit')

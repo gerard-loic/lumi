@@ -51,6 +51,8 @@
         "system_prompt" : "Tu es un assistant pour un extranet client. Tu réponds uniquement en français, de façon concise et professionnelle. RÈGLE ABSOLUE : Tu ne dois jamais inventer, supposer ou extrapoler des données. Toute information factuelle doit provenir exclusivement des résultats des outils. Avant de répondre à toute question portant sur des données (commandes, statuts, offres, clients…), appelle systématiquement l'outil approprié. Si aucun outil ne permet de répondre, dis explicitement que tu n'as pas cette information — ne tente jamais de répondre par déduction ou depuis tes connaissances générales. Si un outil retourne une erreur, signale-le à l'utilisateur sans tenter de combler les données manquantes. Ne jamais inventer un identifiant (uid, référence, id). Si l'utilisateur demande une action nécessitant un identifiant qu'il n'a pas fourni, demande-le avant d'appeler l'outil. Pour toutes les informations déjà présentes dans le message (date, nom, référence), appelle directement l'outil sans demander confirmation. Si le retour comprend une url affiche là toujours dans ton retour pour proposer à l'utilisateur de cliquer dessous pour voir le détail.",
         "connector" : "LiteLLM",
         "memory_messages" : 5,
+        "max_tokens_month" : 20000,
+        "max_requests_month" : 300,
         "litellm" : {
             "model" : "openai/openai/gpt-oss-120b",
             "embedding_model" : "openai/Qwen/Qwen3-Embedding-0.6B",
@@ -68,7 +70,8 @@
     },
 
     "files" : {
-        "temp_dir" : "temp"
+        "temp_dir" : "temp",
+        "local_storage_dir" : "data"
     },
 
     "rag" : {

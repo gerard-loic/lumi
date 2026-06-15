@@ -13,6 +13,9 @@ from lib.mcp.services import ServiceManager
 from lib.log.logger import Logger, ERROR, WARNING
 from lib.config.config import Config, StaticConfig
 from lib.rag.raghelper import RagHelper
+from lib.files.localdata import LocalData
+from lib.agent.llmlimiter import LLMLimiter
+from lib.agent.events import ErrorEvent
 
 _rag_basic_auth = HTTPBasic()
 
@@ -50,7 +53,8 @@ class Router:
             "services" : [],
             "active_ws" : self._active_ws,
             "version" : StaticConfig.version(),
-            "version_name" : StaticConfig.versionName()
+            "version_name" : StaticConfig.versionName(),
+            "llm_usage" : LocalData.getLLMUsage(currentMonth=True)[0]
         }
         for name in ServiceManager.services:
             out["services"].append(name)
@@ -142,6 +146,11 @@ class Router:
                     AuthSessionManager.resolve_confirmation(session_id, data.get("option", -1))
 
                 elif msg_type == "message":
+                    #Verification du droit d'appel du LLM
+                    if LLMLimiter.isRequestUsageExceeded() or LLMLimiter.isTokenUsageExceeded():
+                        await websocket.send_text(ErrorEvent.get(error_code="RATE_LIMIT_EXCEEDED", message="Request usage limit exceeded"))
+                        continue
+
                     message = data.get("message", "").strip()
                     if not message:
                         continue
