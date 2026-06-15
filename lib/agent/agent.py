@@ -124,12 +124,8 @@ class Agent:
                             answer = -1
                         if answer != meta.get("confirmation_validation_option", -1):
                             yield ConfirmationRefusedEvent.get()
-                            messages.append({
-                                "role": "tool",
-                                "tool_call_id": tc.id,
-                                "content": "Action cancelled by user.",
-                            })
-                            continue
+                            yield DoneEvent.get()
+                            return
 
                     yield ToolEvent.get(tool_name=tc.function.name, status="PENDING", long_call=meta.get("slow", False), message=description)
                     try:

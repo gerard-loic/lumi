@@ -7,7 +7,7 @@
 - [ ] Limiter la sortie ?
 - [ ] Critique du code
 - [ ] Support OCR ?
-- [ ] bug botcore
+- [x] bug botcore
 - [ ] option pour retourner les infos des documents
 - [ ] Confirmations : prévoir des options plus riches (objets)
 - [ ] Bug sur les retours de confirmations (message refusé après sélection d'un oui ? ou pas de validation du tout)
@@ -20,6 +20,7 @@
 - [ ] Fonction "instruction" dans le tool MCP
 - [ ] Pb confirmation avec l'abandon de l'action [EN COURS]
 - [ ] Pbs de l'affichage du retour des liens
+- [ ] Tache de delestage
 
 Idées usages
 -> transcription de réunions manuscrites

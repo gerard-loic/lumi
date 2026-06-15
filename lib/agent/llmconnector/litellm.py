@@ -4,6 +4,7 @@ from lib.mcp.client import mcp_manager
 from lib.files.localdata import LocalData
 from lib.http.auth import Auth
 
+
 class LiteLLMTrackingCallback(litellm.integrations.custom_logger.CustomLogger):
     def __init__(self):
         self.total_prompt_tokens     = 0
