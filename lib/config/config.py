@@ -31,7 +31,7 @@ class Config:
 class StaticConfig:
     @staticmethod
     def version():
-        return "1.1.1"
+        return "1.1.2"
     
     @staticmethod
     def versionName():
