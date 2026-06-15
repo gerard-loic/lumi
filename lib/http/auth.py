@@ -1,11 +1,13 @@
 import jwt
+import json
+import hashlib
 import threading
 from datetime import datetime, timezone, timedelta
 from lib.mcp.services import ServiceManager, Service
 from lib.config.config import Config
 import sys
 import secrets
-from lib.log.logger import Logger, ERROR
+from lib.log.logger import Logger, ERROR, WARNING
 from lib.session.session import AuthSession, AuthSessionManager
 """
 Auth — Gestion de l'authentification sur l'agent
@@ -23,6 +25,14 @@ class Auth:
         auth_service = ServiceManager.get(name=Config.get(key="authentication.service"))
         result = auth_service.checkAuthentication(authorization=authorization)
         if result:
+            fingerprint = hashlib.sha256(
+                json.dumps(authorization, sort_keys=True).encode()
+            ).hexdigest()
+
+            if AuthSessionManager.has_active_ws_for(fingerprint):
+                Logger.write("[AUTH] Authentification refusée : une session WebSocket est déjà ouverte pour cet utilisateur", type=WARNING)
+                return None
+
             #On authentifie tous les services
             payload = {
                 "session_id" : secrets.token_hex(16),   #ID de session de la conversation
@@ -39,7 +49,7 @@ class Auth:
             token = Auth._create_token(payload=payload)
             Auth._local.sessionId = payload["session_id"]
 
-            AuthSessionManager.add(payload["session_id"], payload["exp"].timestamp(), payload)
+            AuthSessionManager.add(payload["session_id"], payload["exp"].timestamp(), payload, auth_fingerprint=fingerprint)
 
             #Le token comprend toutes les couches d'authentification aux services
             return token

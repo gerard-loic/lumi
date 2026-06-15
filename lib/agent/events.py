@@ -18,7 +18,8 @@ Codes d'erreur supportés :
 LLM_CALL_FAIL : erreur d'appel au LLM
 MCP_TOOL_LIMIT_EXCEEDED : Trop d'appels d'outils consécutifs
 UNEXPECTED : erreur inattendue
-RATE_LIMIT_EXCEEDED : limites atteintes
+RATE_LIMIT_EXCEEDED : limites mensuelles ou anti-flood dépassées
+RESPONSE_IN_PROGRESS : un message est déjà en cours de traitement
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class ErrorEvent:

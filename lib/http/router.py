@@ -151,12 +151,17 @@ class Router:
                         await websocket.send_text(ErrorEvent.get(error_code="RATE_LIMIT_EXCEEDED", message="Request usage limit exceeded"))
                         continue
 
-                    message = data.get("message", "").strip()
-                    if not message:
+                    if LLMLimiter.isFloodDetected(session_id):
+                        await websocket.send_text(ErrorEvent.get(error_code="RATE_LIMIT_EXCEEDED", message="Too many requests, please slow down"))
                         continue
 
                     if active_stream and not active_stream.done():
-                        active_stream.cancel()
+                        await websocket.send_text(ErrorEvent.get(error_code="RESPONSE_IN_PROGRESS", message="A response is already in progress, please wait"))
+                        continue
+
+                    message = data.get("message", "").strip()
+                    if not message:
+                        continue
 
                     async def _stream(msg=message, sid=session_id, auth=decodedToken):
                         try:
@@ -219,6 +224,9 @@ class Router:
         except Exception as e:
             Logger.write(f"[HTTP] [500] auth — Internal authentification error: {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=f"Internal authentification error")
+        if token is None:
+            Logger.write(f"[HTTP] [409] auth — Session already connected", type=ERROR)
+            raise HTTPException(status_code=409, detail="A session is already active for this user")
         if not token:
             Logger.write(f"[HTTP] [403] auth — Unauthorized", type=ERROR)
             raise HTTPException(status_code=403, detail="Unauthorized")

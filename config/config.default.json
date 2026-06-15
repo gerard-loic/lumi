@@ -53,6 +53,7 @@
         "memory_messages" : 5,
         "max_tokens_month" : 20000,
         "max_requests_month" : 300,
+        "max_requests_minute" : 5,
         "litellm" : {
             "model" : "openai/openai/gpt-oss-120b",
             "embedding_model" : "openai/Qwen/Qwen3-Embedding-0.6B",

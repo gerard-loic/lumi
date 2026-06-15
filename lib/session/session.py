@@ -5,10 +5,11 @@ Session — Gestion du cycle de vie des sessions (authentification + historique 
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class AuthSession:
-    def __init__(self, session_id: str, expires_at: int, authentication: dict):
-        self.session_id    = session_id
-        self.expires_at    = expires_at
-        self.authentication = authentication
+    def __init__(self, session_id: str, expires_at: int, authentication: dict, auth_fingerprint: str = ""):
+        self.session_id      = session_id
+        self.expires_at      = expires_at
+        self.authentication  = authentication
+        self.auth_fingerprint = auth_fingerprint
         self.files:   list[str]  = []
         self.history: list[dict] = []
         self.ws_connected: bool  = False
@@ -27,10 +28,17 @@ class AuthSessionManager:
     _confirmation_queues: dict[str, asyncio.Queue] = {}
 
     @staticmethod
-    def add(session_id: str, expires_at: int, authentication: dict):
+    def add(session_id: str, expires_at: int, authentication: dict, auth_fingerprint: str = ""):
         AuthSessionManager._sessions.append(
-            AuthSession(session_id=session_id, expires_at=expires_at, authentication=authentication)
+            AuthSession(session_id=session_id, expires_at=expires_at, authentication=authentication, auth_fingerprint=auth_fingerprint)
         )
+
+    @staticmethod
+    def has_active_ws_for(auth_fingerprint: str) -> bool:
+        for session in AuthSessionManager._sessions:
+            if session.auth_fingerprint == auth_fingerprint and session.ws_connected:
+                return True
+        return False
 
     @staticmethod
     def get(session_id: str) -> 'AuthSession | None':

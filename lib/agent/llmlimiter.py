@@ -1,7 +1,32 @@
+import time
+from collections import defaultdict
 from lib.files.localdata import LocalData
 from lib.config.config import Config
 
 class LLMLimiter:
+    _session_timestamps: dict[str, list[float]] = defaultdict(list)
+
+    @staticmethod
+    def getFloodLimit():
+        limit = Config.get("llm.max_requests_minute")
+        if limit is None or limit == -1:
+            return None
+        return limit
+
+    @staticmethod
+    def isFloodDetected(session_id: str) -> bool:
+        """Retourne True si la session dépasse le nombre de requêtes autorisées par minute."""
+        limit = LLMLimiter.getFloodLimit()
+        if not limit:
+            return False
+        now = time.time()
+        timestamps = LLMLimiter._session_timestamps[session_id]
+        timestamps[:] = [t for t in timestamps if now - t < 60.0]
+        if len(timestamps) >= limit:
+            return True
+        timestamps.append(now)
+        return False
+
     @staticmethod
     def getTokenLimit():
         limit = Config.get("llm.max_tokens_month")
