@@ -16,7 +16,7 @@
 - [ ] Limitation des résultats
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
 - [ ] Critique de la réponse par un modèle
-- [ ] Filtres de contenus
+- [x] Filtres de contenus
 - [ ] Fonction "instruction" dans le tool MCP
 - [ ] Pb confirmation avec l'abandon de l'action [EN COURS]
 - [ ] Pbs de l'affichage du retour des liens
