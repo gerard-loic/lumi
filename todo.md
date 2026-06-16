@@ -3,11 +3,10 @@
 - [ ] Implémentation des traductions
 - [ ] RAG local sur un fichier
 - [ ] Envoi de fichiers à l'agent
-- [x] Problème de non réponse du LLM (réponse vide)
+
 - [ ] Limiter la sortie ?
 - [ ] Critique du code
 - [ ] Support OCR ?
-- [x] bug botcore
 - [ ] option pour retourner les infos des documents
 - [ ] Confirmations : prévoir des options plus riches (objets)
 - [ ] Bug sur les retours de confirmations (message refusé après sélection d'un oui ? ou pas de validation du tout)
@@ -16,12 +15,14 @@
 - [ ] Limitation des résultats
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
 - [ ] Critique de la réponse par un modèle
-- [x] Filtres de contenus
 - [ ] Fonction "instruction" dans le tool MCP
 - [ ] Pb confirmation avec l'abandon de l'action [EN COURS]
 - [ ] Pbs de l'affichage du retour des liens
 - [ ] Tache de delestage
 - [ ] Possibilité d'arreter une conversation proprement
+- [ ] Connecteur Webex [EN COURS]
+- [ ] Outil génération PDF [EN COURS]
+- [ ] pb pbVector sur prod
 
 Idées usages
 -> transcription de réunions manuscrites
@@ -57,3 +58,6 @@ Idées usages
 - [x] Sécurité : limites
 - [x] ne pas pouvoir envoyer une question si un échange est déjà en cours
 - [x] ne pas pouvoir envoyer une question si un échange est déjà en cours
+- [x] bug botcore
+- [x] Problème de non réponse du LLM (réponse vide)
+- [x] Filtres de contenus

@@ -846,9 +846,31 @@
     const el = document.createElement(event.url ? "a" : "span");
     el.className = "resource-attachment " + (isFile ? "type-file" : "type-url");
     if (event.url) {
-      el.href = event.url;
-      el.target = "_blank";
-      el.rel = "noopener noreferrer";
+      if (isFile) {
+        el.href = "#";
+        el.addEventListener("click", async (e) => {
+          e.preventDefault();
+          try {
+            const resp = await fetch(event.url, {
+              headers: { "Authorization": "Bearer " + authToken }
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const blob = await resp.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            a.download = event.name || "fichier";
+            a.click();
+            URL.revokeObjectURL(blobUrl);
+          } catch (err) {
+            console.error("Téléchargement échoué :", err);
+          }
+        });
+      } else {
+        el.href = event.url;
+        el.target = "_blank";
+        el.rel = "noopener noreferrer";
+      }
     }
     el.textContent = escapeHtml(event.name || event.path || event.url || "Ressource");
     msg.appendChild(el);
