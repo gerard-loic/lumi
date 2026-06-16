@@ -3,6 +3,8 @@ from pathlib import Path
 import os
 import json
 
+_MISSING = object()
+
 """
 Config — Gestion des fichiers de configuration
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
@@ -12,12 +14,14 @@ class Config:
     def init():
         Config.conf = {}
         Config._loadConfFile(file_path="config/config.json")
-        
+
     @staticmethod
-    def get(key:str):
+    def get(key: str, default=_MISSING):
         node = Config.conf
         for part in key.split("."):
             if not isinstance(node, dict) or part not in node:
+                if default is not _MISSING:
+                    return default
                 raise Exception(f"Config {key} does not exist")
             node = node[part]
         return node

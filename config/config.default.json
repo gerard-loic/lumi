@@ -85,8 +85,14 @@
         "pgvector" : {
             "table" : "rag_documents"
         }
+    },
+
+    "webex" : {
+        "enabled" : false,
+        "bot_token" : "votre-token-bot-webex",
+        "webhook_secret" : ""
     }
 
 
-    
+
 }

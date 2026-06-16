@@ -84,6 +84,15 @@ async def lifespan(app: FastAPI):
     cleaner = asyncio.create_task(_session_cleaner())
     async with mcp_manager.run():
         lumi_router.agent = Agent(connector=Config.get(key="llm.connector"))
+
+        if Config.get(key="webex.enabled", default=False):
+            from lib.webex.connector import WebexConnector
+            from lib.webex.webhook import WebexWebhookHandler
+            webex_connector = WebexConnector(bot_token=Config.get(key="webex.bot_token"))
+            await webex_connector.init()
+            lumi_router._webex_connector = webex_connector
+            lumi_router._webex_handler = WebexWebhookHandler(agent=lumi_router.agent, connector=webex_connector)
+
         yield
     cleaner.cancel()
 
