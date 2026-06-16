@@ -12,15 +12,19 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class PgVector:
     @staticmethod
-    def _connect():
+    def _connect_raw():
         cfg = Config.get("services")["bdd"]
-        conn = psycopg2.connect(
+        return psycopg2.connect(
             host=cfg["host"],
             port=cfg["port"],
             database=cfg["database"],
             user=cfg["username"],
             password=cfg["password"],
         )
+
+    @staticmethod
+    def _connect():
+        conn = PgVector._connect_raw()
         register_vector(conn)
         return conn
 
@@ -38,7 +42,7 @@ class PgVector:
             hnsw_idx = sql.Identifier(f"{table_name}_hnsw_idx")
             coll_idx = sql.Identifier(f"{table_name}_collection_idx")
 
-            conn = PgVector._connect()
+            conn = PgVector._connect_raw()
             try:
                 with conn.cursor() as cur:
                     cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
