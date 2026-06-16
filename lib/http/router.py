@@ -240,6 +240,8 @@ class Router:
     Route [POST] /webex/webhook : Reçoit les événements Webex et traite les messages en arrière-plan
     """
     async def webex_webhook(self, request: Request, background_tasks: BackgroundTasks, x_spark_signature: str | None = Header(default=None)):
+        Logger.write(f"[HTTP] [WEBEX] Webhook reçu depuis {request.client.host}", type=WARNING)
+
         if not self._webex_handler:
             raise HTTPException(status_code=404, detail="Webex integration not configured")
 
