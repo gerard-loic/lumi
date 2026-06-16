@@ -73,3 +73,4 @@ yarl==1.24.2
 zipp==4.1.0
 pgvector
 websockets
+fpdf2
