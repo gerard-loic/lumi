@@ -21,6 +21,7 @@
 - [ ] Pb confirmation avec l'abandon de l'action [EN COURS]
 - [ ] Pbs de l'affichage du retour des liens
 - [ ] Tache de delestage
+- [ ] Possibilité d'arreter une conversation proprement
 
 Idées usages
 -> transcription de réunions manuscrites

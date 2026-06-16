@@ -5,6 +5,9 @@ from psycopg2 import sql
 from lib.config.config import Config
 from lib.mcp.services import Service
 
+#CREATE EXTENSION IF NOT EXISTS pg_trgm
+#CREATE EXTENSION IF NOT EXISTS vector
+
 class PostgreSQL(Service):
     def __init__(self, data:dict):
         service_format = {

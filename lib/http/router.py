@@ -96,30 +96,30 @@ class Router:
     """
     async def ws_chat(self, websocket: WebSocket, token: str = Query(...)):
         if not token:
-            await websocket.close(code=4001, reason="Token manquant")
+            await websocket.close(code=4001, reason="Authentication token is required")
             return
 
         try:
             decodedToken = Auth.checkAuthentification(token=token)
         except Exception as e:
-            Logger.write(f"[HTTP] [WS] ws_chat — Erreur de vérification du token : {e}", type=ERROR)
+            Logger.write(f"[HTTP] [WS] ws_chat — Erreur during token verification : {e}", type=ERROR)
             await websocket.close(code=4001, reason="Authentication error")
             return
 
         if not decodedToken:
-            Logger.write("[HTTP] [WS] ws_chat — Token invalide ou session expirée", type=ERROR)
+            Logger.write("[HTTP] [WS] ws_chat — Invalid token or session expired", type=ERROR)
             await websocket.close(code=4003, reason="Unauthorized")
             return
 
         if self.agent is None:
-            Logger.write("[HTTP] [WS] ws_chat — Agent non disponible", type=ERROR)
+            Logger.write("[HTTP] [WS] ws_chat — Agentnon available", type=ERROR)
             await websocket.close(code=4503, reason="Agent non available")
             return
 
         session_id: str | None = decodedToken.get("session_id")
 
         if not AuthSessionManager.claim_ws(session_id):
-            Logger.write(f"[HTTP] [WS] ws_chat — Session {session_id} déjà connectée", type=WARNING)
+            Logger.write(f"[HTTP] [WS] ws_chat — Session {session_id} already connected", type=WARNING)
             await websocket.close(code=4409, reason="Session already connected")
             return
 
@@ -134,7 +134,7 @@ class Router:
                 try:
                     data = await asyncio.wait_for(websocket.receive_json(), timeout=inactivity_timeout)
                 except asyncio.TimeoutError:
-                    Logger.write(f"[HTTP] [WS] ws_chat — Timeout d'inactivité ({inactivity_timeout}s) pour la session {session_id}", type=WARNING)
+                    Logger.write(f"[HTTP] [WS] ws_chat — Intactivity timeout ({inactivity_timeout}s) for session {session_id}", type=WARNING)
                     await websocket.close(code=1001, reason="Inactivity timeout")
                     break
                 except Exception:
@@ -175,9 +175,9 @@ class Router:
                     active_stream = asyncio.create_task(_stream())
 
         except WebSocketDisconnect:
-            Logger.write("[HTTP] [WS] ws_chat — Client déconnecté", type=WARNING)
+            Logger.write("[HTTP] [WS] ws_chat — Client disconnected", type=WARNING)
         except Exception as e:
-            Logger.write(f"[HTTP] [WS] ws_chat — Erreur inattendue : {e}", type=ERROR)
+            Logger.write(f"[HTTP] [WS] ws_chat — Unexpected error : {e}", type=ERROR)
         finally:
             self._active_ws -= 1
             AuthSessionManager.release_ws(session_id)
@@ -192,18 +192,18 @@ class Router:
         if authorization and authorization.startswith("Bearer "):
             token = authorization[7:]
         if not token:
-            raise HTTPException(status_code=401, detail="Token manquant")
+            raise HTTPException(status_code=401, detail="Authentication bearer token required")
 
         decoded = Auth.checkAuthentification(token=token)
         if not decoded:
             Logger.write(f"[HTTP] [403] get_file — Token invalide ou session expirée", type=ERROR)
-            raise HTTPException(status_code=403, detail="Non autorisé")
+            raise HTTPException(status_code=403, detail="Unauthorized")
 
         session_id = decoded.get("session_id")
         session = AuthSessionManager.get(session_id)
         if not session or key not in session.files:
             Logger.write(f"[HTTP] [403] get_file — Clé {key} absente de la session {session_id}", type=ERROR)
-            raise HTTPException(status_code=403, detail="Accès refusé")
+            raise HTTPException(status_code=403, detail="Unauthorized")
 
         temp_root = Path("temp").resolve()
         file_path = (temp_root / key).resolve()
