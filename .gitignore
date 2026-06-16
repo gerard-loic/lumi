@@ -8,6 +8,8 @@ tools/*
 !tools/.gitkeep
 !tools/excel.py
 !tools/rag.py
+!tools/pdf.py
+!tools/web.py
 logs/*
 !logs/.gitkeep
 services/*
