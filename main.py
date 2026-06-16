@@ -92,6 +92,9 @@ async def lifespan(app: FastAPI):
             await webex_connector.init()
             lumi_router._webex_connector = webex_connector
             lumi_router._webex_handler = WebexWebhookHandler(agent=lumi_router.agent, connector=webex_connector)
+            webhook_url = Config.get(key="app.url").rstrip("/") + "/webex/webhook"
+            webhook_secret = Config.get(key="webex.webhook_secret", default="")
+            await webex_connector.register_webhook(target_url=webhook_url, secret=webhook_secret)
 
         yield
     cleaner.cancel()
