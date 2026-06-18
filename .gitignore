@@ -24,3 +24,5 @@ __pycache__
 Dockerfile
 .dockerignore
 docker-compose.yml
+docker/*
+Makefile
