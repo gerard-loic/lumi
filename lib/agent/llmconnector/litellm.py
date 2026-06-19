@@ -46,18 +46,20 @@ class LiteLLM:
         self._model    = Config.get(key="llm.litellm.model")
         self._api_base = Config.get(key="llm.litellm.api_base")
         self._api_key  = Config.get(key="llm.litellm.api_key")
-        self._tools    = mcp_manager.tools_as_openai_format()
+        self._tools              = mcp_manager.tools_as_openai_format(exclude_restricted=False)
+        self._tools_no_restricted = mcp_manager.tools_as_openai_format(exclude_restricted=True)
 
         self._tracking = LiteLLMTrackingCallback()
         litellm.callbacks = [self._tracking]
 
         print(f"[Agent LiteLLM] {len(self._tools)} outil(s) chargé(s) : {[t['function']['name'] for t in self._tools]}")
 
-    async def callLLM(self, messages:str, stream:bool):
+    async def callLLM(self, messages: str, stream: bool, exclude_restricted: bool = False):
+        tools = self._tools_no_restricted if exclude_restricted else self._tools
         response = await litellm.acompletion(
             model=self._model,
             messages=messages,
-            tools=self._tools,
+            tools=tools,
             stream=stream,
             api_base=self._api_base,
             api_key=self._api_key,

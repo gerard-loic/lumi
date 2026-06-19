@@ -1,16 +1,15 @@
 - [ ] Revoir le fichier de configuration pour le prompt
-- [ ] Retour des urls et des fichiers 
+- [x] Retour des urls et des fichiers 
 - [ ] Implémentation des traductions
 - [ ] RAG local sur un fichier
 - [ ] Envoi de fichiers à l'agent
-
 - [ ] Limiter la sortie ?
 - [ ] Critique du code
-- [ ] Support OCR ?
+- [ ] Support OCR / modèle de compréhension d'image
 - [ ] option pour retourner les infos des documents
 - [ ] Confirmations : prévoir des options plus riches (objets)
 - [ ] Bug sur les retours de confirmations (message refusé après sélection d'un oui ? ou pas de validation du tout)
-- [ ] chat.html : pb des fichiers
+- [x] chat.html : pb des fichiers
 - [ ] Follow-up 
 - [ ] Limitation des résultats
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
@@ -21,11 +20,21 @@
 - [ ] Tache de delestage
 - [ ] Possibilité d'arreter une conversation proprement
 - [ ] Connecteur Webex [EN COURS]
-- [ ] Outil génération PDF [EN COURS]
-- [ ] pb pbVector sur prod
+- [x] Outil génération PDF [EN COURS]
+- [ ] Outil génération fichier Word
+- [x] pb pbVector sur prod
+- [ ] Gestion des liens directs, modification authentification
+- [ ] Refactoring pour la version Spark
+- [ ] Outils de date/heure
+- [ ] Gestion du system prompt dans un fichier séparé
+- [ ] Connecteur Webex : avoir des retours sur les actions en cours
 
-Idées usages
--> transcription de réunions manuscrites
+------------
+Versions à venir : 
+
+Spark (1.2.0)
+- Connecteur Webex
+- Outils MCP PDF/Date/Word
 
 ------------
 
@@ -61,3 +70,26 @@ Idées usages
 - [x] bug botcore
 - [x] Problème de non réponse du LLM (réponse vide)
 - [x] Filtres de contenus
+
+
+------------
+
+Installer cloudflared
+
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o cloudflared.deb
+sudo dpkg -i cloudflared.deb
+rm cloudflared.deb
+
+Lancer le tunnel
+cloudflared tunnel --url http://localhost:8001
+
+
+----------------------------------------
+Implémentation Webex sur LumePack :
+Fichiers : 
+app/Http/Middleware/WebexBasicAuth.php
+app/Http/Controllers/Webex/WebexAuthController.php
+config/webex.php
+Modifié : bootstrap/app.php
+Modifié : routes/api.php
+Modifié : .env.example et .env

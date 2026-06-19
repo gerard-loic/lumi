@@ -1,6 +1,5 @@
 import asyncio
-import json
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Header, Request, UploadFile, File, Form, Depends, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, HTTPException, Header, Request, UploadFile, File, Form, Depends, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
@@ -29,8 +28,6 @@ class Router:
     def __init__(self):
         self.agent = None
         self._active_ws = 0
-        self._webex_handler = None
-        self._webex_connector = None
         self.router = APIRouter()
         self.router.add_api_route("/health", self.health, methods=["GET"])
         self.router.add_api_route("/tools", self.list_tools, methods=["GET"], response_model=list[ToolInfo])
@@ -42,7 +39,6 @@ class Router:
         self.router.add_api_route("/rag/stats", self.rag_stats, methods=["GET"])
         self.router.add_api_route("/rag/collections/{collection}", self.rag_delete_collection, methods=["DELETE"])
         self.router.add_api_route("/rag/collections/{collection}/documents/{source:path}", self.rag_delete_document, methods=["DELETE"])
-        self.router.add_api_route("/webex/webhook", self.webex_webhook, methods=["POST"])
 
     """
     Route [GET] /health : renvoie l'état de santé du service
@@ -190,22 +186,27 @@ class Router:
 
     """
     Route [GET] /files/{key}/{filename} : renvoie un fichier
+    Authentification acceptée via :
+      - Header Authorization: Bearer <token>  (méthode classique)
+      - Query param ?t=<sha256_du_token>       (méthode URL intégrée)
     """
-    async def get_file(self, key: str, filename: str, authorization: str | None = Header(default=None)):
-        token = None
+    async def get_file(self, key: str, filename: str, authorization: str | None = Header(default=None), t: str | None = Query(default=None)):
+        session = None
+
         if authorization and authorization.startswith("Bearer "):
             token = authorization[7:]
-        if not token:
-            raise HTTPException(status_code=401, detail="Authentication bearer token required")
+            decoded = Auth.checkAuthentification(token=token)
+            if not decoded:
+                Logger.write(f"[HTTP] [403] get_file — Token invalide ou session expirée", type=ERROR)
+                raise HTTPException(status_code=403, detail="Unauthorized")
+            session = AuthSessionManager.get(decoded.get("session_id"))
+        elif t:
+            session = AuthSessionManager.get_by_token_hash(t)
+        else:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
-        decoded = Auth.checkAuthentification(token=token)
-        if not decoded:
-            Logger.write(f"[HTTP] [403] get_file — Token invalide ou session expirée", type=ERROR)
-            raise HTTPException(status_code=403, detail="Unauthorized")
-
-        session_id = decoded.get("session_id")
-        session = AuthSessionManager.get(session_id)
         if not session or key not in session.files:
+            session_id = session.session_id if session else "?"
             Logger.write(f"[HTTP] [403] get_file — Clé {key} absente de la session {session_id}", type=ERROR)
             raise HTTPException(status_code=403, detail="Unauthorized")
 
@@ -235,31 +236,6 @@ class Router:
             Logger.write(f"[HTTP] [403] auth — Unauthorized", type=ERROR)
             raise HTTPException(status_code=403, detail="Unauthorized")
         return {"token": token}
-
-    """
-    Route [POST] /webex/webhook : Reçoit les événements Webex et traite les messages en arrière-plan
-    """
-    async def webex_webhook(self, request: Request, background_tasks: BackgroundTasks, x_spark_signature: str | None = Header(default=None)):
-        Logger.write(f"[HTTP] [WEBEX] Webhook reçu depuis {request.client.host}", type=WARNING)
-
-        if not self._webex_handler:
-            raise HTTPException(status_code=404, detail="Webex integration not configured")
-
-        body = await request.body()
-
-        webhook_secret = Config.get(key="webex.webhook_secret", default="")
-        if webhook_secret and x_spark_signature:
-            if not self._webex_connector.verify_signature(body, x_spark_signature, webhook_secret):
-                Logger.write("[HTTP] [401] webex_webhook — Signature invalide", type=ERROR)
-                raise HTTPException(status_code=401, detail="Invalid webhook signature")
-
-        try:
-            event = json.loads(body)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid JSON payload")
-
-        background_tasks.add_task(self._webex_handler.handle, event)
-        return {"status": "ok"}
 
     def _check_admin_auth(self, credentials: HTTPBasicCredentials) -> None:
         if not AdminAuth.checkAdminCredentials(credentials.username, credentials.password):

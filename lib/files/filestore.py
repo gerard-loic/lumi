@@ -28,7 +28,10 @@ class FileStore:
         if session:
             session.addFile(key)
 
-        return f"{base_url}/files/{key}/{filename}"
+        url = f"{base_url}/files/{key}/{filename}"
+        if session and session.token_hash:
+            url += f"?t={session.token_hash}"
+        return url
 
     @staticmethod
     def delete(key:str) -> bool:

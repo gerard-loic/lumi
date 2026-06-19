@@ -30,6 +30,7 @@ from lib.session.session import AuthSessionManager
 from lib.files.filestore import FileStore
 from lib.files.localdata import LocalData
 from lib.agent.filters.llmfilter import LLMFilterManager
+from lib.connectors.connector import ConnectorManager
 
 # ----------------------------------------------------------------
 # Initialisation configuration
@@ -47,9 +48,11 @@ Logger.init(configuration=Config.get(key="logger"))
 LocalData.init()
 
 # ----------------------------------------------------------------
-# Initialisation filtres
+# Initialisation filtres LLM
 # ----------------------------------------------------------------
 LLMFilterManager.init()
+
+
 
 print("###############################################################################")
 print('# LUMI - IA agent with MCP toolkit')
@@ -66,7 +69,7 @@ ServiceManager.init()
 # ----------------------------------------------------------------
 lumi_router = Router()
 
-
+#Gestion du délestage des sessions
 async def _session_cleaner():
     while True:
         await asyncio.sleep(60)
@@ -75,6 +78,7 @@ async def _session_cleaner():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    #Pour concentrer toute la gestion des logs en un seul endroit
     Logger._patch_logging_handlers()
 
     #Suppression des données rémanantes
@@ -85,16 +89,12 @@ async def lifespan(app: FastAPI):
     async with mcp_manager.run():
         lumi_router.agent = Agent(connector=Config.get(key="llm.connector"))
 
-        if Config.get(key="webex.enabled", default=False):
-            from lib.webex.connector import WebexConnector
-            from lib.webex.webhook import WebexWebhookHandler
-            webex_connector = WebexConnector(bot_token=Config.get(key="webex.bot_token"))
-            await webex_connector.init()
-            lumi_router._webex_connector = webex_connector
-            lumi_router._webex_handler = WebexWebhookHandler(agent=lumi_router.agent, connector=webex_connector)
-            webhook_url = Config.get(key="app.url").rstrip("/") + "/webex/webhook"
-            webhook_secret = Config.get(key="webex.webhook_secret", default="")
-            await webex_connector.register_webhook(target_url=webhook_url, secret=webhook_secret)
+        # ----------------------------------------------------------------
+        # Initialisation des connecteurs
+        # ----------------------------------------------------------------
+        await ConnectorManager.init(agent=lumi_router.agent)
+        for connector_router in ConnectorManager.get_routers():
+            app.include_router(connector_router)
 
         yield
     cleaner.cancel()

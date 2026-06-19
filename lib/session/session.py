@@ -1,15 +1,17 @@
 import asyncio
+import secrets
 from datetime import datetime, timezone
 """
 Session — Gestion du cycle de vie des sessions (authentification + historique LLM)
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class AuthSession:
-    def __init__(self, session_id: str, expires_at: int, authentication: dict, auth_fingerprint: str = ""):
+    def __init__(self, session_id: str, expires_at: int, authentication: dict, auth_fingerprint: str = "", token_hash: str = ""):
         self.session_id      = session_id
         self.expires_at      = expires_at
         self.authentication  = authentication
         self.auth_fingerprint = auth_fingerprint
+        self.token_hash      = token_hash if token_hash else secrets.token_hex(32)
         self.files:   list[str]  = []
         self.history: list[dict] = []
         self.ws_connected: bool  = False
@@ -28,10 +30,17 @@ class AuthSessionManager:
     _confirmation_queues: dict[str, asyncio.Queue] = {}
 
     @staticmethod
-    def add(session_id: str, expires_at: int, authentication: dict, auth_fingerprint: str = ""):
+    def add(session_id: str, expires_at: int, authentication: dict, auth_fingerprint: str = "", token_hash: str = ""):
         AuthSessionManager._sessions.append(
-            AuthSession(session_id=session_id, expires_at=expires_at, authentication=authentication, auth_fingerprint=auth_fingerprint)
+            AuthSession(session_id=session_id, expires_at=expires_at, authentication=authentication, auth_fingerprint=auth_fingerprint, token_hash=token_hash)
         )
+
+    @staticmethod
+    def get_by_token_hash(token_hash: str) -> 'AuthSession | None':
+        for session in AuthSessionManager._sessions:
+            if session.token_hash == token_hash:
+                return session
+        return None
 
     @staticmethod
     def has_active_ws_for(auth_fingerprint: str) -> bool:

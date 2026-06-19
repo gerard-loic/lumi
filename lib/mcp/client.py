@@ -12,6 +12,7 @@ from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 from lib.config.config import Config
 from lib.mcp.services import ServiceManager
+from lib.mcp.tools import MCPTool
 from lib.http.auth import Auth
 from lib.log.logger import Logger, ERROR
 import sys
@@ -73,10 +74,12 @@ class MCPClientManager:
     def tools(self) -> list:
         return self._tools
 
-    def tools_as_openai_format(self) -> list[dict]:
+    def tools_as_openai_format(self, exclude_restricted: bool = False) -> list[dict]:
         """Convertit les tools MCP au format attendu par le LLM."""
         result = []
         for t in self._tools:
+            if exclude_restricted and MCPTool.get_meta(t.name).get("restricted", False):
+                continue
             schema = dict(t.inputSchema)
             properties = {k: v for k, v in schema.get("properties", {}).items()}
             required = [r for r in schema.get("required", [])]

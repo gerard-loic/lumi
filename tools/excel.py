@@ -8,7 +8,7 @@ from lib.agent.events import FileEvent
 from lib.http.auth import Auth
 from lib.session.session import AuthSessionManager
 from lib.mcp.tools import MCPTool
-from lib.mcp.tools import native_tool, confirmation_tool
+from lib.mcp.tools import native_tool, confirmation_tool, restricted_tool
 
 class FichierExcel(BaseModel):
     url: str = Field(description="URL de téléchargement du fichier Excel généré.")

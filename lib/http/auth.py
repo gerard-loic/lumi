@@ -46,10 +46,11 @@ class Auth:
                 if authenticated:
                     payload["services"][name] = service.getAuthentication()
 
-            token = Auth._create_token(payload=payload)
+            token = Auth._create_token(payload=payload, expires_in=Config.get("authentication.session_duration"))
             Auth._local.sessionId = payload["session_id"]
 
-            AuthSessionManager.add(payload["session_id"], payload["exp"].timestamp(), payload, auth_fingerprint=fingerprint)
+            token_hash = hashlib.sha256(token.encode()).hexdigest()
+            AuthSessionManager.add(payload["session_id"], payload["exp"].timestamp(), payload, auth_fingerprint=fingerprint, token_hash=token_hash)
 
             #Le token comprend toutes les couches d'authentification aux services
             return token

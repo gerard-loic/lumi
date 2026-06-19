@@ -42,7 +42,7 @@ class Agent:
     """
     Gestion d'une connexion SSE (correspondant à une requête client)
     """
-    async def chatStream(self, message: str, authorization: dict, session_id: Optional[str] = None) -> AsyncGenerator[str, None]:
+    async def chatStream(self, message: str, authorization: dict, session_id: Optional[str] = None, exclude_restricted: bool = False) -> AsyncGenerator[str, None]:
         #On filtre le message entrant
         message = LLMFilterManager.filter(text=message)
         
@@ -61,7 +61,7 @@ class Agent:
             # ÉTAPE 1 — Appel non streamé pour détecter les tool calls
             # ----------------------------------------------------------------
             try:
-                response = await self._connector.callLLM(messages=messages, stream=False)
+                response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
                 if not response.choices:
                     raise ValueError("Empty LLM answer")
                 assistant_msg = response.choices[0].message
@@ -170,7 +170,7 @@ class Agent:
 
                 Logger.write("[AGENT] Call LLM...", type=WARNING)
                 try:
-                    response = await self._connector.callLLM(messages=messages, stream=False)
+                    response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
                     if not response.choices:
                         raise ValueError("Empty LLM answer")
                     assistant_msg = response.choices[0].message
@@ -188,7 +188,7 @@ class Agent:
             for attempt in range(2):
                 Logger.write(f"[AGENT] Call LLM for final answer (attempt {attempt + 1})...", type=WARNING)
                 try:
-                    async for chunk in await self._connector.callLLM(messages=messages, stream=True):
+                    async for chunk in await self._connector.callLLM(messages=messages, stream=True, exclude_restricted=exclude_restricted):
                         token = chunk.choices[0].delta.content
                         if token:
                             assistant_reply_tokens.append(token)

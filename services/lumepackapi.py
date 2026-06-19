@@ -1,6 +1,9 @@
+import base64
 import httpx
 from urllib.parse import urlencode
 from lib.mcp.services import Service
+from lib.config.config import Config
+from lib.log.logger import Logger, ERROR
 from pydantic import Field, BaseModel
 from typing import Annotated, Literal, Optional, Any
 
@@ -108,6 +111,7 @@ class LumePackAPI(Service):
         }
         super().__init__(data=data, serviceDataFormat=service_format)
         self.timeout = data.get("timeout", 10)
+        
 
     def checkAuthentication(self, authorization:dict):
         if "token" not in authorization:
@@ -142,6 +146,39 @@ class LumePackAPI(Service):
 
         return False
 
+
+    def webexAuthenticate(self, username: str):
+        api_key = Config.get(key="webex.api_key")
+        url = f"{self.getConfValue(key='url')}/api/webex/auth"
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                encoded_key = base64.b64encode(api_key.encode()).decode()
+                r = client.post(
+                    url,
+                    files={"login": (None, username)},
+                    headers={
+                        "Accept": "application/json",
+                        "Authorization": f"Basic {encoded_key}",
+                    },
+                )
+                r.raise_for_status()
+                response_data = r.json()
+                token = response_data.get("data", {}).get("token")
+                if not token:
+                    Logger.write(f"[LUMEPACKAPI] webexAuthenticate : token absent dans la réponse — {response_data}", type=ERROR)
+                    return False
+                self.authenticated = True
+                self.authData = {"token": token}
+                return {"token": token}
+        except httpx.HTTPStatusError as e:
+            Logger.write(f"[LUMEPACKAPI] webexAuthenticate erreur {e.response.status_code} pour '{username}' : {e.response.text}", type=ERROR)
+            return False
+        except httpx.TimeoutException:
+            Logger.write(f"[LUMEPACKAPI] webexAuthenticate timeout après {self.timeout}s", type=ERROR)
+            return False
+        except httpx.RequestError as e:
+            Logger.write(f"[LUMEPACKAPI] webexAuthenticate erreur réseau : {e}", type=ERROR)
+            return False
     
     def get(self, endpoint:str, arguments:dict = {}):
         url = f"{self.getConfValue(key='url')}/api/{endpoint}?{urlencode(arguments)}"

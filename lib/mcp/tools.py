@@ -39,6 +39,15 @@ def confirmation_tool(question:str, options:list, validation_option:int):
         return f
     return decorator
 
+def restricted_tool(func=None):
+    """Décorateur signalant qu'un outil n'est pas disponible pour les agents non-chatbot"""
+    def decorator(f):
+        f.__restricted_tool__ = True
+        return f
+    if func is not None:
+        return decorator(func)
+    return decorator
+
 """
 MCPTool — classe parente outil MCP
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
@@ -94,6 +103,7 @@ class MCPTool:
 
         MCPTool._registry[method.__name__] = {
             "slow": getattr(method, "__slow_tool__", False),
+            "restricted" : getattr(method, "__restricted_tool__", False),
             "description": getattr(method, "__tool_description__", False),
             "native" : getattr(method, "__native_tool__", False),
             "confirmation" : getattr(method, "__tool_confirmation__", False),

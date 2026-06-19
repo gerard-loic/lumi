@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from lib.agent.events import FileEvent
 from lib.files.filestore import FileStore
-from lib.mcp.tools import MCPTool, confirmation_tool, native_tool
+from lib.mcp.tools import MCPTool, confirmation_tool, native_tool, restricted_tool
 
 _LINE_H = 6
 _FONT = "DejaVuSans"

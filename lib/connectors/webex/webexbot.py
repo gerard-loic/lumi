@@ -1,19 +1,23 @@
+from __future__ import annotations
 import hmac
 import hashlib
 import httpx
+from typing import TYPE_CHECKING
 from lib.log.logger import Logger, ERROR, WARNING, OK
-
+if TYPE_CHECKING:
+    from lib.connectors.webex.connector import WebexConnector
 _WEBHOOK_NAME = "lumi-webhook"
 
 """
-WebexConnector — Client HTTP vers l'API Webex
+WebexBot — Client HTTP vers l'API Webex
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
-class WebexConnector:
-    BASE_URL = "https://webexapis.com/v1"
+class WebexBot:
 
-    def __init__(self, bot_token: str):
+    def __init__(self, bot_token: str, connector:WebexConnector):
         self._token = bot_token
+        self._connector = connector
+        self._webex_api = connector.getConfValue("webex_api")
         self._headers = {
             "Authorization": f"Bearer {bot_token}",
             "Content-Type": "application/json",
@@ -23,7 +27,7 @@ class WebexConnector:
 
     async def init(self):
         async with httpx.AsyncClient() as client:
-            r = await client.get(f"{self.BASE_URL}/people/me", headers=self._headers)
+            r = await client.get(f"{self._webex_api}/people/me", headers=self._headers)
         if r.status_code == 200:
             data = r.json()
             self.bot_id = data.get("id")
@@ -50,7 +54,7 @@ class WebexConnector:
             if existing_id:
                 # Mettre à jour
                 r = await client.put(
-                    f"{self.BASE_URL}/webhooks/{existing_id}",
+                    f"{self._webex_api}/webhooks/{existing_id}",
                     headers=self._headers,
                     json={"name": _WEBHOOK_NAME, "targetUrl": target_url},
                 )
@@ -62,7 +66,7 @@ class WebexConnector:
             else:
                 # Créer
                 r = await client.post(
-                    f"{self.BASE_URL}/webhooks",
+                    f"{self._webex_api}/webhooks",
                     headers=self._headers,
                     json=payload,
                 )
@@ -74,7 +78,7 @@ class WebexConnector:
 
     async def _find_webhook(self, client: httpx.AsyncClient) -> str | None:
         """Retourne l'ID du webhook existant portant le nom _WEBHOOK_NAME, ou None."""
-        r = await client.get(f"{self.BASE_URL}/webhooks?max=100", headers=self._headers)
+        r = await client.get(f"{self._webex_api}/webhooks?max=100", headers=self._headers)
         if r.status_code != 200:
             Logger.write(f"[WEBEX] Impossible de lister les webhooks : HTTP {r.status_code}", type=WARNING)
             return None
@@ -87,19 +91,37 @@ class WebexConnector:
         expected = hmac.new(secret.encode(), body, hashlib.sha1).hexdigest()
         return hmac.compare_digest(expected, signature)
 
+    async def get_person(self, person_id: str) -> dict | None:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{self._webex_api}/people/{person_id}", headers=self._headers)
+        if r.status_code == 200:
+            return r.json()
+        Logger.write(f"[WEBEX] get_person erreur {r.status_code} : {r.text}", type=ERROR)
+        return None
+
     async def get_message(self, message_id: str) -> dict | None:
         async with httpx.AsyncClient() as client:
-            r = await client.get(f"{self.BASE_URL}/messages/{message_id}", headers=self._headers)
+            r = await client.get(f"{self._webex_api}/messages/{message_id}", headers=self._headers)
         if r.status_code == 200:
             return r.json()
         Logger.write(f"[WEBEX] get_message erreur {r.status_code} : {r.text}", type=ERROR)
         return None
 
-    async def send_message(self, room_id: str, markdown: str) -> bool:
+    async def send_message(self, room_id: str, markdown: str) -> str | None:
+        """Envoie un message et retourne son ID, ou None en cas d'erreur."""
         payload = {"roomId": room_id, "markdown": markdown}
         async with httpx.AsyncClient() as client:
-            r = await client.post(f"{self.BASE_URL}/messages", headers=self._headers, json=payload)
+            r = await client.post(f"{self._webex_api}/messages", headers=self._headers, json=payload)
         if r.status_code not in (200, 201):
             Logger.write(f"[WEBEX] send_message erreur {r.status_code} : {r.text}", type=ERROR)
+            return None
+        return r.json().get("id")
+
+    async def update_message(self, message_id: str, room_id: str, markdown: str) -> bool:
+        payload = {"roomId": room_id, "markdown": markdown}
+        async with httpx.AsyncClient() as client:
+            r = await client.put(f"{self._webex_api}/messages/{message_id}", headers=self._headers, json=payload)
+        if r.status_code not in (200, 201):
+            Logger.write(f"[WEBEX] update_message erreur {r.status_code} : {r.text}", type=ERROR)
             return False
         return True
