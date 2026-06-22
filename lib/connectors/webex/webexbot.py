@@ -56,7 +56,7 @@ class WebexBot:
                 r = await client.put(
                     f"{self._webex_api}/webhooks/{existing_id}",
                     headers=self._headers,
-                    json={"name": _WEBHOOK_NAME, "targetUrl": target_url},
+                    json={"name": _WEBHOOK_NAME, "targetUrl": target_url, "secret": secret},
                 )
                 if r.status_code == 200:
                     Logger.write(f"[WEBEX] Webhook mis à jour → {target_url}", type=OK)

@@ -52,6 +52,10 @@ class WebexWebhookHandler:
         if room_type != "direct" and self._connector.bot_id not in mentioned_people:
             return
 
+        # En espace de groupe, ignorer si la configuration l'interdit
+        if room_type != "direct" and not Config.get(key="connectors.webex.allow_group_messages", default=True):
+            return
+
         # Récupérer le texte complet du message via l'API
         msg_data = await self._connector.get_message(message_id)
         if not msg_data:

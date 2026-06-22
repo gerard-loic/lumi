@@ -10,6 +10,8 @@ tools/*
 !tools/rag.py
 !tools/pdf.py
 !tools/web.py
+!tools/datetime.py
+!tools/word.py
 logs/*
 !logs/.gitkeep
 services/*

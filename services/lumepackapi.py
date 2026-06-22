@@ -148,7 +148,7 @@ class LumePackAPI(Service):
 
 
     def webexAuthenticate(self, username: str):
-        api_key = Config.get(key="webex.api_key")
+        api_key = Config.get(key="connectors.webex.api_key")
         url = f"{self.getConfValue(key='url')}/api/webex/auth"
         try:
             with httpx.Client(timeout=self.timeout) as client:

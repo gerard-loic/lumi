@@ -4,11 +4,13 @@ Version SPARK :
 - [ ] Fermer une session proprement
 - [ ] Outil génération fichier Word
 - [ ] Refactoring pour la version Spark
-- [ ] Outils de date/heure
+- [x] Outils de date/heure
 - [ ] Gestion du system prompt dans un fichier séparé
 - [ ] Webex : mise en forme des tableaux
 - [ ] Statistiques d'usages : en authentification Session
-- [ ] Sécurisation bot : accessibilité ? Accès en mode pingé ?
+- [x] Sécurisation bot : accessibilité ? 
+- [x] Webex bot : Accès en mode pingé ?
+- [ ] Mise à jour fichier conf
 ----------------------------
 BACKLOG
 - [ ] Implémentation des traductions

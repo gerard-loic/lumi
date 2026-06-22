@@ -51,9 +51,10 @@ class AuthSessionManager:
 
     @staticmethod
     def get(session_id: str) -> 'AuthSession | None':
+        current_ts = datetime.now(tz=timezone.utc).timestamp()
         for session in AuthSessionManager._sessions:
             if session.session_id == session_id:
-                return session
+                return session if session.expires_at > current_ts else None
         return None
 
     @staticmethod

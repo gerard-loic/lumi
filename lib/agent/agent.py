@@ -11,6 +11,7 @@ from lib.session.session import AuthSessionManager
 from lib.http.auth import Auth
 from lib.files.localdata import LocalData
 from lib.agent.filters.llmfilter import LLMFilterManager
+import datetime
 
 """
 Agent — Agent d'orchestration / communication LLM
@@ -32,7 +33,15 @@ class Agent:
             raise Exception(f"LLM connector {connector} not supported.")
         
         #Prompt systeme
-        self._system   = Config.get(key="llm.system_prompt")
+        system_prompt_file = Config.get(key="llm.system_prompt_file", default=None)
+        system_prompt      = Config.get(key="llm.system_prompt",      default=None)
+        if system_prompt_file:
+            with open(system_prompt_file, encoding="utf-8") as f:
+                self._system = f.read()
+        elif system_prompt:
+            self._system = system_prompt
+        else:
+            raise Exception("LLM system prompt not configured: set 'llm.system_prompt_file' or 'llm.system_prompt' in config.")
 
         self._MAX_TOOL_ITERATIONS = Config.get(key="mcp.max_tool_iterations")
         self._MEMORY_MESSAGES     = Config.get(key="llm.memory_messages")
@@ -50,8 +59,14 @@ class Agent:
 
             history = AuthSessionManager.get_history(session_id)[-self._MEMORY_MESSAGES:]
 
+            
+            #Ajout de la date heure courante
+            now = datetime.datetime.now()  # ou avec timezone si pertinent
+            system = self._system + f"\n\nDate et heure actuelles : {now.strftime('%A %d %B %Y, %H:%M')} (heure locale)"
+
+
             messages = [
-                {"role": "system", "content": self._system},
+                {"role": "system", "content": system},
                 *history,
                 {"role": "user",   "content": message},
             ]

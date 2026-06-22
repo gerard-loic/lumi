@@ -12,7 +12,7 @@ class WebexConnector(Connector):
         super().__init__('webex', agent, config)
 
     async def start(self):
-        webhook_secret = Config.get(key="webex.webhook_secret", default="")
+        webhook_secret = self._config.get("webhook_secret", "")
         if not webhook_secret:
             raise Exception("[WebexConnector] webex.webhook_secret est obligatoire — configurez un secret pour sécuriser le webhook")
 
@@ -42,7 +42,7 @@ class WebexConnector(Connector):
             Logger.write("[HTTP] [401] webex_webhook — Header X-Spark-Signature absent", type=ERROR)
             raise HTTPException(status_code=401, detail="Missing webhook signature")
 
-        webhook_secret = Config.get(key="webex.webhook_secret")
+        webhook_secret = self.getConfValue("webhook_secret")
         if not self._bot.verify_signature(body, x_spark_signature, webhook_secret):
             Logger.write("[HTTP] [401] webex_webhook — Signature invalide", type=ERROR)
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
