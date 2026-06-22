@@ -147,6 +147,11 @@ class WebexWebhookHandler:
                 elif ev_type == "confirmation_refused":
                     cancelled = True
 
+                elif ev_type == "tool_call":
+                    if ev.get("status") == "PENDING" and placeholder_id:
+                        tool_label = ev.get("message") or ev.get("tools", "")
+                        await self._connector.update_message(placeholder_id, room_id, f"⏳ *{tool_label}...*")
+
                 elif ev_type == "file":
                     url  = ev.get("url", "")
                     name = ev.get("name", "Fichier")

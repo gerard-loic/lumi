@@ -1,40 +1,48 @@
+Version SPARK : 
 - [ ] Revoir le fichier de configuration pour le prompt
-- [x] Retour des urls et des fichiers 
+- [ ] Critique du code
+- [ ] Fermer une session proprement
+- [ ] Outil génération fichier Word
+- [ ] Refactoring pour la version Spark
+- [ ] Outils de date/heure
+- [ ] Gestion du system prompt dans un fichier séparé
+- [ ] Webex : mise en forme des tableaux
+- [ ] Statistiques d'usages : en authentification Session
+- [ ] Sécurisation bot : accessibilité ? Accès en mode pingé ?
+----------------------------
+BACKLOG
 - [ ] Implémentation des traductions
 - [ ] RAG local sur un fichier
 - [ ] Envoi de fichiers à l'agent
 - [ ] Limiter la sortie ?
-- [ ] Critique du code
 - [ ] Support OCR / modèle de compréhension d'image
 - [ ] option pour retourner les infos des documents
 - [ ] Confirmations : prévoir des options plus riches (objets)
-- [ ] Bug sur les retours de confirmations (message refusé après sélection d'un oui ? ou pas de validation du tout)
-- [x] chat.html : pb des fichiers
 - [ ] Follow-up 
 - [ ] Limitation des résultats
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
 - [ ] Critique de la réponse par un modèle
-- [ ] Fonction "instruction" dans le tool MCP
-- [ ] Pb confirmation avec l'abandon de l'action [EN COURS]
-- [ ] Pbs de l'affichage du retour des liens
 - [ ] Tache de delestage
 - [ ] Possibilité d'arreter une conversation proprement
-- [ ] Connecteur Webex [EN COURS]
-- [x] Outil génération PDF [EN COURS]
-- [ ] Outil génération fichier Word
-- [x] pb pbVector sur prod
-- [ ] Gestion des liens directs, modification authentification
-- [ ] Refactoring pour la version Spark
-- [ ] Outils de date/heure
-- [ ] Gestion du system prompt dans un fichier séparé
-- [ ] Connecteur Webex : avoir des retours sur les actions en cours
-
 ------------
 Versions à venir : 
 
 Spark (1.2.0)
 - Connecteur Webex
 - Outils MCP PDF/Date/Word
+- Statistiques d'usage 
+- Refonte du system prompt
+- Finalisation propre des websockets
+
+Ocean (1.3.0)
+- Envoi de fichiers à l'agent
+- Outils de lectures de PDF/Excel/Word
+- Micro RAG sur les outils envoyés
+
+Vision (1.4.0)
+- Implémentation de modèles de vision
+- Implémentation de modèles d'audio
+- Envoi de la demande en audio au modèle
 
 ------------
 
@@ -70,8 +78,17 @@ Spark (1.2.0)
 - [x] bug botcore
 - [x] Problème de non réponse du LLM (réponse vide)
 - [x] Filtres de contenus
-
-
+- [x] Retour des urls et des fichiers 
+- [x] Bug sur les retours de confirmations (message refusé après sélection d'un oui ? ou pas de validation du tout)
+- [x] chat.html : pb des fichiers
+- [x] Fonction "instruction" dans le tool MCP
+- [x] Pb confirmation avec l'abandon de l'action [EN COURS]
+- [x] Pbs de l'affichage du retour des liens
+- [x] Connecteur Webex [EN COURS]
+- [x] Outil génération PDF [EN COURS]
+- [x] pb pbVector sur prod
+- [x] Gestion des liens directs, modification authentification
+- [x] Connecteur Webex : avoir des retours sur les actions en cours
 ------------
 
 Installer cloudflared
