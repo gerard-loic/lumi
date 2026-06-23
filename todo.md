@@ -1,16 +1,18 @@
 Version SPARK : 
-- [ ] Revoir le fichier de configuration pour le prompt
+- [x] Revoir le fichier de configuration pour le prompt
 - [ ] Critique du code
-- [ ] Fermer une session proprement
-- [ ] Outil génération fichier Word
+- [x] Fermer une session proprement
+- [x] Outil génération fichier Word
 - [ ] Refactoring pour la version Spark
 - [x] Outils de date/heure
-- [ ] Gestion du system prompt dans un fichier séparé
-- [ ] Webex : mise en forme des tableaux
-- [ ] Statistiques d'usages : en authentification Session
+- [x] Gestion du system prompt dans un fichier séparé
+- [x] Webex : mise en forme des tableaux
+- [x] Statistiques d'usages : en authentification Session
 - [x] Sécurisation bot : accessibilité ? 
 - [x] Webex bot : Accès en mode pingé ?
-- [ ] Mise à jour fichier conf
+- [x] Mise à jour fichier conf
+- [ ] Mise à jour README.md
+- [x] Vérifier le fonctionnement multithread
 ----------------------------
 BACKLOG
 - [ ] Implémentation des traductions
@@ -32,9 +34,12 @@ Versions à venir :
 Spark (1.2.0)
 - Connecteur Webex
 - Outils MCP PDF/Date/Word
-- Statistiques d'usage 
+- Gestion des graphiques (barre / camembert / courbes) dans les PDF et Word
+- gestion de la date et des calculs de date
+- Implémentation d'une route permettant de récupérer des statistiques d'usage
 - Refonte du system prompt
-- Finalisation propre des websockets
+- Implémentation d'une route permettant de fermer sa session
+- Fix divers service LumePackAPI
 
 Ocean (1.3.0)
 - Envoi de fichiers à l'agent

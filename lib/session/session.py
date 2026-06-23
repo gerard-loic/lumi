@@ -12,9 +12,10 @@ class AuthSession:
         self.authentication  = authentication
         self.auth_fingerprint = auth_fingerprint
         self.token_hash      = token_hash if token_hash else secrets.token_hex(32)
-        self.files:   list[str]  = []
-        self.history: list[dict] = []
-        self.ws_connected: bool  = False
+        self.files:   list[str]   = []
+        self.history: list[dict]  = []
+        self.ws_connected: bool   = False
+        self.flood_timestamps: list[float] = []
 
     def clear(self):
         from lib.files.filestore import FileStore
@@ -106,6 +107,15 @@ class AuthSessionManager:
         session = AuthSessionManager.get(session_id)
         if session:
             session.ws_connected = False
+
+    @staticmethod
+    def remove(session_id: str) -> bool:
+        for i, session in enumerate(AuthSessionManager._sessions):
+            if session.session_id == session_id:
+                session.clear()
+                AuthSessionManager._sessions.pop(i)
+                return True
+        return False
 
     @staticmethod
     def clear(all: bool = False):

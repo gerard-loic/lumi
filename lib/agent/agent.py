@@ -22,8 +22,6 @@ Stratégie :
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Agent:
-    currentStreamUID = None
-
     def __init__(self, connector:str):
         #Initialisation du connecteur LLM
         if connector=="LiteLLM":
@@ -32,7 +30,7 @@ class Agent:
             Logger.write(f"[AGENT] LLM connector {connector} not supported.", type=ERROR)
             raise Exception(f"LLM connector {connector} not supported.")
         
-        #Prompt systeme
+        #Prompt systeme (issu du fichier de configuration ou d'un fichier joint)
         system_prompt_file = Config.get(key="llm.system_prompt_file", default=None)
         system_prompt      = Config.get(key="llm.system_prompt",      default=None)
         if system_prompt_file:
@@ -41,30 +39,31 @@ class Agent:
         elif system_prompt:
             self._system = system_prompt
         else:
-            raise Exception("LLM system prompt not configured: set 'llm.system_prompt_file' or 'llm.system_prompt' in config.")
+            Logger.write("[AGENT] LLM system prompt not configured: set 'llm.system_prompt_file' or 'llm.system_prompt' in config.", ERROR)
+            raise Exception("[AGENT] LLM system prompt not configured: set 'llm.system_prompt_file' or 'llm.system_prompt' in config.")
 
-        self._MAX_TOOL_ITERATIONS = Config.get(key="mcp.max_tool_iterations")
-        self._MEMORY_MESSAGES     = Config.get(key="llm.memory_messages")
+        self._MAX_TOOL_ITERATIONS          = Config.get(key="mcp.max_tool_iterations")
+        self._MEMORY_MESSAGES              = Config.get(key="llm.memory_messages")
+        self._EMPTY_LLM_RESPONSE_MAX_RETRY = Config.get(key="llm.empty_llm_response_max_retry", default=2)
 
         Logger.write("[AGENT] MCP agent initialized", type=OK)
 
     """
     Gestion d'une connexion SSE (correspondant à une requête client)
     """
-    async def chatStream(self, message: str, authorization: dict, session_id: Optional[str] = None, exclude_restricted: bool = False) -> AsyncGenerator[str, None]:
-        #On filtre le message entrant
+    async def chatStream(self, message: str, session_id: Optional[str] = None, exclude_restricted: bool = False) -> AsyncGenerator[str, None]:
+        #On filtre le message entrant (application des filtres selon les filtres actifs dans la conf)
         message = LLMFilterManager.filter(text=message)
         
         try:
-
+            #On récupère l'historique de conversation pour l'intégrer au prompt
             history = AuthSessionManager.get_history(session_id)[-self._MEMORY_MESSAGES:]
 
-            
-            #Ajout de la date heure courante
+            #Ajout de la date heure courante au prompt
             now = datetime.datetime.now()  # ou avec timezone si pertinent
             system = self._system + f"\n\nDate et heure actuelles : {now.strftime('%A %d %B %Y, %H:%M')} (heure locale)"
 
-
+            #Préparation des différents types de message pour le LLM
             messages = [
                 {"role": "system", "content": system},
                 *history,
@@ -75,17 +74,24 @@ class Agent:
             # ----------------------------------------------------------------
             # ÉTAPE 1 — Appel non streamé pour détecter les tool calls
             # ----------------------------------------------------------------
-            try:
-                response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
-                if not response.choices:
-                    raise ValueError("Empty LLM answer")
-                assistant_msg = response.choices[0].message
-            except Exception as e:
-                Logger.write(f"[AGENT] LLM call failure : {str(e)}", type=ERROR)
-                yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
+            for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
+                try:
+                    response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
+                except Exception as e:
+                    Logger.write(f"[AGENT] LLM call failure : {str(e)}", type=ERROR)
+                    yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
+                    yield DoneEvent.get()
+                    return
+                if response.choices:
+                    break
+                if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
+                    Logger.write("[AGENT] LLM returned empty response, retrying...", type=WARNING)
+            else:
+                Logger.write("[AGENT] LLM returned empty response after retries", type=ERROR)
+                yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty LLM answer")
                 yield DoneEvent.get()
                 return
-
+            assistant_msg = response.choices[0].message
             Logger.write("[AGENT] Call LLM OK !", type=OK)
 
             # ----------------------------------------------------------------
@@ -120,6 +126,7 @@ class Agent:
                     ],
                 })
 
+                #Appels des outils MCP
                 for tc in assistant_msg.tool_calls:
                     Logger.write(f"[AGENT] Call MCP tool {tc.function.name}...", type=WARNING)
                     meta = MCPTool.get_meta(tc.function.name)
@@ -142,7 +149,10 @@ class Agent:
                             yield DoneEvent.get()
                             return
 
+                    #Avertit le client que l'appel risque d'être long
                     yield ToolEvent.get(tool_name=tc.function.name, status="PENDING", long_call=meta.get("slow", False), message=description)
+                    
+                    #On essaie d'executer l'outil, si erreur on transmet l'erreur au LLM pour qu'il puisse en déduire la suite
                     try:
                         args = json.loads(tc.function.arguments)
                         result_text, tool_events = await mcp_manager.call_tool(tc.function.name, args)
@@ -175,7 +185,8 @@ class Agent:
 
                     # Interception des actions spéciales — le LLM n'est pas rappelé
                     #TODO
-  
+
+                    #On ajoute aux messages le résultat de l'appel de l'outil
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
@@ -184,24 +195,32 @@ class Agent:
 
 
                 Logger.write("[AGENT] Call LLM...", type=WARNING)
-                try:
-                    response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
-                    if not response.choices:
-                        raise ValueError("Empty LLM answer")
-                    assistant_msg = response.choices[0].message
-                except Exception as e:
-                    Logger.write(f"[AGENT] LLM call failure (iteration {str(iteration)}) : {str(e)}", type=ERROR)
-                    yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
+                for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
+                    try:
+                        response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
+                    except Exception as e:
+                        Logger.write(f"[AGENT] LLM call failure (iteration {str(iteration)}) : {str(e)}", type=ERROR)
+                        yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
+                        yield DoneEvent.get()
+                        return
+                    if response.choices:
+                        break
+                    if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
+                        Logger.write("[AGENT] LLM returned empty response, retrying...", type=WARNING)
+                else:
+                    Logger.write("[AGENT] LLM returned empty response after retries", type=ERROR)
+                    yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty LLM answer")
                     yield DoneEvent.get()
                     return
+                assistant_msg = response.choices[0].message
                 Logger.write("[AGENT] Call LLM OK !", type=OK)
 
             # ----------------------------------------------------------------
             # ÉTAPE 3 — Réponse finale streamée token par token (1 retry si vide)
             # ----------------------------------------------------------------
             assistant_reply_tokens = []
-            for attempt in range(2):
-                Logger.write(f"[AGENT] Call LLM for final answer (attempt {attempt + 1})...", type=WARNING)
+            for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
+                Logger.write(f"[AGENT] Call LLM for final answer (attempt {attempt + 1}/{self._EMPTY_LLM_RESPONSE_MAX_RETRY})...", type=WARNING)
                 try:
                     async for chunk in await self._connector.callLLM(messages=messages, stream=True, exclude_restricted=exclude_restricted):
                         token = chunk.choices[0].delta.content
@@ -216,7 +235,7 @@ class Agent:
 
                 if assistant_reply_tokens:
                     break
-                if attempt == 0:
+                if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
                     Logger.write("[AGENT] LLM returned empty response, retrying...", type=WARNING)
 
             if not assistant_reply_tokens:
@@ -227,13 +246,16 @@ class Agent:
 
             Logger.write("[AGENT] Call LLM for final answer OK !", type=OK)
 
+            #On construit la chaine complète depuis les tokens
             assistant_reply = "".join(assistant_reply_tokens)
             new_history = history + [
                 {"role": "user",      "content": message},
                 {"role": "assistant", "content": assistant_reply},
             ]
+            #On enregistre dans l'historique des messages
             AuthSessionManager.save_history(session_id, new_history)
 
+            #Log de l'appel pour comptabilisation (1 requete effectuée avec succès)
             LocalData.logLLMUsage(session_uid=Auth.getSessionId(), token_used=0)
             yield DoneEvent.get()
         except Exception as e:

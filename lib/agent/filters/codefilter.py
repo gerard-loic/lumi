@@ -1,6 +1,10 @@
 import re
 from lib.agent.filters.llmfilter import LLMFilter
 
+"""
+CodeFilter — Filtre utilisé en entrée LLM pour filtrer du code éventuellement transmis par le client
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class CodeFilter(LLMFilter):
     _FENCED_BLOCK = re.compile(r'```[\s\S]*?```|~~~[\s\S]*?~~~', re.MULTILINE)
     _INLINE_CODE  = re.compile(r'`[^`\n]+`')

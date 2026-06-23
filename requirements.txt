@@ -76,3 +76,4 @@ websockets
 fpdf2
 holidays
 python-docx
+matplotlib

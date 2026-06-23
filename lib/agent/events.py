@@ -73,18 +73,29 @@ class UrlEvent:
     def get(name:str, url:str):
         return Event.get(eventType="url", payload={"name": name, "url": url})
 
+"""
+RagEvent : envoyé lorsqu'une ressource RAG est utilisée
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class RagEvent:
     @staticmethod
     def get(source:str, locations:list = []):
         return Event.get(eventType="rag", payload={"source":source, "locations":locations})
     
 
-
+"""
+ConfirmationEvent: envoyé lorsqu'une demande de confirmation d'utilisation d'un outil est demandée
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class ConfirmationEvent:
     @staticmethod
     def get(question:str, options:list):
         return Event.get(eventType="confirmation", payload={"question":question,"options":options})
 
+"""
+ConfirmationRefusedEvent : envoyé lorsqu'une demande de refus de confirmation a été reçue.
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class ConfirmationRefusedEvent:
     @staticmethod
     def get():

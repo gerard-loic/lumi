@@ -238,7 +238,7 @@ class LumePackAPI(Service):
         if relations != "":
             parameters["with"] = relations
         if order != None:
-            parameters["order"] = order
+            parameters["sort"] = order
         parameters["limit"] = limit
         if filters:
             parameters["filters"] = FilterBuilder.build(filters)

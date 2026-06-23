@@ -1,7 +1,7 @@
 import jwt
 import json
 import hashlib
-import threading
+import contextvars
 from datetime import datetime, timezone, timedelta
 from lib.mcp.services import ServiceManager, Service
 from lib.config.config import Config
@@ -14,7 +14,7 @@ Auth — Gestion de l'authentification sur l'agent
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Auth:
-    _local = threading.local()
+    _session_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar('session_id', default=None)
 
     """
     S'authentifier sur l'agent
@@ -47,7 +47,7 @@ class Auth:
                     payload["services"][name] = service.getAuthentication()
 
             token = Auth._create_token(payload=payload, expires_in=Config.get("authentication.session_duration"))
-            Auth._local.sessionId = payload["session_id"]
+            Auth._session_id_var.set(payload["session_id"])
 
             token_hash = hashlib.sha256(token.encode()).hexdigest()
             AuthSessionManager.add(payload["session_id"], payload["exp"].timestamp(), payload, auth_fingerprint=fingerprint, token_hash=token_hash)
@@ -66,7 +66,7 @@ class Auth:
             session = AuthSessionManager.get(decoded["session_id"])
             if session is None:
                 return False
-            Auth._local.sessionId = decoded["session_id"]
+            Auth._session_id_var.set(decoded["session_id"])
             return session.authentication
         except Exception:
             return False
@@ -76,7 +76,7 @@ class Auth:
     """
     @staticmethod
     def getSessionId() -> str:
-        return getattr(Auth._local, 'sessionId', None)
+        return Auth._session_id_var.get()
 
     """
     Retourne le payload du token d'authentification courant

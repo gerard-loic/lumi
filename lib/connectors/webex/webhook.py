@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from datetime import datetime, timezone
 
 from lib.connectors.webex.webexbot import WebexBot
@@ -107,7 +108,7 @@ class WebexWebhookHandler:
         cancelled = False
 
         try:
-            async for raw in self._agent.chatStream(text, {}, session_id, exclude_restricted=True):
+            async for raw in self._agent.chatStream(text, session_id, exclude_restricted=True):
                 try:
                     ev = json.loads(raw)
                 except Exception:
@@ -173,7 +174,7 @@ class WebexWebhookHandler:
             await _reply(self._connector, room_id, placeholder_id, "❌ Une erreur est survenue lors du traitement de votre demande.")
             return
 
-        response = "".join(tokens).strip()
+        response = _convert_md_tables("".join(tokens).strip())
         if extras:
             response = response + "\n\n" + "\n".join(extras)
 
@@ -215,3 +216,56 @@ async def _reply(connector: WebexBot, room_id: str, placeholder_id: str | None, 
         await connector.update_message(placeholder_id, room_id, text)
     else:
         await connector.send_message(room_id, text)
+
+
+def _is_table_row(line: str) -> bool:
+    s = line.strip()
+    return s.startswith("|") and s.endswith("|") and len(s) > 2
+
+
+def _is_separator_row(line: str) -> bool:
+    return bool(re.match(r"^\|[\s\-:|]+\|$", line.strip()))
+
+
+def _render_ascii_table(table_lines: list[str]) -> str:
+    rows = []
+    for line in table_lines:
+        if _is_separator_row(line):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        rows.append(cells)
+
+    if not rows:
+        return "\n".join(table_lines)
+
+    num_cols = max(len(row) for row in rows)
+    rows = [row + [""] * (num_cols - len(row)) for row in rows]
+    widths = [max(len(row[c]) for row in rows) for c in range(num_cols)]
+
+    sep = "+" + "+".join("-" * (w + 2) for w in widths) + "+"
+    out = [sep]
+    for idx, row in enumerate(rows):
+        out.append("|" + "|".join(f" {row[c]:<{widths[c]}} " for c in range(num_cols)) + "|")
+        if idx == 0:
+            out.append(sep)
+    out.append(sep)
+
+    return "```\n" + "\n".join(out) + "\n```"
+
+
+def _convert_md_tables(text: str) -> str:
+    """Remplace les tableaux Markdown par des tableaux ASCII en bloc de code (Webex ne supporte pas les tables MD)."""
+    lines = text.split("\n")
+    result = []
+    i = 0
+    while i < len(lines):
+        if _is_table_row(lines[i]):
+            block = []
+            while i < len(lines) and _is_table_row(lines[i]):
+                block.append(lines[i])
+                i += 1
+            result.append(_render_ascii_table(block))
+        else:
+            result.append(lines[i])
+            i += 1
+    return "\n".join(result)

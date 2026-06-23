@@ -1,11 +1,14 @@
 import time
-from collections import defaultdict
 from lib.files.localdata import LocalData
 from lib.config.config import Config
 
+"""
+LLMLimiter : classe permettant de gérer la limitation de l'usage au LLM
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class LLMLimiter:
-    _session_timestamps: dict[str, list[float]] = defaultdict(list)
 
+    #Retourne la limite de requêtes par minute
     @staticmethod
     def getFloodLimit():
         limit = Config.get("llm.max_requests_minute")
@@ -13,20 +16,25 @@ class LLMLimiter:
             return None
         return limit
 
+    #Retourne True si la session dépasse le nombre de requêtes autorisées par minute.
     @staticmethod
     def isFloodDetected(session_id: str) -> bool:
-        """Retourne True si la session dépasse le nombre de requêtes autorisées par minute."""
+        
         limit = LLMLimiter.getFloodLimit()
         if not limit:
             return False
+        from lib.session.session import AuthSessionManager
+        session = AuthSessionManager.get(session_id)
+        if not session:
+            return False
         now = time.time()
-        timestamps = LLMLimiter._session_timestamps[session_id]
-        timestamps[:] = [t for t in timestamps if now - t < 60.0]
-        if len(timestamps) >= limit:
+        session.flood_timestamps[:] = [t for t in session.flood_timestamps if now - t < 60.0]
+        if len(session.flood_timestamps) >= limit:
             return True
-        timestamps.append(now)
+        session.flood_timestamps.append(now)
         return False
 
+    #Retourne le nombre de tokens autorisés par mois
     @staticmethod
     def getTokenLimit():
         limit = Config.get("llm.max_tokens_month")
@@ -34,7 +42,8 @@ class LLMLimiter:
             return None
         else:
             return limit
-        
+    
+    #Retourne le nombre de requeêtes autorisées par mois
     @staticmethod
     def getRequestLimit():
         limit = Config.get("llm.max_requests_month")
@@ -42,15 +51,18 @@ class LLMLimiter:
             return None
         else:
             return limit
-        
+
+    #Retourne l'usage actuel en nombre de tokens
     @staticmethod
     def getTokenUsage():
         return int(LocalData.getLLMUsage(currentMonth=True)[0]["token_used"])
     
+    #Retourne le nombre de requetes actuel
     @staticmethod
     def getRequestUsage():
         return int(LocalData.getLLMUsage(currentMonth=True)[0]["request_count"])
     
+    #Retourne TRUE si le nombre de tokens utilisés excède le nombre max autorisé
     @staticmethod
     def isTokenUsageExceeded():
         limit = LLMLimiter.getTokenLimit()
@@ -60,6 +72,7 @@ class LLMLimiter:
                 return True
         return False
     
+    #Retourne TRUE si le nombre de requêtes effectuées excède le nombre max autorisé
     @staticmethod
     def isRequestUsageExceeded():
         limit = LLMLimiter.getRequestLimit()

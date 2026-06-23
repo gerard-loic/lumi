@@ -5,6 +5,7 @@ et partagée entre toutes les requêtes — le serveur MCP tourne dans le
 même processus via transport in-memory (pas de subprocess).
 """
 
+import asyncio
 import json
 import anyio
 from contextlib import asynccontextmanager
@@ -29,6 +30,7 @@ class MCPClientManager:
     def __init__(self):
         self._session: ClientSession | None = None
         self._tools: list = []
+        self._call_lock = asyncio.Lock()
 
     @asynccontextmanager
     async def run(self):
@@ -96,10 +98,9 @@ class MCPClientManager:
     async def call_tool(self, name: str, arguments: dict):
         """Appelle un outil MCP. """
 
-        #Met à jour l'authentification des services avec les infos d'authentification du token
-        ServiceManager.setAuthorization(authorization=Auth.getAuthentication())
-
-        result = await self.session.call_tool(name, arguments)
+        async with self._call_lock:
+            ServiceManager.setAuthorization(authorization=Auth.getAuthentication())
+            result = await self.session.call_tool(name, arguments)
 
         if result.isError:
             error_text = result.content[0].text if result.content else "unknown error"

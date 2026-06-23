@@ -6,34 +6,36 @@
        "allowed_cors_ips" : ["*"],
        "allowed_cors_methods" : ["*"],
        "allowed_cors_headers" : ["*"],
-       "url" : "http://localhost:8001",
+       "url" : "https://service.fr",
+       "ws_inactivity_timeout" : 300,
        "admin_users" : [
             {
-                "username" : "username",
-                "password" : "password"
+                "username" : "",
+                "password" : ""
             }
        ]
     },
 
     "authentication" : {
-        "service" : "nomserviceapi",
-        "jwt_secret" : "cle-secrete-jwt",
-        "jwt_algorithm": "HS256"
+        "service" : "apiservice",
+        "jwt_secret" : "",
+        "jwt_algorithm": "HS256",
+        "session_duration" : 3600
     },
 
     "services" : {
-        "nomserviceapi" : {
+        "nexora" : {
             "handler" : "LumePackAPI",
-            "url" : "http://host.local",
+            "url" : "http://api.exemple.local",
             "timeout" : 60
         },
         "bdd" : {
             "handler" : "PostgreSQL",
             "host" : "0.0.0.0",
             "port" : 5432,
-            "database" : "bddname",
-            "username" : "username",
-            "password" : "password"
+            "database" : "dbname",
+            "username" : "",
+            "password" : ""
         }
     },
 
@@ -48,17 +50,22 @@
     },
 
     "llm" : {
-        "system_prompt" : "Tu es un assistant pour un extranet client. Tu réponds uniquement en français, de façon concise et professionnelle. RÈGLE ABSOLUE : Tu ne dois jamais inventer, supposer ou extrapoler des données. Toute information factuelle doit provenir exclusivement des résultats des outils. Avant de répondre à toute question portant sur des données (commandes, statuts, offres, clients…), appelle systématiquement l'outil approprié. Si aucun outil ne permet de répondre, dis explicitement que tu n'as pas cette information — ne tente jamais de répondre par déduction ou depuis tes connaissances générales. Si un outil retourne une erreur, signale-le à l'utilisateur sans tenter de combler les données manquantes. Ne jamais inventer un identifiant (uid, référence, id). Si l'utilisateur demande une action nécessitant un identifiant qu'il n'a pas fourni, demande-le avant d'appeler l'outil. Pour toutes les informations déjà présentes dans le message (date, nom, référence), appelle directement l'outil sans demander confirmation. Si le retour comprend une url affiche là toujours dans ton retour pour proposer à l'utilisateur de cliquer dessous pour voir le détail. RÈGLE ABSOLUE : Tu ne génères jamais de code sous aucune forme (Python, JavaScript, SQL, HTML, shell, pseudo-code ou tout autre langage de programmation). Si l'utilisateur envoie du code dans sa question ou te demande d'écrire, analyser, expliquer ou commenter du code, refuse poliment en lui indiquant que tu n'es pas conçu pour ce type de demande.",
+        "system_prompt_file" : "config/systemprompt.md",
         "connector" : "LiteLLM",
         "memory_messages" : 5,
-        "max_tokens_month" : 20000,
-        "max_requests_month" : 300,
+        "empty_llm_response_max_retry" : 2,
+        "max_tokens_month" : -1,
+        "max_requests_month" : -1,
         "max_requests_minute" : 5,
         "litellm" : {
             "model" : "openai/openai/gpt-oss-120b",
             "embedding_model" : "openai/Qwen/Qwen3-Embedding-0.6B",
-            "api_base" : "https://service.fr/v1",
-            "api_key" : "cle-api"
+            "api_base" : "https://provider.fr/v1",
+            "api_key" : ""
+        },
+        "filters" : {
+            "CodeFilter" : {
+            }
         }
     },
 
@@ -69,7 +76,8 @@
             "generer_fichier_excel",
             "generer_fichier_pdf",
             "rechercher_sur_internet",
-            "lire_page_web"
+            "lire_page_web",
+            "generer_fichier_word"
         ]
     },
 
@@ -90,12 +98,16 @@
         }
     },
 
-    "webex" : {
-        "enabled" : false,
-        "bot_token" : "votre-token-bot-webex",
-        "webhook_secret" : ""
+    "connectors" : {
+        "webex" : {
+            "enabled": false,
+            "bot_token": "",
+            "webhook_secret": "",
+            "webex_api" : "https://webexapis.com/v1",
+            "api_key" : "",
+            "allow_group_messages": false
+        }
     }
 
-
-
+    
 }

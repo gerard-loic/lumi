@@ -5,22 +5,35 @@ from fpdf import FPDF
 from fpdf.fonts import FontFace
 from pydantic import BaseModel, Field
 
+from tools._charts import render_chart
 from lib.agent.events import FileEvent
 from lib.files.filestore import FileStore
-from lib.mcp.tools import MCPTool, confirmation_tool, native_tool, restricted_tool
+from lib.mcp.tools import MCPTool, confirmation_tool, native_tool
 
 _LINE_H = 6
 _FONT = "DejaVuSans"
+_FONT_MONO = "DejaVuSansMono"
 _FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 _FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+_FONT_MONO_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
 
 _TABLE_HEADER_STYLE = FontFace(emphasis="B", fill_color=(220, 220, 220))
+
+_INLINE_RE = re.compile(
+    r"(\*\*[^*]+\*\*)"        # **bold**
+    r"|(\*[^*]+\*)"            # *italic* (rendu sans mise en forme, police manquante)
+    r"|(~~[^~]+~~)"            # ~~strikethrough~~
+    r"|(__[^_]+__)"            # __underline__
+    r"|(`[^`]+`)"              # `inline code`
+    r"|(\[[^\]]+\]\([^)]+\))"  # [text](url)
+)
 
 
 def _make_pdf() -> FPDF:
     pdf = FPDF()
     pdf.add_font(_FONT, style="", fname=_FONT_REGULAR)
     pdf.add_font(_FONT, style="B", fname=_FONT_BOLD)
+    pdf.add_font(_FONT_MONO, style="", fname=_FONT_MONO_REGULAR)
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.set_margins(20, 20, 20)
     pdf.add_page()
@@ -32,7 +45,7 @@ def _parse_table(table_lines: list[str]) -> list[list[str]]:
     for line in table_lines:
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         if all(re.match(r"^:?-+:?$", c) for c in cells if c):
-            continue  # ligne séparatrice |---|---|
+            continue
         rows.append(cells)
     return rows
 
@@ -57,14 +70,32 @@ class PdfService(MCPTool):
             str,
             Field(
                 description=(
-                    "Contenu du document en Markdown. "
-                    "Supporte les titres (# ## ###), le gras (**texte**), "
-                    "les tableaux (| col | col |), "
-                    "les listes à puces (- item) et numérotées (1. item), et les paragraphes. "
-                    'Exemple : "# Rapport\\n\\n| Col A | Col B |\\n|---|---|\\n| val | val |"'
+                    "Contenu du document en Markdown enrichi. "
+                    "Supporte : titres (# ## ###), gras (**texte**), barré (~~texte~~), "
+                    "souligné (__texte__), code inline (`texte`), liens ([texte](url)), "
+                    "tableaux (| col | col |), listes à puces (- item) et numérotées (1. item). "
+                    "Directives de mise en page (sur leur propre ligne) : "
+                    ":::pagebreak (saut de page), "
+                    ":::chart:N (insère le graphique d'index N depuis le paramètre graphiques)."
                 )
             ),
         ],
+        graphiques: Annotated[
+            Optional[list[dict]],
+            Field(
+                default=None,
+                description=(
+                    "Graphiques à insérer (liste d'objets). Chaque élément a : "
+                    "\"type\" ('barres', 'courbes' ou 'camembert'), "
+                    "\"titre\" (chaîne), "
+                    "\"données\" : pour 'barres'/'courbes' : {\"labels\":[...], \"series\":[{\"nom\":\"...\",\"valeurs\":[...]}]} ; "
+                    "pour 'camembert' : {\"labels\":[...], \"valeurs\":[...]}. "
+                    "Placer dans le markdown via :::chart:0, :::chart:1, etc. "
+                    "Exemple : [{\"type\":\"camembert\",\"titre\":\"Répartition\","
+                    "\"données\":{\"labels\":[\"A\",\"B\"],\"valeurs\":[60,40]}}]"
+                ),
+            ),
+        ] = None,
         nom_fichier: Annotated[
             Optional[str],
             Field(
@@ -74,16 +105,33 @@ class PdfService(MCPTool):
         ] = None,
     ) -> FichierPDF:
         """
-        Génère un fichier PDF à partir de contenu Markdown et retourne l'URL de téléchargement.
+        Génère un fichier PDF à partir de contenu Markdown enrichi et retourne l'URL de téléchargement.
         À utiliser dès que l'utilisateur demande un export PDF, un document téléchargeable, un rapport ou un compte-rendu.
+        Supporte l'insertion de graphiques (barres, courbes, camembert) via le paramètre graphiques.
         """
         filename = (nom_fichier or "document").removesuffix(".pdf") + ".pdf"
         pdf = _make_pdf()
+
+        charts = graphiques or []
+        chart_images = [render_chart(c) for c in charts]
 
         lines = contenu_markdown.splitlines()
         i = 0
         while i < len(lines):
             line = lines[i]
+
+            if line.strip().startswith(":::"):
+                directive = line.strip()[3:].strip()
+                if directive == "pagebreak":
+                    pdf.add_page()
+                elif directive.startswith("chart:"):
+                    idx = int(directive.split(":", 1)[1])
+                    if 0 <= idx < len(chart_images):
+                        chart_images[idx].seek(0)
+                        pdf.image(chart_images[idx], x=pdf.l_margin, w=pdf.epw)
+                        pdf.ln(4)
+                i += 1
+                continue
 
             if re.match(r"^\s*\|", line):
                 table_lines = []
@@ -141,7 +189,7 @@ class PdfService(MCPTool):
 
     def _bullet(self, pdf: FPDF, text: str) -> None:
         pdf.set_font(_FONT, size=11)
-        pdf.write(_LINE_H, "  - ")
+        pdf.write(_LINE_H, "  • ")
         self._write_inline(pdf, text.strip())
         pdf.ln()
 
@@ -153,10 +201,34 @@ class PdfService(MCPTool):
 
     def _write_inline(self, pdf: FPDF, text: str) -> None:
         size = pdf.font_size_pt
-        for part in re.split(r"(\*\*[^*]+\*\*)", text):
-            if part.startswith("**") and part.endswith("**"):
-                pdf.set_font(_FONT, style="B", size=size)
-                pdf.write(_LINE_H, part[2:-2])
-            elif part:
+        last = 0
+        for m in _INLINE_RE.finditer(text):
+            start, end = m.start(), m.end()
+            if start > last:
                 pdf.set_font(_FONT, size=size)
-                pdf.write(_LINE_H, part)
+                pdf.write(_LINE_H, text[last:start])
+            token = m.group(0)
+            if token.startswith("**"):
+                pdf.set_font(_FONT, style="B", size=size)
+                pdf.write(_LINE_H, token[2:-2])
+            elif token.startswith("*"):
+                pdf.set_font(_FONT, size=size)
+                pdf.write(_LINE_H, token[1:-1])
+            elif token.startswith("~~"):
+                pdf.set_font(_FONT, style="S", size=size)
+                pdf.write(_LINE_H, token[2:-2])
+            elif token.startswith("__"):
+                pdf.set_font(_FONT, style="U", size=size)
+                pdf.write(_LINE_H, token[2:-2])
+            elif token.startswith("`"):
+                pdf.set_font(_FONT_MONO, size=size - 1)
+                pdf.write(_LINE_H, token[1:-1])
+            elif token.startswith("["):
+                link_m = re.match(r"\[([^\]]+)\]\(([^)]+)\)", token)
+                if link_m:
+                    pdf.set_font(_FONT, style="U", size=size)
+                    pdf.write(_LINE_H, link_m.group(1), link=link_m.group(2))
+            last = end
+        if last < len(text):
+            pdf.set_font(_FONT, size=size)
+            pdf.write(_LINE_H, text[last:])

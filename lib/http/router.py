@@ -18,6 +18,21 @@ from lib.agent.llmlimiter import LLMLimiter
 from lib.agent.events import ErrorEvent
 
 _rag_basic_auth = HTTPBasic()
+_rag_basic_auth_optional = HTTPBasic(auto_error=False)
+
+async def _usage_auth_dep(
+    request: Request,
+    credentials: Optional[HTTPBasicCredentials] = Depends(_rag_basic_auth_optional),
+):
+    authorization = request.headers.get("Authorization", "")
+    if authorization.startswith("Bearer "):
+        token = authorization[7:]
+        if not Auth.checkAuthentification(token=token):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        return
+    if credentials and AdminAuth.checkAdminCredentials(credentials.username, credentials.password):
+        return
+    raise HTTPException(status_code=401, headers={"WWW-Authenticate": "Basic"}, detail="Unauthorized")
 
 """
 Router — Routeur endpoints serveur API
@@ -30,10 +45,12 @@ class Router:
         self._active_ws = 0
         self.router = APIRouter()
         self.router.add_api_route("/health", self.health, methods=["GET"])
+        self.router.add_api_route("/usage", self.usage, methods=["GET"])
         self.router.add_api_route("/tools", self.list_tools, methods=["GET"], response_model=list[ToolInfo])
         self.router.add_api_websocket_route("/ws", self.ws_chat)
         self.router.add_api_route("/files/{key}/{filename}", self.get_file, methods=["GET"])
         self.router.add_api_route("/auth", self.auth, methods=["POST"])
+        self.router.add_api_route("/auth", self.logout, methods=["DELETE"])
         self.router.add_api_route("/rag/documents", self.rag_index, methods=["POST"])
         self.router.add_api_route("/rag/documents", self.rag_update, methods=["PUT"])
         self.router.add_api_route("/rag/stats", self.rag_stats, methods=["GET"])
@@ -53,11 +70,22 @@ class Router:
             "services" : [],
             "active_ws" : self._active_ws,
             "version" : StaticConfig.version(),
-            "version_name" : StaticConfig.versionName(),
-            "llm_usage" : LocalData.getLLMUsage(currentMonth=True)[0]
+            "version_name" : StaticConfig.versionName()
         }
         for name in ServiceManager.services:
             out["services"].append(name)
+
+        return out
+    
+    """
+    Route [GET] /usage : renvoie les statistiques d'usage
+    """
+    async def usage(
+            self,
+            _=Depends(_usage_auth_dep),
+    ):
+        out = LocalData.getLLMUsage(currentMonth=True)[0]
+        
 
         return out
 
@@ -163,9 +191,9 @@ class Router:
                     if not message:
                         continue
 
-                    async def _stream(msg=message, sid=session_id, auth=decodedToken):
+                    async def _stream(msg=message, sid=session_id):
                         try:
-                            async for event in self.agent.chatStream(msg, auth, sid):
+                            async for event in self.agent.chatStream(msg, sid):
                                 await websocket.send_text(event)
                         except asyncio.CancelledError:
                             pass
@@ -236,6 +264,20 @@ class Router:
             Logger.write(f"[HTTP] [403] auth — Unauthorized", type=ERROR)
             raise HTTPException(status_code=403, detail="Unauthorized")
         return {"token": token}
+
+    """
+    Route [DELETE] /auth : Déconnexion — ferme la session associée au token
+    """
+    async def logout(self, authorization: str | None = Header(default=None)):
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Authentication required")
+        token = authorization[7:]
+        decoded = Auth.checkAuthentification(token=token)
+        if not decoded:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        session_id = decoded.get("session_id")
+        AuthSessionManager.remove(session_id)
+        return {"detail": "Session closed"}
 
     def _check_admin_auth(self, credentials: HTTPBasicCredentials) -> None:
         if not AdminAuth.checkAdminCredentials(credentials.username, credentials.password):

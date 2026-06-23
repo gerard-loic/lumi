@@ -32,11 +32,15 @@ class Config:
             Config.conf = json.load(f)
 
 
+"""
+StaticConfig — Gestion de la configuration statique
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class StaticConfig:
     @staticmethod
     def version():
-        return "1.1.2"
+        return "1.2.0"
     
     @staticmethod
     def versionName():
-        return "Sense"
+        return "Spark"
