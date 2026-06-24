@@ -17,6 +17,9 @@ BACKLOG
 - [ ] Indexation RAG Word, Excel
 - [ ] Cron Indexer RAG
 - [ ] Sources de stockage RAG
+- [ ] Deplacer _charts.py de tools/
+- [ ] application d'un template "beauty" aux PDF et Word
+- [ ] Pb des fichiers, envoyés avant la génération ??
 ------------
 Versions à venir : 
 
@@ -119,4 +122,5 @@ Implémentation
 
 Docker compose up -d
 docker compose up --build -d (pour réinstaller les libs)
-docker compose downdocker compose -f docker-compose.prod.yml up --build -d
+docker compose down
+docker compose -f docker-compose.prod.yml up --build -d

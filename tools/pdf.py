@@ -1,3 +1,4 @@
+import os
 import re
 from typing import Annotated, Optional
 
@@ -13,9 +14,28 @@ from lib.mcp.tools import MCPTool, confirmation_tool, native_tool
 _LINE_H = 6
 _FONT = "DejaVuSans"
 _FONT_MONO = "DejaVuSansMono"
-_FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-_FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-_FONT_MONO_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
+
+
+def _find_font(filename: str) -> str:
+    candidates = [
+        f"/usr/share/fonts/truetype/dejavu/{filename}",
+        f"/usr/share/fonts/dejavu/{filename}",
+        f"/usr/share/fonts/TTF/{filename}",
+    ]
+    try:
+        import matplotlib
+        candidates.append(os.path.join(matplotlib.get_data_path(), "fonts", "ttf", filename))
+    except ImportError:
+        pass
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    raise FileNotFoundError(f"Police introuvable : {filename}. Chemins testés : {candidates}")
+
+
+_FONT_REGULAR = _find_font("DejaVuSans.ttf")
+_FONT_BOLD = _find_font("DejaVuSans-Bold.ttf")
+_FONT_MONO_REGULAR = _find_font("DejaVuSansMono.ttf")
 
 _TABLE_HEADER_STYLE = FontFace(emphasis="B", fill_color=(220, 220, 220))
 
