@@ -21,7 +21,6 @@ BACKLOG
 Versions à venir : 
 
 
-
 Ocean (1.3.0)
 - Envoi de fichiers à l'agent
 - Outils de lectures de PDF/Excel/Word
@@ -114,3 +113,10 @@ config/webex.php
 Modifié : bootstrap/app.php
 Modifié : routes/api.php
 Modifié : .env.example et .env
+
+----------------------------------------
+Implémentation
+
+Docker compose up -d
+docker compose up --build -d (pour réinstaller les libs)
+docker compose downdocker compose -f docker-compose.prod.yml up --build -d
