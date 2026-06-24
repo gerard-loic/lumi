@@ -14,16 +14,17 @@ from lib.log.logger import Logger, ERROR, WARNING, OK
 WebexWebhookHandler — Traitement des événements webhook Webex
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
-
-
 class WebexWebhookHandler:
 
     def __init__(self, agent, connector: WebexBot):
         self._agent = agent
         self._connector = connector
+        #Gestion des messages attendant confirmation
         self._pending_confirmations: dict[str, asyncio.Queue] = {}
 
+    #Point d'entrée de traitement d'un message webex recu
     async def handle(self, event: dict):
+        #Extraction des meta données du message
         data = event.get("data", {})
         room_id          = data.get("roomId")
         person_id        = data.get("personId")
@@ -74,21 +75,24 @@ class WebexWebhookHandler:
 
         # Obtenir ou créer la session Lumi pour cet utilisateur Webex
         if not AuthSessionManager.get(session_id):
+            #Récupère l'utilisateur Webex
             person_data = await self._connector.get_person(person_id)
             email = (person_data.get("emails") or [None])[0] if person_data else None
             if not email:
-                Logger.write(f"[WEBEX] Impossible de récupérer l'email de {person_id}", type=ERROR)
+                Logger.write(f"[Connector webex] Unable to retreive email from webex user {person_id}", type=ERROR)
                 await self._connector.send_message(room_id, "❌ Impossible de récupérer votre identité Webex.")
                 return
 
+            #Authentification auprès du service principal d'authentification utilisé par Lumi
             auth_service_name = Config.get(key="authentication.service")
             auth_service = ServiceManager.get(name=auth_service_name)
             auth_data = auth_service.webexAuthenticate(username=email)
             if not auth_data:
-                Logger.write(f"[WEBEX] Authentification échouée pour {email}", type=ERROR)
+                Logger.write(f"[Connector webex] Authentication failed for {email}", type=ERROR)
                 await self._connector.send_message(room_id, f"❌ Votre compte **{email}** n'est pas autorisé à utiliser ce service.")
                 return
 
+            #Création de l'authentification
             future_ts = datetime.now(tz=timezone.utc).timestamp() + Config.get("authentication.session_duration")
             AuthSessionManager.add(
                 session_id=session_id,
@@ -97,9 +101,9 @@ class WebexWebhookHandler:
                 auth_fingerprint=f"webex_{person_id}",
             )
 
-        Auth._local.sessionId = session_id
+        Auth._session_id_var.set(session_id)
 
-        Logger.write(f"[WEBEX] Message de {person_id} ({room_type}) : {text[:80]}", type=OK)
+        Logger.write(f"[Connector webex] Message from {person_id} ({room_type}) : {text[:80]}", type=OK)
 
         placeholder_id = await self._connector.send_message(room_id, "⏳ *En cours de rédaction...*")
 
@@ -107,6 +111,7 @@ class WebexWebhookHandler:
         extras: list[str] = []
         cancelled = False
 
+        #Consomme le flux de réponse de l'agent en streaming
         try:
             async for raw in self._agent.chatStream(text, session_id, exclude_restricted=True):
                 try:
@@ -116,9 +121,11 @@ class WebexWebhookHandler:
 
                 ev_type = ev.get("type")
 
+                #Type token : l'ajout à la réponse
                 if ev_type == "token":
                     tokens.append(ev.get("content", ""))
-
+                
+                #Type confirmation : envoie la question à l'utilisateur Webex et met la conversation en pause
                 elif ev_type == "confirmation":
                     question = ev.get("question", "Confirmation requise")
                     options  = ev.get("options", [])
@@ -149,20 +156,24 @@ class WebexWebhookHandler:
                     if option_idx != -1:
                         placeholder_id = await self._connector.send_message(room_id, "⏳ *En cours de rédaction...*")
 
+                #Type confirmation_refused : indique que la requête est annulée
                 elif ev_type == "confirmation_refused":
                     cancelled = True
 
+                #Type tool_call : indique à l'utilisateur Webex qu'un outil est utilisé
                 elif ev_type == "tool_call":
                     if ev.get("status") == "PENDING" and placeholder_id:
                         tool_label = ev.get("message") or ev.get("tools", "")
                         await self._connector.update_message(placeholder_id, room_id, f"⏳ *{tool_label}...*")
 
+                #Type file : ajoute le fichier dans les extras
                 elif ev_type == "file":
                     url  = ev.get("url", "")
                     name = ev.get("name", "Fichier")
                     if url:
                         extras.append(f"📎 **{name}** : {url}")
 
+                #Type url : ajoute une url dans les extras
                 elif ev_type == "url":
                     url  = ev.get("url", "")
                     name = ev.get("name", "Lien")
@@ -170,7 +181,7 @@ class WebexWebhookHandler:
                         extras.append(f"🔗 **{name}** : {url}")
 
         except Exception as e:
-            Logger.write(f"[WEBEX] Erreur pendant le traitement de la requête : {e}", type=ERROR)
+            Logger.write(f"[Connector webex] Error while processing request : {e}", type=ERROR)
             await _reply(self._connector, room_id, placeholder_id, "❌ Une erreur est survenue lors du traitement de votre demande.")
             return
 
@@ -180,14 +191,14 @@ class WebexWebhookHandler:
 
         if response:
             await _reply(self._connector, room_id, placeholder_id, response)
-            Logger.write(f"[WEBEX] Réponse envoyée dans {room_id} ({len(response)} car.)", type=OK)
+            Logger.write(f"[Connector webex] Answer provided in room {room_id} ({len(response)} car.)", type=OK)
         elif not cancelled:
-            Logger.write(f"[WEBEX] Réponse vide pour session {session_id}", type=WARNING)
+            Logger.write(f"[Connector webex] Empty answer for session {session_id}", type=WARNING)
             await _reply(self._connector, room_id, placeholder_id, "❌ Aucune réponse n'a pu être générée.")
 
 
+#Retourne l'index de l'option choisie, ou None si non reconnue. (pour gestion des confirmation)
 def _parse_option(reply: str, options: list[str]) -> int | None:
-    """Retourne l'index de l'option choisie, ou None si non reconnue."""
     reply = reply.strip()
     try:
         idx = int(reply) - 1
@@ -201,16 +212,15 @@ def _parse_option(reply: str, options: list[str]) -> int | None:
             return i
     return None
 
-
+#Attend que wait_confirmation() ait enregistré sa queue avant de résoudre.
 async def _delayed_resolve(session_id: str, option_idx: int) -> None:
-    """Attend que wait_confirmation() ait enregistré sa queue avant de résoudre."""
     for _ in range(50):
         if AuthSessionManager._confirmation_queues.get(session_id):
             break
         await asyncio.sleep(0.1)
     AuthSessionManager.resolve_confirmation(session_id, option_idx)
 
-
+#Envoie la réponse ou met à jour la dernière réponse
 async def _reply(connector: WebexBot, room_id: str, placeholder_id: str | None, text: str) -> None:
     if placeholder_id:
         await connector.update_message(placeholder_id, room_id, text)
@@ -226,7 +236,7 @@ def _is_table_row(line: str) -> bool:
 def _is_separator_row(line: str) -> bool:
     return bool(re.match(r"^\|[\s\-:|]+\|$", line.strip()))
 
-
+#Pour affichage des markup table dans le retour en formattage ASCII
 def _render_ascii_table(table_lines: list[str]) -> str:
     rows = []
     for line in table_lines:
@@ -252,9 +262,8 @@ def _render_ascii_table(table_lines: list[str]) -> str:
 
     return "```\n" + "\n".join(out) + "\n```"
 
-
+#Remplace les tableaux Markdown par des tableaux ASCII en bloc de code (Webex ne supporte pas les tables MD).
 def _convert_md_tables(text: str) -> str:
-    """Remplace les tableaux Markdown par des tableaux ASCII en bloc de code (Webex ne supporte pas les tables MD)."""
     lines = text.split("\n")
     result = []
     i = 0

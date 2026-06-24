@@ -11,6 +11,7 @@ PgVector : service de RAG PostreSQL PgVector
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class PgVector:
+    #Connexion standard à la BDD
     @staticmethod
     def _connect_raw():
         cfg = Config.get("services")["bdd"]
@@ -22,6 +23,7 @@ class PgVector:
             password=cfg["password"],
         )
 
+    #Connexion en vectoriel à la BDD
     @staticmethod
     def _connect():
         conn = PgVector._connect_raw()
@@ -32,6 +34,7 @@ class PgVector:
     def _table() -> sql.Identifier:
         return sql.Identifier(Config.get("rag.pgvector.table"))
 
+    #S'assurer que les prérequis soient présents
     @staticmethod
     async def ensureTable() -> None:
         dim = int(Config.get("rag.embedding_dim"))
@@ -70,6 +73,7 @@ class PgVector:
 
         await asyncio.to_thread(_run)
 
+    #Ajout
     @staticmethod
     async def insert(collection: str, content: str, metadata: dict, embedding: list[float]) -> None:
         def _run():
@@ -89,6 +93,7 @@ class PgVector:
 
         await asyncio.to_thread(_run)
 
+    #Recherche
     @staticmethod
     async def search(collection: str, embedding: list[float], top_k: int) -> list[dict]:
         def _run():
@@ -119,6 +124,7 @@ class PgVector:
 
         return await asyncio.to_thread(_run)
 
+    #Statistiques
     @staticmethod
     async def stats() -> dict:
         def _run():
@@ -142,6 +148,7 @@ class PgVector:
 
         return await asyncio.to_thread(_run)
 
+    #Retourne si un document existe
     @staticmethod
     async def sourceExists(collection: str, source: str) -> bool:
         def _run():
@@ -160,6 +167,7 @@ class PgVector:
 
         return await asyncio.to_thread(_run)
 
+    #Supprimer un document
     @staticmethod
     async def deleteBySource(collection: str, source: str) -> int:
         def _run():
@@ -180,6 +188,7 @@ class PgVector:
 
         return await asyncio.to_thread(_run)
 
+    #Supprimer une collection
     @staticmethod
     async def deleteCollection(collection: str) -> int:
         def _run():

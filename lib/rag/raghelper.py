@@ -6,11 +6,12 @@ from lib.log.logger import Logger, ERROR
 import tempfile, os
 
 """
-RagHelper — Méthodes d'interaction avec le RAG
+RagHelper — Méthodes d'interaction avec le RAG (facilitation)
 
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class RagHelper:
+    #Ajout d'un document
     @staticmethod
     async def addDocument(
         text:str=None,
@@ -56,6 +57,7 @@ class RagHelper:
             Logger.write(f"[HTTP] [500] rag_index — {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=str(e))
 
+    #Mise à jour d'un document
     @staticmethod
     async def updateDocument(
         text:str=None,

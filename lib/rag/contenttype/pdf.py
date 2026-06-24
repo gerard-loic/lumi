@@ -3,6 +3,11 @@ import asyncio
 from lib.rag.indexer import Indexer
 from lib.rag.vectorstore import VectorStore
 
+
+"""
+PdfIndexer — Gestion indexation de fichiers PDF
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class PdfIndexer:
     
     @staticmethod

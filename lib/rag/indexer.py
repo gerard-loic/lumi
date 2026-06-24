@@ -70,12 +70,12 @@ class Indexer:
         indexed = await self.indexText(text, metadata=m)
         return {"deleted_chunks": deleted, "chunks_indexed": indexed}
 
-    # Indexation depuis fichier (avec extraction par type)
-    async def indexFile(self, path: str, source: str = None, metadata: dict = None) -> int:
-        """Indexe un fichier en extrayant son contenu selon son type.
+    """Indexe un fichier en extrayant son contenu selon son type.
         PDF : extraction page par page via pypdfium2 (métadonnée `page`).
         Autres formats : conversion Markdown via MarkItDown puis chunking texte.
         """
+    async def indexFile(self, path: str, source: str = None, metadata: dict = None) -> int:
+        
         await VectorStore.ensureTable()
         src = source or os.path.basename(path)
         ext = os.path.splitext(src)[-1].lower()

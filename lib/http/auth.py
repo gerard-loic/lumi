@@ -14,11 +14,11 @@ Auth — Gestion de l'authentification sur l'agent
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Auth:
+    #Clé spécifique par session (isolée par contexte)
     _session_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar('session_id', default=None)
 
-    """
-    S'authentifier sur l'agent
-    """
+
+    #S'authentifier sur l'agent
     @staticmethod
     def authenticate(authorization: dict):
         #On récupère le service utilisé pour gérer l'authentification
@@ -56,9 +56,7 @@ class Auth:
             return token
         return False
 
-    """
-    Vérifie un token d'authentification et le renvoie décodé
-    """
+    #Vérifie un token d'authentification et le renvoie décodé
     @staticmethod
     def checkAuthentification(token:str) -> bool | dict:
         try:
@@ -71,16 +69,13 @@ class Auth:
         except Exception:
             return False
 
-    """
-    Retourne l'ID de session courant
-    """
+
+    #Retourne l'ID de session courant
     @staticmethod
     def getSessionId() -> str:
         return Auth._session_id_var.get()
 
-    """
-    Retourne le payload du token d'authentification courant
-    """
+    #Retourne le payload du token d'authentification courant
     @staticmethod
     def getAuthentication() -> dict:
         session = AuthSessionManager.get(Auth.getSessionId())

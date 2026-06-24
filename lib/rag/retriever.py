@@ -1,15 +1,14 @@
-"""
-Retriever — Recherche sémantique dans le VectorStore
 
-Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
-"""
 
 from lib.rag.vectorstore import VectorStore
 from lib.config.config import Config
 from lib.log.logger import Logger, ERROR
 from lib.agent.llmconnector.litellm import LiteLLMEmbedder
 
-
+"""
+Retriever — Recherche sémantique dans le VectorStore
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class Retriever:
     def __init__(self, collection: str = None):
         self._collection = collection or Config.get("rag.collection")

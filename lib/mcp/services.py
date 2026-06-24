@@ -13,7 +13,6 @@ _SERVICES_DIR = os.path.join(
 
 """
 Service — Classe parente de tout service
-
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Service:
@@ -75,7 +74,6 @@ class Service:
 
 """
 ServiceManager — Gestionnaire de services
-
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class ServiceManager:

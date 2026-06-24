@@ -48,6 +48,19 @@ def restricted_tool(func=None):
         return decorator(func)
     return decorator
 
+def _inject_session_auth(session_id: str) -> None:
+    """Définit l'auth et la session courante pour l'exécution d'un outil."""
+    if not session_id:
+        return
+    from lib.session.session import AuthSessionManager
+    from lib.mcp.services import ServiceManager
+    from lib.http.auth import Auth
+    session = AuthSessionManager.get(session_id)
+    if session:
+        ServiceManager.setAuthorization(authorization=session.authentication)
+        Auth._session_id_var.set(session_id)
+
+
 """
 MCPTool — classe parente outil MCP
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
@@ -81,15 +94,29 @@ class MCPTool:
     def _wrap_method(cls, method):
         sig = inspect.signature(method)
         params_no_self = [p for p in sig.parameters.values() if p.name != "self"]
-        new_sig = sig.replace(parameters=params_no_self, return_annotation=inspect.Parameter.empty)
+
+        # lumi_session_id est injecté par call_tool à chaque appel ; il est filtré
+        # du schéma exposé au LLM dans tools_as_openai_format.
+        _session_param = inspect.Parameter(
+            "lumi_session_id",
+            kind=inspect.Parameter.KEYWORD_ONLY,
+            default="",
+            annotation=str,
+        )
+        new_sig = sig.replace(
+            parameters=params_no_self + [_session_param],
+            return_annotation=inspect.Parameter.empty,
+        )
 
         if inspect.iscoroutinefunction(method):
             async def wrapper(*args, **kwargs):
+                _inject_session_auth(kwargs.pop("lumi_session_id", ""))
                 instance = cls()
                 result = await method(instance, *args, **kwargs)
                 return {"result": result, "events": instance._events}
         else:
             def wrapper(*args, **kwargs):
+                _inject_session_auth(kwargs.pop("lumi_session_id", ""))
                 instance = cls()
                 result = method(instance, *args, **kwargs)
                 return {"result": result, "events": instance._events}
@@ -99,6 +126,7 @@ class MCPTool:
         wrapper.__doc__ = method.__doc__
         wrapper.__module__ = method.__module__
         wrapper.__annotations__ = {k: v for k, v in method.__annotations__.items() if k not in ("self", "return")}
+        wrapper.__annotations__["lumi_session_id"] = str
         wrapper.__signature__ = new_sig
 
         MCPTool._registry[method.__name__] = {

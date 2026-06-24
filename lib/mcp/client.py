@@ -5,14 +5,12 @@ et partagée entre toutes les requêtes — le serveur MCP tourne dans le
 même processus via transport in-memory (pas de subprocess).
 """
 
-import asyncio
 import json
 import anyio
 from contextlib import asynccontextmanager
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 from lib.config.config import Config
-from lib.mcp.services import ServiceManager
 from lib.mcp.tools import MCPTool
 from lib.http.auth import Auth
 from lib.log.logger import Logger, ERROR
@@ -30,11 +28,10 @@ class MCPClientManager:
     def __init__(self):
         self._session: ClientSession | None = None
         self._tools: list = []
-        self._call_lock = asyncio.Lock()
 
+    #Context manager à utiliser dans le lifespan FastAPI.
     @asynccontextmanager
     async def run(self):
-        """Context manager à utiliser dans le lifespan FastAPI."""
         from lib.mcp.server import create_app
         mcp_app = create_app()
 
@@ -76,15 +73,16 @@ class MCPClientManager:
     def tools(self) -> list:
         return self._tools
 
+    #Convertit les tools MCP au format attendu par le LLM.
     def tools_as_openai_format(self, exclude_restricted: bool = False) -> list[dict]:
-        """Convertit les tools MCP au format attendu par le LLM."""
         result = []
         for t in self._tools:
             if exclude_restricted and MCPTool.get_meta(t.name).get("restricted", False):
                 continue
             schema = dict(t.inputSchema)
-            properties = {k: v for k, v in schema.get("properties", {}).items()}
-            required = [r for r in schema.get("required", [])]
+            # lumi_session_id est un paramètre interne — on le masque au LLM
+            properties = {k: v for k, v in schema.get("properties", {}).items() if k != "lumi_session_id"}
+            required = [r for r in schema.get("required", []) if r != "lumi_session_id"]
             result.append({
                 "type": "function",
                 "function": {
@@ -95,12 +93,12 @@ class MCPClientManager:
             })
         return result
 
+    #Appelle un outil MCP.
     async def call_tool(self, name: str, arguments: dict):
-        """Appelle un outil MCP. """
-
-        async with self._call_lock:
-            ServiceManager.setAuthorization(authorization=Auth.getAuthentication())
-            result = await self.session.call_tool(name, arguments)
+        # lumi_session_id est injecté ici pour que le wrapper de l'outil puisse
+        # configurer l'auth de la bonne session sans passer par un état global.
+        arguments = {**arguments, "lumi_session_id": Auth.getSessionId() or ""}
+        result = await self.session.call_tool(name, arguments)
 
         if result.isError:
             error_text = result.content[0].text if result.content else "unknown error"

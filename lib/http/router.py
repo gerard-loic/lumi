@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
 from typing import Optional
-from lib.http.models import ToolInfo, AuthRequest
+from lib.http.models import ToolInfo, AuthRequest, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse
 
 from lib.http.auth import Auth, AdminAuth
 from lib.session.session import AuthSessionManager
@@ -20,6 +20,7 @@ from lib.agent.events import ErrorEvent
 _rag_basic_auth = HTTPBasic()
 _rag_basic_auth_optional = HTTPBasic(auto_error=False)
 
+#Pour gestion des routes acceptant une authentification Basic (admin) OU Bearer (session agent)
 async def _usage_auth_dep(
     request: Request,
     credentials: Optional[HTTPBasicCredentials] = Depends(_rag_basic_auth_optional),
@@ -36,7 +37,6 @@ async def _usage_auth_dep(
 
 """
 Router — Routeur endpoints serveur API
-
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Router:
@@ -59,11 +59,14 @@ class Router:
 
     """
     Route [GET] /health : renvoie l'état de santé du service
+    Auth    : Basic admin
+    Entrée  : (aucun paramètre)
+    Sortie  : HealthResponse { status, services[], active_ws, version, version_name }
     """
     async def health(
             self,
             credentials: HTTPBasicCredentials = Depends(_rag_basic_auth),
-    ):
+    ) -> HealthResponse:
         self._check_admin_auth(credentials)
         out = {
             "status" : "ok",
@@ -78,19 +81,24 @@ class Router:
         return out
     
     """
-    Route [GET] /usage : renvoie les statistiques d'usage
+    Route [GET] /usage : renvoie les statistiques d'usage du mois en cours
+    Auth    : Basic admin  OU  Bearer token (session agent)
+    Entrée  : (aucun paramètre)
+    Sortie  : UsageResponse { year, month, token_used, request_count }
     """
     async def usage(
             self,
             _=Depends(_usage_auth_dep),
-    ):
+    ) -> UsageResponse:
         out = LocalData.getLLMUsage(currentMonth=True)[0]
         
-
         return out
 
     """
     Route [GET] /tools : renvoie les outils MCP actifs
+    Auth    : Basic admin
+    Entrée  : (aucun paramètre)
+    Sortie  : list[ToolInfo] { name, description }
     """
     async def list_tools(
             self,
@@ -105,24 +113,26 @@ class Router:
 
     """
     Route [WS] /ws : conversation avec l'agent via WebSocket
-    Paramètre : token (query string) issu de /auth
-
-    Protocole messages entrants (JSON) :
-      {"type": "message", "message": "..."}   — envoi d'un message à l'agent
-      {"type": "confirmation", "option": N}   — réponse à une demande de confirmation
-
-    Protocole messages sortants (JSON) :
-      {"type": "token",              "content": "..."}
-      {"type": "tool_call",          "tools": "...", "status": "PENDING|OK|ERROR", ...}
-      {"type": "confirmation",       "question": "...", "options": [...]}
-      {"type": "confirmation_refused"}
-      {"type": "rag",                "source": "...", "locations": [...]}
-      {"type": "file",               "name": "...", "url": "..."}
-      {"type": "url",                "name": "...", "url": "..."}
-      {"type": "error",              "error_code": "...", "message": "...", "details": "..."}
-      {"type": "end"}
+    Auth    : Bearer token (query param ?token=) issu de /auth
+    Entrée  : token (query string)
+              Messages JSON entrants :
+                {"type": "message",      "message": "..."}   — envoi d'un message à l'agent
+                {"type": "confirmation", "option": N}         — réponse à une demande de confirmation
+    Sortie  : Messages JSON sortants (stream) :
+                {"type": "token",              "content": "..."}
+                {"type": "tool_call",          "tools": "...", "status": "PENDING|OK|ERROR", ...}
+                {"type": "confirmation",       "question": "...", "options": [...]}
+                {"type": "confirmation_refused"}
+                {"type": "rag",                "source": "...", "locations": [...]}
+                {"type": "file",               "name": "...", "url": "..."}
+                {"type": "url",                "name": "...", "url": "..."}
+                {"type": "error",              "error_code": "...", "message": "...", "details": "..."}
+                {"type": "end"}
     """
     async def ws_chat(self, websocket: WebSocket, token: str = Query(...)):
+        #-----------------------------------------------------------------------------
+        #Gestion de la vérification de l'authentification
+        
         if not token:
             await websocket.close(code=4001, reason="Authentication token is required")
             return
@@ -150,16 +160,22 @@ class Router:
             Logger.write(f"[HTTP] [WS] ws_chat — Session {session_id} already connected", type=WARNING)
             await websocket.close(code=4409, reason="Session already connected")
             return
+        
 
+        #Connexion acceptée, ouverture de la session
         await websocket.accept()
         self._active_ws += 1
 
         inactivity_timeout: int = Config.get(key="app.ws_inactivity_timeout")
         active_stream: asyncio.Task | None = None
 
+
+        #-----------------------------------------------------------------------------
+        #Gestion des échanges client / agent
         try:
             while True:
                 try:
+                    #Attente de réception d'un message du client
                     data = await asyncio.wait_for(websocket.receive_json(), timeout=inactivity_timeout)
                 except asyncio.TimeoutError:
                     Logger.write(f"[HTTP] [WS] ws_chat — Intactivity timeout ({inactivity_timeout}s) for session {session_id}", type=WARNING)
@@ -168,11 +184,14 @@ class Router:
                 except Exception:
                     break
 
+                #Un message a été recu, on récupère le type du message
                 msg_type = data.get("type", "message")
 
+                #Type confirmation
                 if msg_type == "confirmation":
                     AuthSessionManager.resolve_confirmation(session_id, data.get("option", -1))
 
+                #Type message
                 elif msg_type == "message":
                     #Verification du droit d'appel du LLM
                     if LLMLimiter.isRequestUsageExceeded() or LLMLimiter.isTokenUsageExceeded():
@@ -187,6 +206,7 @@ class Router:
                         await websocket.send_text(ErrorEvent.get(error_code="RESPONSE_IN_PROGRESS", message="A response is already in progress, please wait"))
                         continue
 
+                    #Appel LLM OK : on récupère le message
                     message = data.get("message", "").strip()
                     if not message:
                         continue
@@ -196,9 +216,10 @@ class Router:
                             async for event in self.agent.chatStream(msg, sid):
                                 await websocket.send_text(event)
                         except asyncio.CancelledError:
+                            #Cas de déconnexion client. On termine silencieusement
                             pass
                         except Exception as e:
-                            Logger.write(f"[HTTP] [WS] ws_chat — Erreur streaming : {e}", type=ERROR)
+                            Logger.write(f"[HTTP] [WS] ws_chat — Streaming error: {e}", type=ERROR)
 
                     active_stream = asyncio.create_task(_stream())
 
@@ -213,12 +234,15 @@ class Router:
                 active_stream.cancel()
 
     """
-    Route [GET] /files/{key}/{filename} : renvoie un fichier
-    Authentification acceptée via :
-      - Header Authorization: Bearer <token>  (méthode classique)
-      - Query param ?t=<sha256_du_token>       (méthode URL intégrée)
+    Route [GET] /files/{key}/{filename} : renvoie un fichier lié à la session
+    Auth    : Bearer token via header Authorization  OU  hash du token via query param ?t=
+    Entrée  : key      (path)  — identifiant du fichier dans la session
+              filename (path)  — nom du fichier à retourner dans la réponse
+              Authorization    (header, optionnel) — "Bearer <token>"
+              t                (query,  optionnel) — sha256 du token
+    Sortie  : FileResponse (contenu binaire du fichier)
     """
-    async def get_file(self, key: str, filename: str, authorization: str | None = Header(default=None), t: str | None = Query(default=None)):
+    async def get_file(self, key: str, filename: str, authorization: str | None = Header(default=None), t: str | None = Query(default=None)) -> FileResponse:
         session = None
 
         if authorization and authorization.startswith("Bearer "):
@@ -249,9 +273,12 @@ class Router:
         return FileResponse(file_path, filename=filename)
 
     """
-    Route [POST] /auth : Authentification au service
+    Route [POST] /auth : Authentification au service, ouvre une session
+    Auth    : (aucune — endpoint public)
+    Entrée  : AuthRequest { authorization: dict }
+    Sortie  : AuthResponse { token: str }
     """
-    async def auth(self, request: AuthRequest):
+    async def auth(self, request: AuthRequest) -> AuthResponse:
         try:
             token = Auth.authenticate(request.authorization)
         except Exception as e:
@@ -267,6 +294,9 @@ class Router:
 
     """
     Route [DELETE] /auth : Déconnexion — ferme la session associée au token
+    Auth    : Bearer token (header Authorization)
+    Entrée  : Authorization (header) — "Bearer <token>"
+    Sortie  : { detail: "Session closed" }
     """
     async def logout(self, authorization: str | None = Header(default=None)):
         if not authorization or not authorization.startswith("Bearer "):
@@ -285,58 +315,70 @@ class Router:
 
     """
     Route [POST] /rag/documents : Indexe un document dans la base de connaissances
-    Accepte soit du texte brut (champ `text`), soit un fichier (champ `file`).
+    Auth    : Basic admin
+    Entrée  : RagIndexRequest (multipart/form-data)
+                text       (form, optionnel) — texte brut à indexer
+                file       (file, optionnel) — fichier à indexer
+                source     (form, optionnel) — identifiant source du document
+                collection (form, optionnel) — collection cible (défaut si absent)
+              Au moins `text` ou `file` est requis.
+    Sortie  : RagAddDocumentResponse { chunk_indexed, collection }
     """
     async def rag_index(
         self,
         credentials: HTTPBasicCredentials = Depends(_rag_basic_auth),
-        text:       Optional[str]        = Form(default=None),
-        file:       Optional[UploadFile] = File(default=None),
-        source:     Optional[str]        = Form(default=None),
-        collection: Optional[str]        = Form(default=None),
-    ):
+        req: RagIndexRequest = Depends(),
+    ) -> RagAddDocumentResponse:
         self._check_admin_auth(credentials)
-        if not text and not file:
+        if not req.text and not req.file:
             raise HTTPException(status_code=400, detail="Provide either 'text' or 'file'")
 
         return await RagHelper.addDocument(
-            text=text,
-            file=file,
-            source=source,
-            collection=collection
+            text=req.text,
+            file=req.file,
+            source=req.source,
+            collection=req.collection
         )
 
 
     """
     Route [PUT] /rag/documents : Met à jour un document existant identifié par son `source`
     Supprime les chunks existants puis ré-indexe le nouveau contenu.
+    Auth    : Basic admin
+    Entrée  : RagIndexRequest (multipart/form-data)
+                text       (form, optionnel) — nouveau texte brut
+                file       (file, optionnel) — nouveau fichier
+                source     (form, requis)    — identifiant du document à mettre à jour
+                collection (form, optionnel) — collection cible (défaut si absent)
+              Au moins `text` ou `file` est requis. `source` est obligatoire.
+    Sortie  : RagAddDocumentResponse { chunk_indexed, collection }
     """
     async def rag_update(
         self,
         credentials: HTTPBasicCredentials = Depends(_rag_basic_auth),
-        source:     Optional[str]        = Form(default=None),
-        text:       Optional[str]        = Form(default=None),
-        file:       Optional[UploadFile] = File(default=None),
-        collection: Optional[str]        = Form(default=None),
-    ):
+        req: RagIndexRequest = Depends(),
+    ) -> RagAddDocumentResponse:
         self._check_admin_auth(credentials)
-        if not text and not file:
+        if not req.text and not req.file:
             raise HTTPException(status_code=400, detail="Provide either 'text' or 'file'")
 
-        if not source and (not file or not file.filename):
-                raise HTTPException(status_code=400, detail="'source' is required to identify the document to update")
+        if not req.source and (not req.file or not req.file.filename):
+            raise HTTPException(status_code=400, detail="'source' is required to identify the document to update")
 
         return await RagHelper.updateDocument(
-            text=text,
-            file=file,
-            source=source,
-            collection=collection
+            text=req.text,
+            file=req.file,
+            source=req.source,
+            collection=req.collection
         )
 
     """
     Route [GET] /rag/stats : Statistiques sur le contenu de la base vectorielle
+    Auth    : Basic admin
+    Entrée  : (aucun paramètre)
+    Sortie  : RagStatResponse { total_chunks, collections[] }
     """
-    async def rag_stats(self, credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)):
+    async def rag_stats(self, credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> RagStatResponse:
         self._check_admin_auth(credentials)
         from lib.rag.vectorstore import VectorStore
         try:
@@ -347,15 +389,20 @@ class Router:
 
     """
     Route [DELETE] /rag/collections/{collection}/documents/{source} : Supprime un document par sa source
+    Auth    : Basic admin
+    Entrée  : RagDeleteDocumentRequest (path params)
+                collection (path) — nom de la collection
+                source     (path) — identifiant source du document à supprimer
+    Sortie  : RagDeleteDocumentResponse { deleted_chunks, source, collection }
     """
-    async def rag_delete_document(self, collection: str, source: str, credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)):
+    async def rag_delete_document(self, req: RagDeleteDocumentRequest = Depends(), credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> RagDeleteDocumentResponse:
         self._check_admin_auth(credentials)
         from lib.rag.vectorstore import VectorStore
         try:
-            deleted = await VectorStore.deleteBySource(collection, source)
+            deleted = await VectorStore.deleteBySource(req.collection, req.source)
             if deleted == 0:
-                raise HTTPException(status_code=404, detail=f"No document with source '{source}' in collection '{collection}'")
-            return {"deleted_chunks": deleted, "source": source, "collection": collection}
+                raise HTTPException(status_code=404, detail=f"No document with source '{req.source}' in collection '{req.collection}'")
+            return {"deleted_chunks": deleted, "source": req.source, "collection": req.collection}
         except HTTPException:
             raise
         except Exception as e:
@@ -364,14 +411,18 @@ class Router:
 
     """
     Route [DELETE] /rag/collections/{collection} : Supprime tous les documents d'une collection
+    Auth    : Basic admin
+    Entrée  : RagDeleteCollectionRequest (path params)
+                collection (path) — nom de la collection à vider
+    Sortie  : RagDeleteCollectionResponse { deleted_chunks, collection }
     """
-    async def rag_delete_collection(self, collection: str, credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)):
+    async def rag_delete_collection(self, req: RagDeleteCollectionRequest = Depends(), credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> RagDeleteCollectionResponse:
         self._check_admin_auth(credentials)
         from lib.rag.indexer import Indexer
         try:
-            indexer = Indexer(collection=collection)
-            deleted = await indexer.deleteCollection(collection)
-            return {"deleted_chunks": deleted, "collection": collection}
+            indexer = Indexer(collection=req.collection)
+            deleted = await indexer.deleteCollection(req.collection)
+            return {"deleted_chunks": deleted, "collection": req.collection}
         except Exception as e:
             Logger.write(f"[HTTP] [500] rag_delete_collection — {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=str(e))

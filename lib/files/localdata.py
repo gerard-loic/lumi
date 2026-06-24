@@ -2,6 +2,11 @@ import sqlite3
 import os
 from lib.config.config import Config
 
+
+"""
+LocalData — Gestion de la base de données locale (données rémanantes)
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class LocalData:
     @staticmethod
     def init():
@@ -12,6 +17,8 @@ class LocalData:
         LocalData.cursor = LocalData.cnx.cursor()
         LocalData.cursor.execute("CREATE TABLE IF NOT EXISTS llm_usage (created_at TIMESTAMP, session_uid VARCHAR(255), token_used INTEGER)")
 
+
+    #Log une utilisation de tokens
     @staticmethod
     def logLLMUsage(session_uid: str, token_used: int):
         LocalData.cursor.execute(
@@ -21,6 +28,7 @@ class LocalData:
         LocalData.cnx.commit()
 
 
+    #Retourne des données de consommation
     @staticmethod
     def getLLMUsage(currentMonth: bool = True):
         if currentMonth:
