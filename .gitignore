@@ -12,6 +12,7 @@ tools/*
 !tools/web.py
 !tools/datetime.py
 !tools/word.py
+!tools/_charts.py
 logs/*
 !logs/.gitkeep
 services/*
