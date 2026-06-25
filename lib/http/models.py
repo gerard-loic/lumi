@@ -77,6 +77,8 @@ class UsageResponse(BaseModel):
     month: str
     token_used: int
     request_count: int
+    token_limit: int
+    request_limit: int
 
 
 """

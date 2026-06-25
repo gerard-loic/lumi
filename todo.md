@@ -20,6 +20,8 @@ BACKLOG
 - [ ] Deplacer _charts.py de tools/
 - [ ] application d'un template "beauty" aux PDF et Word
 - [ ] Pb des fichiers, envoyés avant la génération ??
+- [ ] Création de pipelines
+- [ ] Loop
 ------------
 Versions à venir : 
 

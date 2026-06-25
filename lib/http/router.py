@@ -91,6 +91,8 @@ class Router:
             _=Depends(_usage_auth_dep),
     ) -> UsageResponse:
         out = LocalData.getLLMUsage(currentMonth=True)[0]
+        out['token_limit'] = int(Config.get("llm.max_tokens_month"))
+        out['request_limit'] = int(Config.get("llm.max_requests_month"))
         
         return out
 
