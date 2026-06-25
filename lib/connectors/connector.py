@@ -59,11 +59,12 @@ class ConnectorManager:
         #Initialisation
         connectors = Config.get("connectors")
         for connector in connectors:
-            if connector == "webex":
-                ConnectorManager._connectors[connector] = WebexConnector(agent=agent, config=connectors[connector])
-            else:
-                Logger.write(f"[ConnectorManager] Connector {connector} does not exists", ERROR)
-                raise Exception(f"[ConnectorManager] Connector {connector} does not exists")
+            if connectors[connector]["enabled"]:
+                if connector == "webex":
+                    ConnectorManager._connectors[connector] = WebexConnector(agent=agent, config=connectors[connector])
+                else:
+                    Logger.write(f"[ConnectorManager] Connector {connector} does not exists", ERROR)
+                    raise Exception(f"[ConnectorManager] Connector {connector} does not exists")
 
         #Démarrage des connecteurs
         for connector in ConnectorManager._connectors:
