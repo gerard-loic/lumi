@@ -5,9 +5,9 @@ AURORA
 - [ ] Outils PDF avancés
 - [ ] Outils Excel avancés
 - [ ] Pb des fichiers, envoyés avant la génération ??
-- [ ] Tache de delestage
-- [ ] Implémentation d'un mécanisme de tâches CRON
-- [ ] Refonte et sécurisation du système d'import dynamique
+- [x] Tache de delestage
+- [x] Implémentation d'un mécanisme de tâches CRON
+- [ ] Refonte et sécurisation du système d'import dynamique  [EN COURS]
 ----------------------------
 BACKLOG
 - [ ] Implémentation des traductions

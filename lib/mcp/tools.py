@@ -152,7 +152,10 @@ noms d'outils exacts, ainsi que des motifs "namespace.*" comparés au chemin
 du module relatif à `tools.` (ex. `tools.word.word` -> "word.word") :
 "word.*" active ainsi tous les outils situés dans `tools/word/`, et
 "datetime.*" active tous les outils du module `tools/datetime.py`, quel que
-soit leur nombre. Un outil non couvert par cette liste n'est pas enregistré.
+soit leur nombre. Elle accepte aussi un motif "namespace/nom_outil" pour
+n'activer qu'un seul outil précis d'un sous-dossier ou module, ex.
+"pdf/generer_fichier_pdf" n'active que cet outil parmi ceux de `tools/pdf/`.
+Un outil non couvert par cette liste n'est pas enregistré.
 
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
@@ -169,6 +172,10 @@ class ToolLoader:
             if pattern.endswith(".*"):
                 prefix = pattern[:-2]
                 if relative_module == prefix or relative_module.startswith(prefix + "."):
+                    return True
+            elif "/" in pattern:
+                namespace, _, name = pattern.rpartition("/")
+                if name == tool_name and (relative_module == namespace or relative_module.startswith(namespace + ".")):
                     return True
             elif ("*" in pattern or "?" in pattern) and fnmatch.fnmatch(relative_module, pattern):
                 return True
