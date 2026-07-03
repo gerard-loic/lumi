@@ -1,13 +1,15 @@
 AURORA
 - [x] Deplacer _charts.py de tools/
-- [ ] Reorganier les dossiers d'outils [EN COURS]
+- [x] Reorganier les dossiers d'outils [EN COURS]
 - [ ] Outils MCP Word avancés [EN COURS]
-- [ ] Outils PDF avancés
-- [ ] Outils Excel avancés
+- [ ] Outils PDF avancés [EN COURS]
 - [ ] Pb des fichiers, envoyés avant la génération ??
 - [x] Tache de delestage
 - [x] Implémentation d'un mécanisme de tâches CRON
 - [ ] Refonte et sécurisation du système d'import dynamique  [EN COURS]
+- [ ] Refactor version Aurora
+- [ ] MAJ README
+- [ ] Follow-up 
 ----------------------------
 BACKLOG
 - [ ] Implémentation des traductions
@@ -17,7 +19,6 @@ BACKLOG
 - [ ] Support OCR / modèle de compréhension d'image
 - [ ] option pour retourner les infos des documents
 - [ ] Confirmations : prévoir des options plus riches (objets)
-- [ ] Follow-up 
 - [ ] Limitation des résultats
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
 - [ ] Critique de la réponse par un modèle
@@ -25,7 +26,6 @@ BACKLOG
 - [ ] Indexation RAG Word, Excel
 - [ ] Cron Indexer RAG
 - [ ] Sources de stockage RAG
-- [ ] application d'un template "beauty" aux PDF et Word
 - [ ] Création de pipelines
 - [ ] Loop
 - [ ] MCP externes
@@ -34,21 +34,29 @@ BACKLOG
 - [ ] Image to text
 - [ ] Génération d'images
 - [ ] Passer le delestage sessions en tache CRON ?
+- [ ] Outils excel et graphiques avancés
+- [ ] Refondre l'orchestrateur
 ------------
 Versions à venir : 
 
+Phosphor
+Focalisé sur les fonctionnalités RAG
 
-Ocean (1.3.0)
-- Envoi de fichiers à l'agent
-- Outils de lectures de PDF/Excel/Word
-- Micro RAG sur les outils envoyés
+Abyss
+Focalisé sur les pipelines
 
-Vision (1.4.0)
-- Implémentation de modèles de vision
-- Implémentation de modèles d'audio
-- Envoi de la demande en audio au modèle
+Nova
+Focalisé sur les capacités d'analyse d'images
 
-------------
+Vortex
+Focalisé sur les capacités de l'agent à se controler et vérifier la réalisation de sa tâche
+
+Pulse
+Focalisé sur l'optimisation de l'orchestrateur
+
+Nimbus 
+Focalisé sur les capacités audio
+
 
 - [x] Events des appels d'outils (2 états)
 - [x] Gestion des erreurs sur l'appel des outils

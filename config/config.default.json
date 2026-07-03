@@ -100,6 +100,12 @@
         "template_array_style" : "Tableau Gabarit"
     },
 
+    "pdf" : {
+        "template_color" : "1F4E79",
+        "template_logo" : null,
+        "template_footer_text" : null
+    },
+
     "rag" : {
         "collection" : "demo",
         "embedding_dim" : 1024,

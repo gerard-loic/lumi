@@ -1,5 +1,6 @@
 import os
 import re
+from datetime import date
 from typing import Annotated, Optional
 
 from fpdf import FPDF
@@ -7,6 +8,7 @@ from fpdf.fonts import FontFace
 from pydantic import BaseModel, Field
 
 from tools.charts._charts import render_chart
+from tools.pdf import _pdf_template as pt
 from lib.agent.events import FileEvent
 from lib.files.filestore import FileStore
 from lib.mcp.tools import MCPTool, confirmation_tool
@@ -37,7 +39,7 @@ _FONT_REGULAR = _find_font("DejaVuSans.ttf")
 _FONT_BOLD = _find_font("DejaVuSans-Bold.ttf")
 _FONT_MONO_REGULAR = _find_font("DejaVuSansMono.ttf")
 
-_TABLE_HEADER_STYLE = FontFace(emphasis="B", fill_color=(220, 220, 220))
+_MUTED_RGB = (90, 90, 90)
 
 _INLINE_RE = re.compile(
     r"(\*\*[^*]+\*\*)"        # **bold**
@@ -49,13 +51,84 @@ _INLINE_RE = re.compile(
 )
 
 
-def _make_pdf() -> FPDF:
-    pdf = FPDF()
+class _TemplatedPDF(FPDF):
+    """
+    PDF dont l'en-tête, le pied de page et les couleurs suivent le gabarit
+    configuré (voir tools/pdf/_pdf_template.py). Le gabarit est entièrement
+    facultatif : sans configuration ni titre, le rendu reste celui d'un PDF nu.
+    """
+
+    def __init__(self, titre: str | None):
+        super().__init__()
+        self.titre = titre
+        self.color_rgb = pt.hex_to_rgb(pt.template_color())
+        self.logo_path = pt.template_logo()
+        self.footer_text = pt.template_footer_text()
+        self.chrome = bool(titre or self.logo_path or self.footer_text)
+
+    def _on_cover_page(self) -> bool:
+        return bool(self.titre) and self.page_no() == 1
+
+    def header(self) -> None:
+        if not self.chrome or self._on_cover_page():
+            return
+        y = 10
+        if self.logo_path:
+            self.image(self.logo_path, x=self.l_margin, y=y, h=10)
+        if self.titre:
+            self.set_font(_FONT, style="B", size=10)
+            self.set_text_color(*self.color_rgb)
+            self.set_xy(self.l_margin, y)
+            self.cell(self.epw, 10, self.titre, align="R")
+        self.set_draw_color(*self.color_rgb)
+        self.set_line_width(0.4)
+        self.line(self.l_margin, y + 14, self.w - self.r_margin, y + 14)
+        self.set_text_color(0, 0, 0)
+        self.set_y(y + 18)
+
+    def footer(self) -> None:
+        if not self.chrome or self._on_cover_page():
+            return
+        self.set_y(-15)
+        self.set_font(_FONT, size=9)
+        self.set_text_color(*_MUTED_RGB)
+        text = f"Page {self.page_no()}/{{nb}}"
+        if self.footer_text:
+            text = f"{self.footer_text}  —  {text}"
+        self.cell(0, 10, text, align="C")
+        self.set_text_color(0, 0, 0)
+
+
+def _render_cover(pdf: _TemplatedPDF, titre: str, sous_titre: str | None) -> None:
+    pdf.add_page()
+    if pdf.logo_path:
+        pdf.image(pdf.logo_path, x=pdf.w / 2 - 15, y=30, w=30)
+    pdf.set_y(110)
+    pdf.set_font(_FONT, style="B", size=26)
+    pdf.set_text_color(*pdf.color_rgb)
+    pdf.multi_cell(0, 12, titre, align="C")
+    if sous_titre:
+        pdf.ln(4)
+        pdf.set_font(_FONT, size=14)
+        pdf.set_text_color(*_MUTED_RGB)
+        pdf.multi_cell(0, 8, sous_titre, align="C")
+    pdf.set_y(-35)
+    pdf.set_font(_FONT, size=10)
+    pdf.set_text_color(*_MUTED_RGB)
+    pdf.cell(0, 10, date.today().strftime("%d/%m/%Y"), align="C")
+    pdf.set_text_color(0, 0, 0)
+
+
+def _make_pdf(titre: str | None = None, sous_titre: str | None = None) -> _TemplatedPDF:
+    pdf = _TemplatedPDF(titre)
     pdf.add_font(_FONT, style="", fname=_FONT_REGULAR)
     pdf.add_font(_FONT, style="B", fname=_FONT_BOLD)
     pdf.add_font(_FONT_MONO, style="", fname=_FONT_MONO_REGULAR)
     pdf.set_auto_page_break(auto=True, margin=20)
-    pdf.set_margins(20, 20, 20)
+    pdf.set_margins(20, 30 if pdf.chrome else 20, 20)
+    pdf.alias_nb_pages()
+    if titre:
+        _render_cover(pdf, titre, sous_titre)
     pdf.add_page()
     return pdf
 
@@ -99,6 +172,21 @@ class PdfService(MCPTool):
                 )
             ),
         ],
+        titre: Annotated[
+            Optional[str],
+            Field(
+                default=None,
+                description=(
+                    "Titre du document. S'il est fourni, une page de garde est ajoutée "
+                    "(titre, sous-titre, date) ainsi qu'un en-tête et un pied de page "
+                    "(titre, numérotation) sur les pages suivantes, selon le gabarit configuré."
+                ),
+            ),
+        ] = None,
+        sous_titre: Annotated[
+            Optional[str],
+            Field(default=None, description="Sous-titre affiché sous le titre sur la page de garde (ignoré si titre est omis)."),
+        ] = None,
         graphiques: Annotated[
             Optional[list[dict]],
             Field(
@@ -127,9 +215,11 @@ class PdfService(MCPTool):
         Génère un fichier PDF à partir de contenu Markdown enrichi et retourne l'URL de téléchargement.
         À utiliser dès que l'utilisateur demande un export PDF, un document téléchargeable, un rapport ou un compte-rendu.
         Supporte l'insertion de graphiques (barres, courbes, camembert) via le paramètre graphiques.
+        Si titre est fourni, applique le gabarit (page de garde, en-tête, pied de page) configuré
+        pour l'outil PDF (voir la clé de configuration "pdf").
         """
         filename = (nom_fichier or "document").removesuffix(".pdf") + ".pdf"
-        pdf = _make_pdf()
+        pdf = _make_pdf(titre, sous_titre)
 
         charts = graphiques or []
         chart_images = [render_chart(c) for c in charts]
@@ -183,14 +273,15 @@ class PdfService(MCPTool):
         self.emit(FileEvent.get(name=filename, url=url))
         return FichierPDF(url=url)
 
-    def _render_table(self, pdf: FPDF, rows: list[list[str]]) -> None:
+    def _render_table(self, pdf: _TemplatedPDF, rows: list[list[str]]) -> None:
         if not rows:
             return
         pdf.ln(2)
         pdf.set_font(_FONT, size=10)
+        header_style = FontFace(emphasis="B", color=(255, 255, 255), fill_color=pdf.color_rgb)
         with pdf.table(
             first_row_as_headings=True,
-            headings_style=_TABLE_HEADER_STYLE,
+            headings_style=header_style,
             borders_layout="ALL",
             line_height=6,
         ) as table:
@@ -200,25 +291,27 @@ class PdfService(MCPTool):
                     row.cell(cell)
         pdf.ln(2)
 
-    def _heading(self, pdf: FPDF, text: str, size: int) -> None:
+    def _heading(self, pdf: _TemplatedPDF, text: str, size: int) -> None:
         pdf.ln(2)
         pdf.set_font(_FONT, style="B", size=size)
+        pdf.set_text_color(*pdf.color_rgb)
         pdf.multi_cell(0, size * 0.45, text.strip())
+        pdf.set_text_color(0, 0, 0)
         pdf.ln(2)
 
-    def _bullet(self, pdf: FPDF, text: str) -> None:
+    def _bullet(self, pdf: _TemplatedPDF, text: str) -> None:
         pdf.set_font(_FONT, size=11)
         pdf.write(_LINE_H, "  • ")
         self._write_inline(pdf, text.strip())
         pdf.ln()
 
-    def _numbered(self, pdf: FPDF, num: str, text: str) -> None:
+    def _numbered(self, pdf: _TemplatedPDF, num: str, text: str) -> None:
         pdf.set_font(_FONT, size=11)
         pdf.write(_LINE_H, f"  {num}. ")
         self._write_inline(pdf, text.strip())
         pdf.ln()
 
-    def _write_inline(self, pdf: FPDF, text: str) -> None:
+    def _write_inline(self, pdf: _TemplatedPDF, text: str) -> None:
         size = pdf.font_size_pt
         last = 0
         for m in _INLINE_RE.finditer(text):
