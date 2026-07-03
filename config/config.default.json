@@ -71,19 +71,33 @@
 
     "mcp" : {
         "max_tool_iterations" : 10,
-        "native_tools_enabled" : [
+        "tools_enabled" : [
+            "datetime.*",
+            "eligibility.*",
+            "geobase.*",
+            "orders.*",
+            "references.*",
             "search_knowledge_base",
             "generer_fichier_excel",
             "generer_fichier_pdf",
             "rechercher_sur_internet",
             "lire_page_web",
-            "generer_fichier_word"
+            "word.*"
         ]
     },
 
     "files" : {
         "temp_dir" : "temp",
         "local_storage_dir" : "data"
+    },
+
+    "word" : {
+        "template" : "templates/gabarit-document.docx",
+        "template_placeholder" : "{{content}}",
+        "template_summary_placeholder" : "{{summary}}",
+        "template_title_placeholder" : "{{title}}",
+        "template_date_placeholder" : "{{date}}",
+        "template_array_style" : "Tableau Gabarit"
     },
 
     "rag" : {

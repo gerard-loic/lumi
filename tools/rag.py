@@ -2,13 +2,11 @@ from typing import Annotated, Optional
 from pydantic import Field
 from lib.mcp.tools import MCPTool
 from lib.rag.retriever import Retriever
-from lib.mcp.tools import native_tool
 
 class RAGTool(MCPTool):
     name = "rag"
     description = "Recherche dans la base de connaissances"
 
-    @native_tool
     async def search_knowledge_base(
         self,
         query: Annotated[str, Field(description="Question ou sujet à rechercher dans la base de connaissances")],

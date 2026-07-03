@@ -1,4 +1,5 @@
 import os
+import fnmatch
 import inspect
 import importlib.util
 from mcp.server.fastmcp import FastMCP
@@ -18,15 +19,6 @@ def tool_description(name:str):
     def decorator(f):
         f.__tool_description__ = name
         return f
-    return decorator
-
-def native_tool(func=None):
-    """Décorateur signalant qu'un outil est un outil natif"""
-    def decorator(f):
-        f.__native_tool__ = True
-        return f
-    if func is not None:
-        return decorator(func)
     return decorator
 
 def confirmation_tool(question:str, options:list, validation_option:int):
@@ -133,7 +125,6 @@ class MCPTool:
             "slow": getattr(method, "__slow_tool__", False),
             "restricted" : getattr(method, "__restricted_tool__", False),
             "description": getattr(method, "__tool_description__", False),
-            "native" : getattr(method, "__native_tool__", False),
             "confirmation" : getattr(method, "__tool_confirmation__", False),
             "confirmation_question" : getattr(method, "__tool_confirmation_question__", False),
             "confirmation_options" : getattr(method, "__tool_confirmation_options__", False),
@@ -146,13 +137,42 @@ class MCPTool:
 """
 ToolLoader — chargement dynamique des tools MCP.
 
-Parcourt le répertoire `tools/`, importe chaque module Python,
-détecte les sous-classes de MCPService et enregistre leurs outils
-auprès de l'instance FastMCP fournie.
+Parcourt récursivement le répertoire `tools/` (les outils peuvent être
+regroupés dans des sous-dossiers, ex. `tools/word/`), importe chaque
+module Python, détecte les sous-classes de MCPService et enregistre
+leurs outils auprès de l'instance FastMCP fournie.
+
+Les fichiers et dossiers dont le nom commence par `_` (modules internes,
+`__pycache__`) sont ignorés : un fichier de ce type n'est jamais exposé
+comme outil mais reste importable par les autres modules du sous-dossier
+via un import Python classique (ex. `tools.word._word_common`).
+
+`mcp.tools_enabled` contrôle quels outils sont exposés : elle accepte des
+noms d'outils exacts, ainsi que des motifs "namespace.*" comparés au chemin
+du module relatif à `tools.` (ex. `tools.word.word` -> "word.word") :
+"word.*" active ainsi tous les outils situés dans `tools/word/`, et
+"datetime.*" active tous les outils du module `tools/datetime.py`, quel que
+soit leur nombre. Un outil non couvert par cette liste n'est pas enregistré.
 
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class ToolLoader:
+
+    @staticmethod
+    def _is_enabled(tool_name: str, modulename: str, enabled_tools: list) -> bool:
+        # Chemin du module relatif à `tools.` (ex. "tools.word.word" -> "word.word"),
+        # utilisé par les motifs "namespace.*" désignant tout un sous-dossier ou module.
+        relative_module = modulename.removeprefix("tools.")
+        for pattern in enabled_tools:
+            if pattern == tool_name:
+                return True
+            if pattern.endswith(".*"):
+                prefix = pattern[:-2]
+                if relative_module == prefix or relative_module.startswith(prefix + "."):
+                    return True
+            elif ("*" in pattern or "?" in pattern) and fnmatch.fnmatch(relative_module, pattern):
+                return True
+        return False
 
     @staticmethod
     def registerTools(app: FastMCP, toolsDir: str = None):
@@ -162,25 +182,28 @@ class ToolLoader:
                 "tools"
             )
 
-        for filename in sorted(os.listdir(toolsDir)):
-            if not filename.endswith(".py") or filename.startswith("_"):
-                continue
+        for dirpath, dirnames, filenames in os.walk(toolsDir):
+            dirnames[:] = sorted(d for d in dirnames if not d.startswith("_") and not d.startswith("."))
+            package_parts = os.path.relpath(dirpath, toolsDir).split(os.sep) if dirpath != toolsDir else []
 
-            modulename = f"tools.{filename[:-3]}"
-            filepath = os.path.join(toolsDir, filename)
-
-            spec = importlib.util.spec_from_file_location(modulename, filepath)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-
-            for _, cls in inspect.getmembers(module, inspect.isclass):
-                if not issubclass(cls, MCPTool) or cls is MCPTool:
+            for filename in sorted(filenames):
+                if not filename.endswith(".py") or filename.startswith("_"):
                     continue
-                if cls.__module__ != modulename:
-                    continue
-                native_enabled = Config.get("mcp.native_tools_enabled")
-                for tool_fn in cls.get_tools():
-                    meta = MCPTool.get_meta(tool_fn.__name__)
-                    if meta.get("native") and tool_fn.__name__ not in native_enabled:
+
+                modulename = ".".join(["tools", *package_parts, filename[:-3]])
+                filepath = os.path.join(dirpath, filename)
+
+                spec = importlib.util.spec_from_file_location(modulename, filepath)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+
+                for _, cls in inspect.getmembers(module, inspect.isclass):
+                    if not issubclass(cls, MCPTool) or cls is MCPTool:
                         continue
-                    app.tool()(tool_fn)
+                    if cls.__module__ != modulename:
+                        continue
+                    enabled_tools = Config.get("mcp.tools_enabled")
+                    for tool_fn in cls.get_tools():
+                        if not ToolLoader._is_enabled(tool_fn.__name__, modulename, enabled_tools):
+                            continue
+                        app.tool()(tool_fn)

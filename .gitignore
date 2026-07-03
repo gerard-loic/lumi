@@ -11,8 +11,11 @@ tools/*
 !tools/pdf.py
 !tools/web.py
 !tools/datetime.py
-!tools/word.py
 !tools/_charts.py
+!tools/word/
+!tools/word/word.py
+!tools/word/_word_common.py
+!tools/word/_word_template.py
 logs/*
 !logs/.gitkeep
 services/*

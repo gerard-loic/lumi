@@ -9,7 +9,7 @@ Routes :
   POST /auth        : authentification au service
 
 Lancer le service :
-  python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+ python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload 
 """
 
 import asyncio
@@ -31,6 +31,7 @@ from lib.files.filestore import FileStore
 from lib.files.localdata import LocalData
 from lib.agent.filters.llmfilter import LLMFilterManager
 from lib.connectors.connector import ConnectorManager
+from lib.cron.cronmanager import CronManager
 
 # ----------------------------------------------------------------
 # Initialisation configuration
@@ -52,7 +53,10 @@ LocalData.init()
 # ----------------------------------------------------------------
 LLMFilterManager.init()
 
-
+# ----------------------------------------------------------------
+# Initialisation des tâches CRON
+# ----------------------------------------------------------------
+CronManager.init()
 
 print("###############################################################################")
 print('# LUMI - IA agent with MCP toolkit')
@@ -69,11 +73,12 @@ ServiceManager.init()
 # ----------------------------------------------------------------
 lumi_router = Router()
 
-#Gestion du délestage des sessions
+#Gestion du délestage des sessions et des tâches CRON
 async def _session_cleaner():
     while True:
         await asyncio.sleep(60)
         AuthSessionManager.clear()
+        CronManager.execute()
 
 
 @asynccontextmanager

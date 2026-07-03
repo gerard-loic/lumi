@@ -1,4 +1,13 @@
-
+AURORA
+- [x] Deplacer _charts.py de tools/
+- [ ] Reorganier les dossiers d'outils [EN COURS]
+- [ ] Outils MCP Word avancés [EN COURS]
+- [ ] Outils PDF avancés
+- [ ] Outils Excel avancés
+- [ ] Pb des fichiers, envoyés avant la génération ??
+- [ ] Tache de delestage
+- [ ] Implémentation d'un mécanisme de tâches CRON
+- [ ] Refonte et sécurisation du système d'import dynamique
 ----------------------------
 BACKLOG
 - [ ] Implémentation des traductions
@@ -12,16 +21,19 @@ BACKLOG
 - [ ] Limitation des résultats
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
 - [ ] Critique de la réponse par un modèle
-- [ ] Tache de delestage
 - [ ] Possibilité d'arreter une conversation proprement
 - [ ] Indexation RAG Word, Excel
 - [ ] Cron Indexer RAG
 - [ ] Sources de stockage RAG
-- [ ] Deplacer _charts.py de tools/
 - [ ] application d'un template "beauty" aux PDF et Word
-- [ ] Pb des fichiers, envoyés avant la génération ??
 - [ ] Création de pipelines
 - [ ] Loop
+- [ ] MCP externes
+- [ ] MCP contextuel ?
+- [ ] Support Audio
+- [ ] Image to text
+- [ ] Génération d'images
+- [ ] Passer le delestage sessions en tache CRON ?
 ------------
 Versions à venir : 
 
@@ -125,4 +137,8 @@ Implémentation
 Docker compose up -d
 docker compose up --build -d (pour réinstaller les libs)
 docker compose down
-docker compose -f docker-compose.prod.yml up --build -d
+docker compose -f docker-compose.prod.yml up --build -dAUROR
+----------------------------------------
+Installer libreoffice
+
+sudo apt install -y libreoffice-writer

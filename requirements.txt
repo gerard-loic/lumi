@@ -10,6 +10,7 @@ azure-ai-contentunderstanding==1.2.0b1
 azure-ai-documentintelligence==1.0.2
 azure-core==1.41.0
 azure-identity==1.25.3
+babel==2.18.0
 beautifulsoup4==4.15.0
 brotli==1.2.0
 certifi==2026.4.22
@@ -23,6 +24,7 @@ cycler==0.12.1
 ddgs==9.14.4
 defusedxml==0.7.1
 distro==1.9.0
+docxcompose==2.2.0
 duckduckgo_search==8.1.1
 et_xmlfile==2.0.0
 fake-useragent==2.2.0

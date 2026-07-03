@@ -136,7 +136,7 @@ MCP tool settings.
 | Key | Type | Description |
 |-----|------|-------------|
 | `max_tool_iterations` | int | Maximum number of consecutive tool calls per agent turn. |
-| `native_tools_enabled` | array | List of native tool function names that are enabled. Native tools are tools that ship with Lumi (PDF, Excel, Word, web search…) but must be explicitly opted in. |
+| `tools_enabled` | array | List of tool function names (or glob patterns, e.g. `word.*`, matched against the tool's module path relative to `tools.`) that are exposed. A tool not covered by this list is not registered. |
 
 ### `files`
 
@@ -288,14 +288,14 @@ Both `POST` and `PUT` accept `multipart/form-data` with the fields:
 
 ## Adding tools
 
-Tools live in the `tools/` directory. Each file is auto-discovered at startup. Files starting with `_` are ignored.
+Tools live in the `tools/` directory (optionally grouped in subfolders, e.g. `tools/word/`). Each file is auto-discovered at startup. Files and folders starting with `_` are ignored. A tool method is only exposed if it matches an entry in `mcp.tools_enabled` (see the `mcp` config section above).
 
 ### Creating a tool class
 
 Create a file in `tools/` and define a class that extends `MCPTool`:
 
 ```python
-from lib.mcp.tools import MCPTool, tool_description, slow_tool, confirmation_tool, restricted_tool, native_tool
+from lib.mcp.tools import MCPTool, tool_description, slow_tool, confirmation_tool, restricted_tool
 from typing import Annotated
 from pydantic import Field
 
@@ -336,16 +336,6 @@ Marks the tool as potentially slow. The UI can use this flag to show a loading i
 ```python
 @slow_tool
 def my_slow_tool(self, ...):
-    ...
-```
-
-#### `@native_tool`
-
-Marks the tool as a native Lumi tool. Native tools are disabled by default and must be explicitly listed in `mcp.native_tools_enabled` in the config to be activated.
-
-```python
-@native_tool
-def my_native_tool(self, ...):
     ...
 ```
 
