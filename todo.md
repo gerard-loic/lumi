@@ -1,15 +1,16 @@
 AURORA
 - [x] Deplacer _charts.py de tools/
-- [x] Reorganier les dossiers d'outils [EN COURS]
-- [ ] Outils MCP Word avancés [EN COURS]
-- [ ] Outils PDF avancés [EN COURS]
-- [ ] Pb des fichiers, envoyés avant la génération ??
+- [x] Reorganier les dossiers d'outils
+- [x] Outils MCP Word avancés
+- [x] Pb des fichiers, envoyés avant la génération ??
 - [x] Tache de delestage
 - [x] Implémentation d'un mécanisme de tâches CRON
-- [ ] Refonte et sécurisation du système d'import dynamique  [EN COURS]
+- [x] Refonte et sécurisation du système d'import dynamique
 - [ ] Refactor version Aurora
-- [ ] MAJ README
-- [ ] Follow-up 
+- [x] MAJ README
+- [x] Follow-up 
+- [x] Modification version
+- [x] Ajout FollowUpEvent Event
 ----------------------------
 BACKLOG
 - [ ] Implémentation des traductions
@@ -36,6 +37,11 @@ BACKLOG
 - [ ] Passer le delestage sessions en tache CRON ?
 - [ ] Outils excel et graphiques avancés
 - [ ] Refondre l'orchestrateur
+- [ ] Outils PDF avancés [ABANDON PREMIERE IMPLEMENTATION]
+- [ ] Securiser encore davantage l'import dynamique
+- [ ] Audit sécurité
+- [ ] Revoir les limites d'appels d'outils
+- [ ] problèmes des retours LLM vides
 ------------
 Versions à venir : 
 

@@ -43,9 +43,14 @@ class LiteLLM:
 
         print(f"[Agent LiteLLM] {len(self._tools)} Loaded MCP tools : {[t['function']['name'] for t in self._tools]}")
 
-    #Appel du LLM
-    async def callLLM(self, messages: str, stream: bool, exclude_restricted: bool = False):
+    #Retourne un résumé texte (nom + description) des outils réellement disponibles, pour grounder des appels LLM annexes (ex: follow-up)
+    def tools_summary(self, exclude_restricted: bool = False) -> str:
         tools = self._tools_no_restricted if exclude_restricted else self._tools
+        return "\n".join(f"- {t['function']['name']} : {t['function'].get('description', '')}" for t in tools)
+
+    #Appel du LLM
+    async def callLLM(self, messages: str, stream: bool, exclude_restricted: bool = False, use_tools: bool = True):
+        tools = (self._tools_no_restricted if exclude_restricted else self._tools) if use_tools else None
         response = await litellm.acompletion(
             model=self._model,
             messages=messages,

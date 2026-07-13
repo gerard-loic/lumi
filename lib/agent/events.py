@@ -100,3 +100,12 @@ class ConfirmationRefusedEvent:
     @staticmethod
     def get():
         return Event.get(eventType="confirmation_refused")
+
+"""
+FollowUpEvent : envoyé avec des suggestions de questions de suivi après une réponse
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class FollowUpEvent:
+    @staticmethod
+    def get(questions: list):
+        return Event.get(eventType="followup", payload={"questions": questions})

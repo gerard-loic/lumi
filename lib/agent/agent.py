@@ -4,7 +4,7 @@ from lib.mcp.client import mcp_manager, MCPToolError
 from lib.mcp.tools import MCPTool
 from lib.config.config import Config
 from lib.agent.llmconnector.litellm import LiteLLM
-from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent
+from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent, FollowUpEvent
 from lib.session.session import AuthSessionManager as _SessionManager
 from lib.log.logger import Logger, ERROR, OK, WARNING
 from lib.session.session import AuthSessionManager
@@ -12,6 +12,8 @@ from lib.http.auth import Auth
 from lib.files.localdata import LocalData
 from lib.agent.filters.llmfilter import LLMFilterManager
 import datetime
+from lib.utils.dynamicimport import DynamicImport
+
 
 """
 Agent — Agent d'orchestration / communication LLM
@@ -24,12 +26,8 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 class Agent:
     def __init__(self, connector:str):
         #Initialisation du connecteur LLM
-        if connector=="LiteLLM":
-            self._connector = LiteLLM()
-        else:
-            Logger.write(f"[AGENT] LLM connector {connector} not supported.", type=ERROR)
-            raise Exception(f"LLM connector {connector} not supported.")
-        
+        self._connector = DynamicImport.getInstance(className=connector, moduleName=connector, classPath="lib.agent.llmconnector")
+      
         #Prompt systeme (issu du fichier de configuration ou d'un fichier joint)
         system_prompt_file = Config.get(key="llm.system_prompt_file", default=None)
         system_prompt      = Config.get(key="llm.system_prompt",      default=None)
@@ -45,6 +43,8 @@ class Agent:
         self._MAX_TOOL_ITERATIONS          = Config.get(key="mcp.max_tool_iterations")
         self._MEMORY_MESSAGES              = Config.get(key="llm.memory_messages")
         self._EMPTY_LLM_RESPONSE_MAX_RETRY = Config.get(key="llm.empty_llm_response_max_retry", default=2)
+        self._FOLLOWUP_ENABLED             = Config.get(key="llm.followup_questions.enabled", default=True)
+        self._FOLLOWUP_COUNT               = Config.get(key="llm.followup_questions.count", default=3)
 
         Logger.write("[AGENT] MCP agent initialized", type=OK)
 
@@ -257,9 +257,56 @@ class Agent:
 
             #Log de l'appel pour comptabilisation (1 requete effectuée avec succès)
             LocalData.logLLMUsage(session_uid=Auth.getSessionId(), token_used=0)
+
+            #Génération des questions de suivi suggérées (best-effort, ne doit jamais casser le tour de conversation)
+            if self._FOLLOWUP_ENABLED:
+                try:
+                    followup_questions = await self._generateFollowUpQuestions(messages=messages, assistant_reply=assistant_reply, exclude_restricted=exclude_restricted)
+                    if followup_questions:
+                        yield FollowUpEvent.get(questions=followup_questions)
+                except Exception as e:
+                    Logger.write(f"[AGENT] Follow-up questions generation failed : {str(e)}", type=WARNING)
+
             yield DoneEvent.get()
         except Exception as e:
             Logger.write(f"[AGENT] Unexpected error : {str(e)}", type=ERROR)
             yield ErrorEvent.get(error_code="UNEXPECTED", message="Unexpected error", details=str(e))
             yield DoneEvent.get()
+
+    """
+    Génère une liste de questions de suivi suggérées à partir de l'échange complet.
+    Réutilise le prompt système et l'historique de l'appel principal (donc le périmètre/les règles de l'agent)
+    et y ajoute un résumé des outils réellement disponibles, pour éviter que le modèle propose des questions
+    hors périmètre ou portant sur des données/fonctionnalités auxquelles l'agent n'a pas accès.
+    Appel non streamé, sans tools (use_tools=False), pour ne pas déclencher de tool call sur cet appel annexe.
+    """
+    async def _generateFollowUpQuestions(self, messages: list, assistant_reply: str, exclude_restricted: bool) -> list:
+        capabilities = self._connector.tools_summary(exclude_restricted=exclude_restricted)
+        instruction = (
+            f"En te basant uniquement sur l'échange ci-dessus et sur les capacités réellement disponibles pour cet "
+            f"assistant listées ci-dessous, propose {self._FOLLOWUP_COUNT} questions de suivi courtes et pertinentes "
+            "que l'utilisateur pourrait poser ensuite. N'invente aucune fonctionnalité, donnée ou service qui n'apparaît "
+            f"pas dans la conversation ci-dessus ou dans cette liste de capacités :\n{capabilities}\n\n"
+            "Réponds UNIQUEMENT avec un tableau JSON de chaînes de caractères, sans texte additionnel, sans balises de code."
+        )
+        followup_messages = messages + [
+            {"role": "assistant", "content": assistant_reply},
+            {"role": "user", "content": instruction},
+        ]
+        response = await self._connector.callLLM(messages=followup_messages, stream=False, exclude_restricted=exclude_restricted, use_tools=False)
+        if not response.choices:
+            return []
+
+        content = (response.choices[0].message.content or "").strip()
+        if content.startswith("```"):
+            content = content.strip("`")
+            if content.lower().startswith("json"):
+                content = content[4:]
+            content = content.strip()
+
+        questions = json.loads(content)
+        if not isinstance(questions, list) or not all(isinstance(q, str) for q in questions):
+            return []
+
+        return questions[:self._FOLLOWUP_COUNT]
 

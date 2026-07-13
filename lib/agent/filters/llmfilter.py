@@ -1,10 +1,8 @@
 import importlib
 from lib.config.config import Config
 from lib.log.logger import Logger, ERROR
+from lib.utils.dynamicimport import DynamicImport
 
-_ALLOWED_FILTERS = {
-    "CodeFilter": ("lib.agent.filters.codefilter", "CodeFilter"),
-}
 
 """
 LLMFilter — Classe parente des filtres LLM
@@ -30,13 +28,7 @@ class LLMFilterManager:
     def init():
         filters = Config.get("llm.filters")
         for filter_name in filters:
-            if filter_name in _ALLOWED_FILTERS:
-                module_path, class_name = _ALLOWED_FILTERS[filter_name]
-                cls = getattr(importlib.import_module(module_path), class_name)
-                LLMFilterManager._filters.append(cls(configuration=filters[filter_name]))
-            else:
-                Logger.write(text=f"LLM filter {filter_name} not allowed !", type=ERROR)
-                raise Exception(f"LLM filter {filter_name} not allowed !")
+            LLMFilterManager._filters.append(DynamicImport.getInstance(className=filter_name, moduleName=filter_name, classPath="lib.agent.filters", configuration=Config.get(f"llm.filters.{filter_name}")))
 
     #Filtre un contenu en fonction des filtres appliqués
     @staticmethod

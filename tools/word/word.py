@@ -20,7 +20,9 @@ _MARKDOWN_DESC = (
     "Contenu du document en Markdown enrichi. "
     "Supporte : titres (# ## ###), gras (**texte**), italique (*texte*), "
     "barré (~~texte~~), souligné (__texte__), code inline (`texte`), "
-    "liens ([texte](url)), tableaux (| col | col |), "
+    "liens ([texte](url)), tableaux (| col | col |) — limiter à 6 colonnes "
+    "maximum pour un rendu correct dans la page ; au-delà, transposer le "
+    "tableau (lignes ↔ colonnes) ou le scinder en plusieurs tableaux, "
     "listes à puces (- item) et numérotées (1. item), "
     "blocs de code (``` sur une ligne seule, puis code, puis ```). "
     "Directives de mise en page (sur leur propre ligne) : "
@@ -248,7 +250,7 @@ class WordService(MCPTool):
         index_tableau: Annotated[int, Field(description="Index du tableau à remplacer (0-based), obtenu via extraire_tableaux_word.")],
         lignes: Annotated[
             list[list[str]],
-            Field(description="Nouvelles lignes du tableau (la première ligne doit être l'en-tête). Remplace entièrement le tableau existant."),
+            Field(description="Nouvelles lignes du tableau (la première ligne doit être l'en-tête). Remplace entièrement le tableau existant. Limiter à 6 colonnes maximum pour un rendu correct dans la page ; au-delà, transposer le tableau (lignes ↔ colonnes) ou le scinder en plusieurs tableaux."),
         ],
         style_tableau: Annotated[
             Optional[str],

@@ -50,6 +50,10 @@ def table_style_name() -> str:
     return Config.get("word.template_array_style", default=TABLE_STYLE_NAME)
 
 
+def page_break_before_heading1() -> bool:
+    return Config.get("word.page_break_before_heading1", default=False)
+
+
 def ensure_template() -> str:
     path = template_path()
     if not os.path.exists(path):

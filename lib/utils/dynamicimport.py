@@ -3,13 +3,21 @@ from lib.config.config import Config
 from lib.log.logger import Logger, ERROR
 
 _AUTHORIZED_CLASS_PATH = [
-    "lib.cron.tasks"
+    "lib.cron.tasks",
+    "lib.agent.filters",
+    "lib.agent.llmconnector",
+    "lib.connectors.webex"
 ]
 
+"""
+DynamicImport — Gestion d'imports dynamiques
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class DynamicImport:
     @staticmethod
     def getInstance(className:str, moduleName:str, classPath:str, *args, **kwargs):
-        className = className.lower().capitalize()
+        #className = className.lower().capitalize()
+        moduleName = moduleName.lower()
 
         if classPath not in _AUTHORIZED_CLASS_PATH:
             Logger.write(text=f"ClassPath {classPath} not authorized for dynamic instanciation !", type=ERROR)

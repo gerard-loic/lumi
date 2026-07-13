@@ -2,6 +2,10 @@ from datetime import datetime
 
 from lib.log.logger import Logger, INFO, ERROR, OK
 
+"""
+CronTask — Classe parente d'une tâche CRON
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class CronTask():
     def __init__(self, className:str, config:dict):
         self.className = className
@@ -14,16 +18,20 @@ class CronTask():
         self.time = config['time']
         self.log(text="Initialization")
     
+    #Enregistre un log
     def log(self, text, type=INFO):
         Logger.write(f"[CronTask {self.className}] {str(text)}", type)
 
+    #Relève une exception
     def exception(self, text):
         Logger.write(f"[CronTask {self.className}] {str(text)}", ERROR)
         raise Exception(f"[CronTask {self.className}] {str(text)}")
 
+    #Execution de la tâche
     def run(self):
         self.log(text="Run", type=OK)
 
+    #Test si la tâche doit être executée
     def testExecution(self, timestamp:int) -> bool:
         dt = datetime.fromtimestamp(timestamp)
         return self._matchField(field="minute", value=dt.minute) and self._matchField(field="heure", value=dt.hour)

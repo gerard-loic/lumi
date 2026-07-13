@@ -473,6 +473,27 @@
       border-color: var(--accent);
       color: var(--accent);
     }
+    .followup-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .followup-chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--text);
+      transition: border-color 0.2s, color 0.2s;
+      font-family: 'IBM Plex Sans', sans-serif;
+    }
+    .followup-chip:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
   </style>
 </head>
 <body>
@@ -710,6 +731,10 @@
       addResource(msg, data);
       scrollBottom();
 
+    } else if (data.type === "followup") {
+      addFollowUpChips(msg, data.questions);
+      scrollBottom();
+
     } else if (data.type === "error") {
       cursor.remove();
       if (!textNode.textContent) {
@@ -875,6 +900,25 @@
     el.textContent = escapeHtml(event.name || event.path || event.url || "Ressource");
     msg.appendChild(el);
     return el;
+  }
+
+  // ── Ajouter des chips de questions de suivi ──────────────────────
+  function addFollowUpChips(msg, questions) {
+    if (!Array.isArray(questions) || !questions.length) return;
+
+    const container = document.createElement("div");
+    container.className = "followup-chips";
+
+    questions.forEach((question) => {
+      const btn = document.createElement("button");
+      btn.className = "followup-chip";
+      btn.textContent = question;
+      btn.onclick = () => fillSuggestion(btn);
+      container.appendChild(btn);
+    });
+
+    msg.appendChild(container);
+    return container;
   }
 
   // ── Message système (info / erreur non liée à un échange) ────────

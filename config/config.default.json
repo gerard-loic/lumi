@@ -57,6 +57,10 @@
         "max_tokens_month" : -1,
         "max_requests_month" : -1,
         "max_requests_minute" : 5,
+        "followup_questions" : {
+            "enabled" : true,
+            "count" : 3
+        },
         "litellm" : {
             "model" : "openai/openai/gpt-oss-120b",
             "embedding_model" : "openai/Qwen/Qwen3-Embedding-0.6B",
@@ -97,7 +101,8 @@
         "template_summary_placeholder" : "{{summary}}",
         "template_title_placeholder" : "{{title}}",
         "template_date_placeholder" : "{{date}}",
-        "template_array_style" : "Tableau Gabarit"
+        "template_array_style" : "Tableau Gabarit",
+        "page_break_before_heading1" : false
     },
 
     "pdf" : {

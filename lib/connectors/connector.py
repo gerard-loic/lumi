@@ -1,6 +1,7 @@
 from lib.config.config import Config
 from lib.log.logger import Logger, OK, ERROR, WARNING
 from lib.agent.agent import Agent
+from lib.utils.dynamicimport import DynamicImport
 
 """
 Connector — Classe parente d'un connecteur d'agent
@@ -55,17 +56,12 @@ class ConnectorManager:
     #Initialiser les connecteurs
     @staticmethod
     async def init(agent:Agent):
-        from lib.connectors.webex.connector import WebexConnector
         #Initialisation
         connectors = Config.get("connectors")
         for connector in connectors:
             if connectors[connector]["enabled"]:
-                if connector == "webex":
-                    ConnectorManager._connectors[connector] = WebexConnector(agent=agent, config=connectors[connector])
-                else:
-                    Logger.write(f"[ConnectorManager] Connector {connector} does not exists", ERROR)
-                    raise Exception(f"[ConnectorManager] Connector {connector} does not exists")
-
+                ConnectorManager._connectors[connector] = DynamicImport.getInstance(className=connector.lower().capitalize()+"Connector",moduleName="connector", classPath="lib.connectors.webex", agent=agent, config=connectors[connector])
+                
         #Démarrage des connecteurs
         for connector in ConnectorManager._connectors:
             await ConnectorManager._connectors[connector].start()

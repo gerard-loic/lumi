@@ -18,6 +18,7 @@ from tools.word._word_template import (
     add_bookmark,
     find_bookmark_paragraph_element,
     next_bookmark_id,
+    page_break_before_heading1,
     placeholder_date,
     placeholder_summary,
     placeholder_title,
@@ -219,6 +220,8 @@ def render_markdown(
     """
     bookmark_id = next_bookmark_id(doc)
     current_alignment = None
+    pagebreak_before_h1 = page_break_before_heading1()
+    any_content = False
     lines = markdown.splitlines()
     i = 0
     while i < len(lines):
@@ -229,6 +232,7 @@ def render_markdown(
             if directive == "pagebreak":
                 p = doc.add_page_break()
                 _place(p._p, anchor)
+                any_content = True
             elif directive == "center":
                 current_alignment = WD_ALIGN_PARAGRAPH.CENTER
             elif directive == "right":
@@ -244,6 +248,7 @@ def render_markdown(
                     _place(doc.paragraphs[-1]._p, anchor)
                     empty = doc.add_paragraph("")
                     _place(empty._p, anchor)
+                    any_content = True
             elif directive.startswith("image:"):
                 url = directive.split(":", 1)[1].strip()
                 image = _fetch_image(url)
@@ -252,6 +257,7 @@ def render_markdown(
                     _place(doc.paragraphs[-1]._p, anchor)
                     empty = doc.add_paragraph("")
                     _place(empty._p, anchor)
+                    any_content = True
             i += 1
             continue
 
@@ -265,6 +271,7 @@ def render_markdown(
                 render_table(doc, rows, table_style, anchor=anchor)
                 empty = doc.add_paragraph("")
                 _place(empty._p, anchor)
+                any_content = True
             continue
 
         if line.startswith("```"):
@@ -280,6 +287,7 @@ def render_markdown(
             if current_alignment is not None:
                 p.alignment = current_alignment
             _place(p._p, anchor)
+            any_content = True
             i += 1
             continue
 
@@ -290,6 +298,9 @@ def render_markdown(
         elif line.startswith("## "):
             p, level = doc.add_heading(line[3:].strip(), level=2), 2
         elif line.startswith("# "):
+            if pagebreak_before_h1 and any_content:
+                pb = doc.add_page_break()
+                _place(pb._p, anchor)
             p, level = doc.add_heading(line[2:].strip(), level=1), 1
         elif re.match(r"^[-*] ", line):
             p, ok = _paragraph_with_style(doc, "List Bullet")
@@ -308,6 +319,9 @@ def render_markdown(
 
         if p is not None:
             _place(p._p, anchor)
+
+        if p is not None and line.strip() != "":
+            any_content = True
 
         if level is not None and headings_out is not None:
             bookmark_name = f"{_BOOKMARK_PREFIX}{bookmark_id}"

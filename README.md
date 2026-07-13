@@ -1,34 +1,35 @@
-![alt text](https://raw.githubusercontent.com/gerard-loic/lumi/refs/heads/master/public/lumi-spark.jpg?raw=true)
+![alt text](https://raw.githubusercontent.com/gerard-loic/lumi/refs/heads/master/public/lumi-aurora.jpg?raw=true)
 
 # Lumi
 
-Lumi version 1.2.0 (Spark)
+Lumi version 1.3.0 (Aurora)
 
 Lumi is an open-source AI chatbot backend built on top of **FastAPI** and the **Model Context Protocol (MCP)**. It exposes a WebSocket chat API that connects a Large Language Model to a set of custom tools and a **RAG knowledge base**, enabling the agent to answer questions grounded in real data rather than hallucinated knowledge.
 
 ## Features
 
-- **WebSocket chat endpoint** — answers are streamed token by token over a persistent WebSocket connection. The client receives typed JSON events (`token`, `tool_call`, `rag`, `file`, `end`, …).
-- **MCP tool integration** — tools are registered as MCP tools. The agent calls them automatically when it needs real data to answer a question.
+- **WebSocket chat endpoint** — answers are streamed token by token over a persistent WebSocket connection. The client receives typed JSON events (`token`, `tool_call`, `rag`, `file`, `followup`, `end`, …).
+- **MCP tool integration** — tools are registered as MCP tools, optionally grouped into subfolders. The agent calls them automatically when it needs real data to answer a question.
 - **RAG (Retrieval-Augmented Generation)** — a built-in knowledge base lets the agent search indexed documents before answering. The agent triggers searches automatically via the `search_knowledge_base` MCP tool.
-- **Document generation** — native tools for generating PDF, Word, and Excel files, including embedded charts (bar, pie, line).
+- **Document generation** — native tools for generating PDF, Word, and Excel files, including embedded charts (bar, pie, line). Word documents follow a customizable company **template (gabarit)**, with a cover page, header/footer, auto-generated table of contents, and table styles.
+- **Follow-up suggestions** — after each reply, the agent can propose short follow-up questions to help guide the conversation.
 - **Configurable LLM backend** — uses LiteLLM under the hood, so you can point it at any compatible model (OpenAI, Azure, local models, etc.) by changing a config value.
 - **Authentication** — a JWT-based `/auth` endpoint protects the chat API and temporary file downloads. Admin endpoints use HTTP Basic Auth.
 - **Temporary file serving** — tools can produce files that are made available for download through a secure, time-limited URL.
 - **Webex connector** — the agent can be deployed as a Webex bot, receiving and answering messages from Webex spaces via webhooks.
+- **Scheduled CRON tasks** — a built-in scheduler runs background maintenance tasks (e.g. log retention/shredding) on a configurable minute/hour schedule.
 - **Usage statistics** — a `/usage` endpoint returns token and request consumption for the current month.
-- **Extensible by design** — add custom tools and services by dropping files into the `tools/` and `services/` directories.
+- **Extensible by design** — add custom tools, services, LLM filters, and CRON tasks by dropping files into their respective directories. All dynamic class loading goes through a single, allow-listed mechanism for safety. Which MCP tools are exposed is finely controlled via `mcp.tools_enabled` (exact names, whole-group wildcards, or single-tool overrides).
 
-## What's new in v1.2.0 — Spark
+## What's new in v1.3.0 — Aurora
 
-- **Webex connector** — the agent can now be deployed as a Webex bot (see [Webex connector](#webex-connector)).
-- **PDF and Word tools** — new native tools for generating richly formatted PDF and Word documents.
-- **Chart support** — bar charts, pie charts, and line charts can be embedded in generated PDFs and Word documents.
-- **Date and business-day calculations** — new `datetime` tool handles date arithmetic and French public holidays.
-- **Usage statistics endpoint** — `GET /usage` returns monthly token and request consumption.
-- **Session close endpoint** — `DELETE /auth` allows a client to explicitly close its session.
-- **System prompt refactoring** — the system prompt is now fully driven by a Markdown file (`config/systemprompt.md`).
-- **Various LumePackAPI service fixes**.
+- **Reorganized MCP tool structure** — tools can now be grouped into subfolders (e.g. `tools/word/`), and `mcp.tools_enabled` gained flexible matching patterns: exact tool names, `namespace.*` wildcards to enable a whole group at once, and `namespace/tool_name` to enable a single tool from a group (see [Adding tools](#adding-tools)).
+- **Advanced Word MCP tools** — Word generation now builds on a customizable company **template (gabarit)**: cover page, header/footer, auto-generated table of contents, table styles, chart embedding, targeted section insertion, table updates, document merging, and Word → PDF conversion (see [Word document templates](#word-document-templates-gabarits)).
+- **CRON task engine** — a new scheduler (`CronManager`) runs background tasks on a configurable minute/hour schedule, defined in the `cron` config section (see [`cron`](#cron)).
+- **Log shredding CRON task** — a built-in `Shredding` task automatically deletes old log files past a configurable retention period.
+- **Refactored, secured dynamic import system** — services, LLM filters, connectors, and CRON tasks are now all instantiated through a single, allow-listed dynamic import mechanism, preventing arbitrary class loading from configuration.
+- **Follow-up question suggestions** — the agent can generate short, relevant follow-up questions after each reply, configurable via `llm.followup_questions`.
+- **New `followup` client event** — a `FollowUpEvent` delivers the generated follow-up questions to the WebSocket client (see [WebSocket protocol](#websocket-protocol)).
 
 ## Getting started
 
@@ -123,6 +124,8 @@ LLM and agent settings.
 | `max_tokens_month` | int | Monthly token budget (`-1` = unlimited). |
 | `max_requests_month` | int | Monthly request budget (`-1` = unlimited). |
 | `max_requests_minute` | int | Per-minute rate limit per session. |
+| `followup_questions.enabled` | bool | Generate follow-up question suggestions after each reply. |
+| `followup_questions.count` | int | Number of follow-up questions to generate. |
 | `litellm.model` | string | LiteLLM model identifier. |
 | `litellm.embedding_model` | string | LiteLLM model identifier used for RAG embeddings. |
 | `litellm.api_base` | string | Base URL of the LLM provider API. |
@@ -136,7 +139,7 @@ MCP tool settings.
 | Key | Type | Description |
 |-----|------|-------------|
 | `max_tool_iterations` | int | Maximum number of consecutive tool calls per agent turn. |
-| `tools_enabled` | array | List of tool function names (or glob patterns, e.g. `word.*`, matched against the tool's module path relative to `tools.`) that are exposed. A tool not covered by this list is not registered. |
+| `tools_enabled` | array | Patterns controlling which tools are exposed. A tool not covered by this list is not registered. Accepts: exact tool function names (e.g. `search_knowledge_base`); `namespace.*` to enable every tool of a module or subfolder, matched against the tool's module path relative to `tools.` (e.g. `word.*` enables all tools in `tools/word/`, `datetime.*` enables all tools in `tools/datetime.py`); `namespace/tool_name` to enable a single tool from a group (e.g. `pdf/generer_fichier_pdf`); and general glob patterns (`*`, `?`) matched against the module path. |
 
 ### `files`
 
@@ -144,6 +147,20 @@ MCP tool settings.
 |-----|------|-------------|
 | `temp_dir` | string | Directory for temporary files produced by tools (e.g. generated PDFs). |
 | `local_storage_dir` | string | Directory for persistent local data (e.g. usage statistics). |
+
+### `word`
+
+Settings for the Word document template (gabarit) used by the `word.*` MCP tools. See [Word document templates](#word-document-templates-gabarits).
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `template` | string | Path to the `.docx` template file. Auto-generated on first use if it doesn't exist. |
+| `template_placeholder` | string | Placeholder replaced by the generated body content. |
+| `template_summary_placeholder` | string | Placeholder replaced by the auto-generated table of contents. |
+| `template_title_placeholder` | string | Placeholder replaced by the document title (cover page and header). |
+| `template_date_placeholder` | string | Placeholder replaced by the generation date. |
+| `template_array_style` | string | Name of the table style (defined in the template) applied to generated tables. |
+| `page_break_before_heading1` | bool | Insert a page break before every top-level (`#`) heading. |
 
 ### `rag`
 
@@ -158,6 +175,28 @@ RAG knowledge base settings.
 | `chunk_overlap` | int | Overlap between consecutive chunks. |
 | `connector` | string | Vector store backend (`PgVector`). |
 | `pgvector.table` | string | PostgreSQL table used to store vectors. |
+
+### `cron`
+
+An array of scheduled background tasks, executed once a minute by `CronManager`. See [Adding CRON tasks](#adding-cron-tasks).
+
+```json
+"cron": [
+  {
+    "task": "Shredding",
+    "time": { "minute": "/5", "heure": "*" },
+    "config": { "log_max_days": 30 }
+  }
+]
+```
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `task` | string | Name of the `CronTask` subclass to run (must exist in `lib/cron/tasks/`). |
+| `time` | object | Schedule, matched against the current minute/hour. Each field (`minute`, `heure`) accepts `"*"` (always), `"/N"` (every N units), or a fixed integer (exact match). Omitted fields always match. |
+| `config` | object | Task-specific configuration, passed to the task instance. |
+
+Built-in tasks live in `lib/cron/tasks/`. The bundled `Shredding` task deletes log files older than `config.log_max_days` days (log delestage/retention).
 
 ### `connectors`
 
@@ -245,6 +284,7 @@ Connect to `ws://host:8001/ws?token=<jwt>`.
 { "type": "rag",                 "source": "...", "locations": [...] }
 { "type": "file",                "name": "...", "url": "..." }
 { "type": "url",                 "name": "...", "url": "..." }
+{ "type": "followup",            "questions": [...] }
 { "type": "confirmation",        "question": "...", "options": [...] }
 { "type": "confirmation_refused" }
 { "type": "error",               "error_code": "...", "message": "...", "details": "..." }
@@ -283,6 +323,23 @@ Both `POST` and `PUT` accept `multipart/form-data` with the fields:
 | `text` | string | Raw text to index (mutually exclusive with `file`). |
 | `source` | string | Identifier for the document (defaults to the filename). |
 | `collection` | string | Target collection (defaults to `rag.collection` in config). |
+
+---
+
+## Built-in tools
+
+Lumi ships with the following generic MCP tool groups in `tools/`. Enable a group (or a single tool within it) via [`mcp.tools_enabled`](#mcp).
+
+| Group | Module | Tools | Description |
+|-------|--------|-------|-------------|
+| `datetime` | `tools/context/datetime.py` | `get_business_days`, `next_business_day`, `get_public_holidays` | Date arithmetic and French public-holiday / business-day calculations. |
+| `excel` | `tools/excel/excel.py` | `generer_fichier_excel` | Generates Excel (`.xlsx`) files, including embedded charts. |
+| `pdf` | `tools/pdf/pdf.py` | `generer_fichier_pdf` | Generates templated PDF documents (cover page, header/footer, tables, charts). |
+| `rag` | `tools/rag/rag.py` | `search_knowledge_base` | Searches the RAG knowledge base — see [RAG knowledge base](#rag-knowledge-base). |
+| `web` | `tools/web/web.py` | `rechercher_sur_internet`, `lire_page_web` | Web search and web page reading. |
+| `word` | `tools/word/word.py` | 8 tools | Word document generation and editing on top of a company template — see [Word document templates](#word-document-templates-gabarits). |
+
+
 
 ---
 
@@ -379,6 +436,40 @@ def my_tool(self, ...):
 
 ---
 
+## Word document templates (gabarits)
+
+The `word.*` MCP tools (`tools/word/word.py`) generate and edit `.docx` files on top of a company **template (gabarit)** configured under [`word`](#word), rather than plain documents. If the configured `word.template` file doesn't exist yet, Lumi builds a default one automatically on first use (cover page, header/footer, table of contents area, heading and table styles).
+
+The template contains placeholders (`word.template_placeholder`, `word.template_title_placeholder`, `word.template_summary_placeholder`, `word.template_date_placeholder`) that tools fill in with the generated content, title, table of contents, and date, plus a named table style (`word.template_array_style`) applied to generated tables.
+
+### Markdown → Word rendering
+
+Document content is authored in Markdown, enriched with layout directives placed on their own line:
+
+| Directive | Effect |
+|-----------|--------|
+| `:::center` / `:::right` / `:::justify` / `:::left` | Aligns the following blocks. |
+| `:::pagebreak` | Inserts a page break. |
+| `:::chart:N` | Inserts the chart at index `N` from the `graphiques` parameter (bar, line, or pie). |
+| `:::image:URL` | Inserts an image fetched from a URL. |
+
+Standard Markdown is also supported: headings (`#`/`##`/`###`, auto-collected into the table of contents), bold/italic/strikethrough/underline, inline code, links, tables (6 columns max), lists, and fenced code blocks.
+
+### Available tools
+
+| Tool | Purpose |
+|------|---------|
+| `generer_fichier_word` | Generate a new Word document from Markdown content, following the template. |
+| `lire_document_word` | Read back a generated document's title, outline, and full text. |
+| `extraire_tableaux_word` | Extract all tables from a document, with their index and preceding section. |
+| `remplacer_texte_word` | Find-and-replace text anywhere in a document (body, headers/footers, tables). |
+| `ajouter_contenu_word` | Append Markdown content to a document, or insert it after a given section. |
+| `mettre_a_jour_tableau_word` | Replace the data of an existing table, identified by index. |
+| `fusionner_documents_word` | Merge several Word documents into one, each keeping its own cover page and table of contents. |
+| `convertir_word_en_pdf` | Convert a Word document to PDF (requires LibreOffice/`soffice` on the server). |
+
+---
+
 ## Adding services
 
 Services are reusable HTTP or database clients made available to tools via `ServiceManager`. They live in the `services/` directory.
@@ -431,6 +522,35 @@ class MyTools(MCPTool):
 ### Authentication
 
 Services can implement the `checkAuthentication(authorization: dict)` method to verify user credentials at session open time. The `authorization` dict is the payload sent by the client in `POST /auth`.
+
+### Dynamic class loading
+
+Services, LLM filters, connectors, and CRON tasks are all instantiated through a single mechanism, `DynamicImport.getInstance` (`lib/utils/dynamicimport.py`). It only imports classes from a fixed allow-list of module paths (`lib.cron.tasks`, `lib.agent.filters`, `lib.agent.llmconnector`, `lib.connectors.webex`), so configuration values can never trigger the loading of arbitrary code — dropping a new class in one of these packages is enough to make it loadable, but the package itself must be explicitly allow-listed.
+
+---
+
+## Adding CRON tasks
+
+CRON tasks run periodically in the background (see [`cron`](#cron) for scheduling). They live in `lib/cron/tasks/`.
+
+### Creating a CRON task
+
+Create a file in `lib/cron/tasks/` and define a class that extends `CronTask`, with a class name matching the file name (case-insensitive) and the `task` value used in the `cron` config entry:
+
+```python
+from lib.cron.tasks.crontask import CronTask
+
+class MyTask(CronTask):
+    def __init__(self, config: dict):
+        super().__init__(className="MyTask", config=config)
+
+    def run(self):
+        super().run()
+        # self.config holds the task-specific "config" block from the cron entry
+        ...
+```
+
+`CronManager` calls `testExecution(timestamp)` once a minute for every configured task, and runs `run()` when the current minute/hour match the task's `time` schedule.
 
 ---
 
@@ -492,9 +612,20 @@ On startup, the connector:
 
 ## Changelog
 
+### v1.3.0 — Aurora
+
+See [What's new in v1.3.0](#whats-new-in-v130--aurora).
+
 ### v1.2.0 — Spark
 
-See [What's new in v1.2.0](#whats-new-in-v120--spark).
+- **Webex connector** — the agent can be deployed as a Webex bot (see [Webex connector](#webex-connector)).
+- **PDF and Word tools** — new native tools for generating richly formatted PDF and Word documents.
+- **Chart support** — bar charts, pie charts, and line charts can be embedded in generated PDFs and Word documents.
+- **Date and business-day calculations** — new `datetime` tool handles date arithmetic and French public holidays.
+- **Usage statistics endpoint** — `GET /usage` returns monthly token and request consumption.
+- **Session close endpoint** — `DELETE /auth` allows a client to explicitly close its session.
+- **System prompt refactoring** — the system prompt is now fully driven by a Markdown file (`config/systemprompt.md`).
+- Various LumePackAPI service fixes.
 
 ### v1.1.0 — Sense
 
@@ -530,3 +661,4 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+Dynam

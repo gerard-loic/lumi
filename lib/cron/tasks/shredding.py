@@ -7,6 +7,10 @@ from lib.config.config import Config
 
 _LOG_FILE_RE = re.compile(r"^(\d{8})\.log$")
 
+"""
+Shredding — Classe tâche CRON de délestage
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class Shredding(CronTask):
     def __init__(self, config:dict):
         super().__init__(
