@@ -2,7 +2,7 @@
 
 # Lumi
 
-Lumi version 1.3.0 (Aurora)
+Lumi version 1.3.1 (Aurora)
 
 Lumi is an open-source AI chatbot backend built on top of **FastAPI** and the **Model Context Protocol (MCP)**. It exposes a WebSocket chat API that connects a Large Language Model to a set of custom tools and a **RAG knowledge base**, enabling the agent to answer questions grounded in real data rather than hallucinated knowledge.
 
