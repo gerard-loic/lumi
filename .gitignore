@@ -24,6 +24,8 @@ config/*
 !config/config.default.json
 models/*
 !models/.gitkeep
+templates/*
+!templates/.gitkeep
 __pycache__
 Dockerfile
 .dockerignore
