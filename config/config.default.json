@@ -102,7 +102,10 @@
         "template_title_placeholder" : "{{title}}",
         "template_date_placeholder" : "{{date}}",
         "template_array_style" : "Tableau Gabarit",
-        "page_break_before_heading1" : false
+        "page_break_before_heading1" : false,
+        "heading_style_1" : "Heading 1",
+        "heading_style_2" : "Heading 2",
+        "heading_style_3" : "Heading 3"
     },
 
     "pdf" : {

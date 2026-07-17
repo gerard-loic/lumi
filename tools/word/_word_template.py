@@ -50,6 +50,10 @@ def table_style_name() -> str:
     return Config.get("word.template_array_style", default=TABLE_STYLE_NAME)
 
 
+def heading_style_name(level: int) -> str:
+    return Config.get(f"word.heading_style_{level}", default=f"Heading {level}")
+
+
 def page_break_before_heading1() -> bool:
     return Config.get("word.page_break_before_heading1", default=False)
 

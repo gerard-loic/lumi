@@ -161,6 +161,9 @@ Settings for the Word document template (gabarit) used by the `word.*` MCP tools
 | `template_date_placeholder` | string | Placeholder replaced by the generation date. |
 | `template_array_style` | string | Name of the table style (defined in the template) applied to generated tables. |
 | `page_break_before_heading1` | bool | Insert a page break before every top-level (`#`) heading. |
+| `heading_style_1` | string | Name of the paragraph style (defined in the template) applied to `#` headings. Defaults to `Heading 1`. |
+| `heading_style_2` | string | Name of the paragraph style (defined in the template) applied to `##` headings. Defaults to `Heading 2`. |
+| `heading_style_3` | string | Name of the paragraph style (defined in the template) applied to `###` headings. Defaults to `Heading 3`. |
 
 ### `rag`
 
@@ -441,6 +444,8 @@ def my_tool(self, ...):
 The `word.*` MCP tools (`tools/word/word.py`) generate and edit `.docx` files on top of a company **template (gabarit)** configured under [`word`](#word), rather than plain documents. If the configured `word.template` file doesn't exist yet, Lumi builds a default one automatically on first use (cover page, header/footer, table of contents area, heading and table styles).
 
 The template contains placeholders (`word.template_placeholder`, `word.template_title_placeholder`, `word.template_summary_placeholder`, `word.template_date_placeholder`) that tools fill in with the generated content, title, table of contents, and date, plus a named table style (`word.template_array_style`) applied to generated tables.
+
+Markdown headings (`#`/`##`/`###`) are rendered using the paragraph styles named in `word.heading_style_1`/`2`/`3`, so a custom template can define its own heading styles instead of Word's built-in `Heading 1`/`2`/`3`. If a configured style name isn't found in the template, Lumi falls back to the built-in `Heading N` style for that level.
 
 ### Markdown → Word rendering
 

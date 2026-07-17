@@ -17,6 +17,7 @@ from tools.word._word_template import (
     SUMMARY_START_BOOKMARK,
     add_bookmark,
     find_bookmark_paragraph_element,
+    heading_style_name,
     next_bookmark_id,
     page_break_before_heading1,
     placeholder_date,
@@ -111,12 +112,33 @@ def add_internal_hyperlink(paragraph, text: str, bookmark_name: str) -> None:
 # Détection des titres (Heading N)
 # ---------------------------------------------------------------------------
 
+def _style_labels(style) -> list[str]:
+    """Noms sous lesquels un style peut être identifié : son nom, son id, et ses
+    éventuels alias Word (ex. le panneau Styles de Word affiche parfois "Titre;diatem
+    - titre 1", où "Titre" est le nom du style et "diatem - titre 1" un alias)."""
+    labels = [style.name or "", style.style_id or ""]
+    aliases_el = style.element.find(qn("w:aliases"))
+    if aliases_el is not None:
+        val = aliases_el.get(qn("w:val")) or ""
+        labels.extend(a.strip() for a in re.split(r"[,;]", val) if a.strip())
+    return [label for label in labels if label]
+
+
+def _style_matches(style, configured: str | None) -> bool:
+    if style is None or not configured:
+        return False
+    candidates = [p.strip() for p in configured.split(";") if p.strip()] or [configured]
+    return not set(candidates).isdisjoint(_style_labels(style))
+
+
 def heading_level(paragraph: Paragraph) -> int | None:
     style = paragraph.style
     if style is None:
         return None
-    m = re.match(r"^Heading (\d)$", style.name or "")
-    return int(m.group(1)) if m else None
+    for level in (1, 2, 3):
+        if _style_matches(style, heading_style_name(level)) or _style_matches(style, f"Heading {level}"):
+            return level
+    return None
 
 
 def find_heading_element(doc: Document, titre: str, case_sensitive: bool = False):
@@ -163,6 +185,21 @@ def _paragraph_with_style(doc: Document, style_name: str):
         return doc.add_paragraph(style=style_name), True
     except (KeyError, ValueError):
         return doc.add_paragraph(), False
+
+
+def _find_style(doc: Document, configured: str | None):
+    for style in doc.styles:
+        if _style_matches(style, configured):
+            return style
+    return None
+
+
+def _add_heading(doc: Document, text: str, level: int) -> Paragraph:
+    """Ajoute un titre en utilisant le style configuré pour `level`
+    (`word.heading_style_N`, reconnu par nom, id ou alias Word), avec repli sur
+    le style Word natif "Heading N" si le style configuré n'existe pas dans le gabarit."""
+    style = _find_style(doc, heading_style_name(level)) or _find_style(doc, f"Heading {level}")
+    return doc.add_paragraph(text, style=style)
 
 
 def _apply_table_style(table: Table, requested: str | None) -> None:
@@ -294,14 +331,14 @@ def render_markdown(
         p = None
         level = None
         if line.startswith("### "):
-            p, level = doc.add_heading(line[4:].strip(), level=3), 3
+            p, level = _add_heading(doc, line[4:].strip(), 3), 3
         elif line.startswith("## "):
-            p, level = doc.add_heading(line[3:].strip(), level=2), 2
+            p, level = _add_heading(doc, line[3:].strip(), 2), 2
         elif line.startswith("# "):
             if pagebreak_before_h1 and any_content:
                 pb = doc.add_page_break()
                 _place(pb._p, anchor)
-            p, level = doc.add_heading(line[2:].strip(), level=1), 1
+            p, level = _add_heading(doc, line[2:].strip(), 1), 1
         elif re.match(r"^[-*] ", line):
             p, ok = _paragraph_with_style(doc, "List Bullet")
             write_inline(p, (line[2:].strip() if ok else f"• {line[2:].strip()}"))
@@ -444,8 +481,32 @@ def iter_all_paragraphs(doc: Document):
             yield Paragraph(p_el, doc)
 
 
+_TEXT_RUN_CHILD_TAGS = {
+    qn("w:t"),
+    qn("w:tab"),
+    qn("w:br"),
+    qn("w:cr"),
+    qn("w:noBreakHyphen"),
+    qn("w:ptab"),
+    qn("w:rPr"),
+}
+
+
+def _run_is_plain_text(run) -> bool:
+    """Un run est "sûr" à réécrire s'il ne contient que du texte brut.
+
+    Les runs de champs complexes (numérotation de page, etc.) sont composés de
+    <w:fldChar>/<w:instrText> répartis sur plusieurs <w:r> frères dans le même
+    paragraphe. python-docx expose ces runs avec un `.text` vide, donc les
+    inclure dans la fusion/effacement ci-dessous détruirait le champ (ex. la
+    pagination d'un en-tête) alors qu'ils ne contiennent aucun texte de
+    substitution.
+    """
+    return all(child.tag in _TEXT_RUN_CHILD_TAGS for child in run._r)
+
+
 def _replace_in_paragraph(paragraph: Paragraph, old: str, new: str, case_sensitive: bool) -> int:
-    runs = paragraph.runs
+    runs = [r for r in paragraph.runs if _run_is_plain_text(r)]
     if not runs or not old:
         return 0
     texts = [r.text for r in runs]
