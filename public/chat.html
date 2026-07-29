@@ -208,6 +208,59 @@
     }
     .resource-attachment.type-file::before { content: '⊟  '; opacity: 0.6; }
     .resource-attachment.type-url::before  { content: '↗  '; opacity: 0.6; }
+    .resource-attachment.type-rag::before  { content: '▤  '; opacity: 0.6; }
+    .resource-attachment.mine { align-self: flex-end; }
+
+    /* Citation de source (non cliquable, informative) : visuellement distincte des ressources
+       actionnables (fichier généré / url), qui elles restent cliquables avec le hover en accent. */
+    .resource-attachment.type-rag {
+      color: var(--muted);
+      border-style: dashed;
+      cursor: default;
+    }
+    .resource-attachment.type-rag:hover {
+      border-color: var(--border);
+      color: var(--muted);
+    }
+
+    /* ── Pièces jointes en cours de rédaction (avant envoi) ── */
+    .staged-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .staged-attachments:empty { display: none; }
+
+    .staged-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 5px 8px 5px 10px;
+      border-radius: 4px;
+      max-width: 220px;
+    }
+    .staged-chip::before { content: '⊟  '; opacity: 0.6; }
+    .staged-chip.uploading { opacity: 0.6; border-style: dashed; }
+    .staged-chip.error { border-color: #ff4d4d60; color: #ff6b6b; }
+    .staged-chip .chip-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .staged-chip .chip-remove {
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 500;
+      padding: 0 2px;
+      line-height: 1;
+    }
+    .staged-chip .chip-remove:hover { color: #ff6b6b; }
 
     /* ── Cursor clignotant pendant stream ── */
     .cursor {
@@ -274,6 +327,24 @@
     button#send:active { transform: scale(0.95); }
     button#send:disabled { opacity: 0.3; cursor: not-allowed; }
     button#send svg { width: 18px; height: 18px; }
+
+    button#attach {
+      width: 46px; height: 46px;
+      flex-shrink: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color 0.2s, color 0.2s, transform 0.1s;
+      color: var(--text);
+    }
+    button#attach:hover:not(:disabled)  { border-color: var(--accent); color: var(--accent); }
+    button#attach:active:not(:disabled) { transform: scale(0.95); }
+    button#attach:disabled { opacity: 0.3; cursor: not-allowed; }
+    button#attach svg { width: 18px; height: 18px; }
 
     /* ── Hint raccourci ── */
     .hint {
@@ -509,7 +580,8 @@
     <textarea id="authBody" spellcheck="false">{
   "authorization": {
     "token": ""
-  }
+  },
+  "profile": "default"
 }</textarea>
     <div class="modal-error" id="authError"></div>
     <div class="modal-actions">
@@ -539,7 +611,20 @@
   </div>
 
   <div class="input-zone">
+    <div class="staged-attachments" id="stagedAttachments"></div>
     <div class="input-row">
+      <input
+        type="file"
+        id="attachInput"
+        multiple
+        hidden
+        accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.md,.html,.htm,.py,.js,.ts,.txt,.csv"
+      />
+      <button id="attach" type="button" onclick="attachInput.click()" title="Joindre un fichier">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.44 11.05l-9.19 9.19a5 5 0 01-7.07-7.07l9.19-9.19a3 3 0 014.24 4.24l-9.19 9.19a1 1 0 01-1.41-1.41l8.48-8.49"></path>
+        </svg>
+      </button>
       <textarea
         id="input"
         placeholder="Posez votre question…"
@@ -553,33 +638,47 @@
         </svg>
       </button>
     </div>
-    <div class="hint">Entrée pour envoyer · Maj+Entrée pour un saut de ligne</div>
+    <div class="hint">Entrée pour envoyer · Maj+Entrée pour un saut de ligne · 📎 pour joindre un fichier</div>
   </div>
 
 </div>
 
 <script>
   // ── Config ──────────────────────────────────────────────────────
-  const BASE_URL = "http://127.0.0.1:8001";
-  const WS_URL   = "ws://127.0.0.1:8001/ws";
-  const AUTH_URL = BASE_URL + "/auth";
+  const BASE_URL   = "http://127.0.0.1:8001";
+  const WS_URL     = "ws://127.0.0.1:8001/ws";
+  const AUTH_URL   = BASE_URL + "/auth";
+  const UPLOAD_URL = BASE_URL + "/files/upload";
 
   let authToken  = null;
   let ws         = null;
   let isStreaming = false;
   let currentCtx  = null;
 
-  // ── Éléments DOM ────────────────────────────────────────────────
-  const messagesEl  = document.getElementById("messages");
-  const inputEl     = document.getElementById("input");
-  const sendBtn     = document.getElementById("send");
-  const emptyState  = document.getElementById("emptyState");
-  const authModal   = document.getElementById("authModal");
-  const authBodyEl  = document.getElementById("authBody");
-  const authErrorEl = document.getElementById("authError");
-  const authBtn     = document.getElementById("authBtn");
+  // ── Pièces jointes en cours de rédaction (avant envoi) ───────────
+  let stagedAttachments = []; // { id, key, filename, tokens, status: 'uploading'|'ready'|'error', chipEl }
+  let pendingUploads    = 0;
 
-  sendBtn.disabled = true;
+  // ── Éléments DOM ────────────────────────────────────────────────
+  const messagesEl   = document.getElementById("messages");
+  const inputEl      = document.getElementById("input");
+  const sendBtn      = document.getElementById("send");
+  const attachBtn    = document.getElementById("attach");
+  const attachInput  = document.getElementById("attachInput");
+  const stagedEl     = document.getElementById("stagedAttachments");
+  const emptyState   = document.getElementById("emptyState");
+  const authModal    = document.getElementById("authModal");
+  const authBodyEl   = document.getElementById("authBody");
+  const authErrorEl  = document.getElementById("authError");
+  const authBtn      = document.getElementById("authBtn");
+
+  sendBtn.disabled   = true;
+  attachBtn.disabled = true;
+
+  // ── Disponibilité du bouton d'envoi (stream en cours / upload en cours / non authentifié) ──
+  function refreshSendAvailability() {
+    sendBtn.disabled = isStreaming || !authToken || pendingUploads > 0;
+  }
 
   // ── Authentification ─────────────────────────────────────────────
   async function authenticate() {
@@ -647,7 +746,8 @@
     ws._pendingOpen = onOpen;
 
     ws.onopen = () => {
-      sendBtn.disabled = false;
+      attachBtn.disabled = false;
+      refreshSendAvailability();
       ws._pendingOpen?.();
       ws._pendingOpen = null;
     };
@@ -661,6 +761,8 @@
       if (event.code === 4001 || event.code === 4003) {
         authToken = null;
         sendBtn.disabled = true;
+        attachBtn.disabled = true;
+        clearStagedAttachments(); // les clés étaient rattachées à la session qui vient d'expirer
         authBtn.disabled = false;
         authModal.classList.remove("hidden");
         if (isStreaming && currentCtx) {
@@ -673,6 +775,7 @@
       // Session déjà ouverte dans un autre onglet
       if (event.code === 4409) {
         sendBtn.disabled = true;
+        attachBtn.disabled = true;
         appendSystemMessage("Session déjà active dans un autre onglet. Fermez-le et actualisez.");
         if (isStreaming && currentCtx) {
           currentCtx.cursor.remove();
@@ -731,6 +834,10 @@
       addResource(msg, data);
       scrollBottom();
 
+    } else if (data.type === "rag") {
+      addRagSource(msg, data);
+      scrollBottom();
+
     } else if (data.type === "followup") {
       addFollowUpChips(msg, data.questions);
       scrollBottom();
@@ -754,7 +861,7 @@
   function endStream() {
     isStreaming = false;
     currentCtx = null;
-    sendBtn.disabled = false;
+    refreshSendAvailability();
     inputEl.focus();
     // La connexion WS reste ouverte
   }
@@ -779,8 +886,8 @@
     inputEl.focus();
   }
 
-  // ── Ajouter un message utilisateur ───────────────────────────────
-  function addUserMessage(text) {
+  // ── Ajouter un message utilisateur (+ pièces jointes déjà uploadées) ──
+  function addUserMessage(text, attachments = []) {
     const empty = document.getElementById("emptyState");
     if (empty) empty.remove();
 
@@ -788,10 +895,26 @@
     msg.className = "message user";
     msg.innerHTML = `
       <div class="role">Vous</div>
-      <div class="bubble">${escapeHtml(text)}</div>
+      ${text ? `<div class="bubble">${escapeHtml(text)}</div>` : ""}
     `;
     messagesEl.appendChild(msg);
+    attachments.forEach(a => addSentAttachment(msg, a.filename, a.key));
     scrollBottom();
+  }
+
+  // ── Ajouter la chip d'une pièce jointe déjà envoyée (téléchargeable) ──
+  function addSentAttachment(msg, filename, key) {
+    const url = `${BASE_URL}/files/${key}/${encodeURIComponent(filename)}`;
+    const el = document.createElement("a");
+    el.className = "resource-attachment type-file mine";
+    el.href = "#";
+    el.textContent = escapeHtml(filename);
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      downloadViaAuth(url, filename);
+    });
+    msg.appendChild(el);
+    return el;
   }
 
   // ── Créer un message bot vide (retourner refs pour le remplir) ───
@@ -865,6 +988,25 @@
     return card;
   }
 
+  // ── Téléchargement authentifié d'un fichier (Bearer) ─────────────
+  async function downloadViaAuth(url, filename) {
+    try {
+      const resp = await fetch(url, {
+        headers: { "Authorization": "Bearer " + authToken }
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename || "fichier";
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Téléchargement échoué :", err);
+    }
+  }
+
   // ── Ajouter une ressource jointe (file / url) ────────────────────
   function addResource(msg, event) {
     const isFile = event.type === "file";
@@ -873,23 +1015,9 @@
     if (event.url) {
       if (isFile) {
         el.href = "#";
-        el.addEventListener("click", async (e) => {
+        el.addEventListener("click", (e) => {
           e.preventDefault();
-          try {
-            const resp = await fetch(event.url, {
-              headers: { "Authorization": "Bearer " + authToken }
-            });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const blob = await resp.blob();
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = blobUrl;
-            a.download = event.name || "fichier";
-            a.click();
-            URL.revokeObjectURL(blobUrl);
-          } catch (err) {
-            console.error("Téléchargement échoué :", err);
-          }
+          downloadViaAuth(event.url, event.name);
         });
       } else {
         el.href = event.url;
@@ -898,6 +1026,18 @@
       }
     }
     el.textContent = escapeHtml(event.name || event.path || event.url || "Ressource");
+    msg.appendChild(el);
+    return el;
+  }
+
+  // ── Ajouter la citation d'une source utilisée (RAG persistant ou fichiers joints) ──
+  function addRagSource(msg, event) {
+    const el = document.createElement("span");
+    el.className = "resource-attachment type-rag";
+    const label = event.locations && event.locations.length
+      ? `${event.source} — p. ${event.locations.join(", ")}`
+      : event.source;
+    el.textContent = escapeHtml(label || "Source");
     msg.appendChild(el);
     return el;
   }
@@ -934,20 +1074,116 @@
     scrollBottom();
   }
 
+  // ── Sélection de fichiers à joindre ───────────────────────────────
+  attachInput.addEventListener("change", () => {
+    const files = Array.from(attachInput.files);
+    attachInput.value = ""; // permet de resélectionner le même fichier ensuite
+    files.forEach(uploadAttachment);
+  });
+
+  // ── Upload d'une pièce jointe vers /files/upload ─────────────────
+  async function uploadAttachment(file) {
+    const item = { id: crypto.randomUUID(), key: null, filename: file.name, tokens: null, status: "uploading" };
+    stagedAttachments.push(item);
+    item.chipEl = renderStagedChip(item);
+
+    pendingUploads++;
+    refreshSendAvailability();
+
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const resp = await fetch(UPLOAD_URL, {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + authToken },
+        body: form,
+      });
+
+      // La pièce jointe a pu être retirée par l'utilisateur pendant l'upload
+      if (!stagedAttachments.includes(item)) return;
+
+      if (!resp.ok) {
+        const detail = await resp.json().catch(() => ({}));
+        throw new Error(detail.detail || `Erreur ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      item.key = data.key;
+      item.tokens = data.tokens;
+      item.status = "ready";
+      updateStagedChip(item);
+    } catch (err) {
+      if (!stagedAttachments.includes(item)) return;
+      item.status = "error";
+      item.error = err.message;
+      updateStagedChip(item);
+    } finally {
+      pendingUploads--;
+      refreshSendAvailability();
+    }
+  }
+
+  // ── Rendu / mise à jour des chips de pièces jointes en attente ───
+  function renderStagedChip(item) {
+    const chip = document.createElement("div");
+    chip.className = "staged-chip";
+    const name = document.createElement("span");
+    name.className = "chip-name";
+    name.textContent = item.filename;
+    const remove = document.createElement("span");
+    remove.className = "chip-remove";
+    remove.textContent = "×";
+    remove.title = "Retirer";
+    remove.onclick = () => removeStagedAttachment(item.id);
+    chip.appendChild(name);
+    chip.appendChild(remove);
+    stagedEl.appendChild(chip);
+    updateStagedChip(item, chip);
+    return chip;
+  }
+
+  function updateStagedChip(item, chip = item.chipEl) {
+    if (!chip) return;
+    chip.classList.toggle("uploading", item.status === "uploading");
+    chip.classList.toggle("error", item.status === "error");
+    chip.title = item.status === "error"
+      ? `${item.filename} — ${item.error}`
+      : item.status === "ready"
+        ? `${item.filename} (~${item.tokens} tokens)`
+        : `${item.filename} — envoi en cours…`;
+  }
+
+  function removeStagedAttachment(id) {
+    const idx = stagedAttachments.findIndex(a => a.id === id);
+    if (idx === -1) return;
+    stagedAttachments[idx].chipEl?.remove();
+    stagedAttachments.splice(idx, 1);
+  }
+
+  function clearStagedAttachments() {
+    stagedAttachments.forEach(a => a.chipEl?.remove());
+    stagedAttachments = [];
+  }
+
   // ── Envoi du message ─────────────────────────────────────────────
   function sendMessage() {
     const text = inputEl.value.trim();
-    if (!text || isStreaming || !authToken) return;
+    const readyAttachments = stagedAttachments.filter(a => a.status === "ready");
+    if ((!text && readyAttachments.length === 0) || isStreaming || !authToken || pendingUploads > 0) return;
 
     inputEl.value = "";
     inputEl.style.height = "auto";
     sendBtn.disabled = true;
 
-    addUserMessage(text);
+    addUserMessage(text, readyAttachments);
+    clearStagedAttachments();
+
     const refs = addBotMessage();
     currentCtx = { ...refs, toolIndicators: new Map() };
     isStreaming = true;
 
+    // Les fichiers uploadés sont automatiquement consultables par l'agent (tool search_attached_files) :
+    // pas besoin de les référencer dans le message, seul l'affichage (chip sous le message) en dépend.
     const doSend = () => ws.send(JSON.stringify({ type: "message", message: text }));
 
     if (ws && ws.readyState === WebSocket.OPEN) {

@@ -10,6 +10,10 @@ _LOG_FILE_RE = re.compile(r"^(\d{8})\.log$")
 """
 Shredding — Classe tâche CRON de délestage
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+Config : 
+"config": {
+    "log_max_days": 10
+}
 """
 class Shredding(CronTask):
     def __init__(self, config:dict):
@@ -18,8 +22,8 @@ class Shredding(CronTask):
             config=config
         )
 
-    def run(self):
-        super().run()
+    async def run(self):
+        await super().run()
 
         if "log_max_days" not in self.config:
             self.exception(text="key 'log_max_days' not defined in config")

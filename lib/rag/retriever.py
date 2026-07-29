@@ -11,10 +11,13 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Retriever:
     def __init__(self, collection: str = None):
-        self._collection = collection or Config.get("rag.collection")
+        #Collection et connecteur LLM utilisés. Par défaut ceux du profil "default" (utilisé hors contexte de session)
+        from lib.agent.profile import ProfileManager
+        default_profile = ProfileManager.getProfile("default")
+        self._collection = collection or default_profile.getConfigValue("rag.collection")
         self._top_k      = Config.get("rag.top_k")
 
-        model_connector = Config.get("llm.connector")
+        model_connector = default_profile.getConfigValue("llm.connector")
         if model_connector == "LiteLLM":
             self._embedder = LiteLLMEmbedder()
         else:

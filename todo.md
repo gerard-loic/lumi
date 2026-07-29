@@ -1,32 +1,33 @@
-AURORA
-- [x] Deplacer _charts.py de tools/
-- [x] Reorganier les dossiers d'outils
-- [x] Outils MCP Word avancés
-- [x] Pb des fichiers, envoyés avant la génération ??
-- [x] Tache de delestage
-- [x] Implémentation d'un mécanisme de tâches CRON
-- [x] Refonte et sécurisation du système d'import dynamique
-- [ ] Refactor version Aurora
-- [x] MAJ README
-- [x] Follow-up 
-- [x] Modification version
-- [x] Ajout FollowUpEvent Event
+PHOSPHOR
+- [x] RAG local sur un fichier 
+- [x] Envoi de fichiers à l'agent
+- [x] RAG local ou dans le prompt en fonction de la taille
+- [x] Limitations des envois de fichiers
+- [x] option pour retourner les infos des documents
+- [x] Indexation RAG Word, Excel 
+- [x] Cron Indexer RAG
+- [x] Sources de stockage RAG
+- [x] Cache pour l'indexer
+- [ ] Versions
+- [x] Profils
+- [x] RAG par profil
+- [x] MCP par profil
+- [x] Retester toutes les fonctionnalités
+- [ ] Supprimer les anciennes libs
+- [ ] Refactor
+- [ ] Modification readme
+
 ----------------------------
 BACKLOG
 - [ ] Implémentation des traductions
-- [ ] RAG local sur un fichier
-- [ ] Envoi de fichiers à l'agent
+- [ ] Gérer d'autres sources de données ?
 - [ ] Limiter la sortie ?
 - [ ] Support OCR / modèle de compréhension d'image
-- [ ] option pour retourner les infos des documents
 - [ ] Confirmations : prévoir des options plus riches (objets)
 - [ ] Limitation des résultats
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
 - [ ] Critique de la réponse par un modèle
 - [ ] Possibilité d'arreter une conversation proprement
-- [ ] Indexation RAG Word, Excel
-- [ ] Cron Indexer RAG
-- [ ] Sources de stockage RAG
 - [ ] Création de pipelines
 - [ ] Loop
 - [ ] MCP externes
@@ -42,11 +43,13 @@ BACKLOG
 - [ ] Audit sécurité
 - [ ] Revoir les limites d'appels d'outils
 - [ ] problèmes des retours LLM vides
+- [ ] Gestion de profils LLM
+- [ ] Traduction
 ------------
 Versions à venir : 
 
-Phosphor
-Focalisé sur les fonctionnalités RAG
+Wave
+Focalisé sur les traductions
 
 Abyss
 Focalisé sur les pipelines
@@ -123,6 +126,20 @@ Version SPARK :
 - [x] Mise à jour fichier conf
 - [x] Mise à jour README.md
 - [x] Vérifier le fonctionnement multithread
+
+Version AURORA :
+- [x] Deplacer _charts.py de tools/
+- [x] Reorganier les dossiers d'outils
+- [x] Outils MCP Word avancés
+- [x] Pb des fichiers, envoyés avant la génération ??
+- [x] Tache de delestage
+- [x] Implémentation d'un mécanisme de tâches CRON
+- [x] Refonte et sécurisation du système d'import dynamique
+- [x] Refactor version Aurora
+- [x] MAJ README
+- [x] Follow-up 
+- [x] Modification version
+- [x] Ajout FollowUpEvent Event
 ------------
 
 Installer cloudflared

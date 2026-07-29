@@ -167,6 +167,28 @@ class PgVector:
 
         return await asyncio.to_thread(_run)
 
+    #Retourne les métadonnées d'un document indexé
+    @staticmethod
+    async def sourceMetadata(collection: str, source: str) -> dict | None:
+        def _run():
+            conn = PgVector._connect()
+            try:
+                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    cur.execute(
+                        sql.SQL(
+                            "SELECT metadata FROM {} WHERE collection = %s AND metadata->>'source' = %s LIMIT 1"
+                        ).format(PgVector._table()),
+                        (collection, source),
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        return None
+                    return dict(row["metadata"]) if row["metadata"] else {}
+            finally:
+                conn.close()
+
+        return await asyncio.to_thread(_run)
+
     #Supprimer un document
     @staticmethod
     async def deleteBySource(collection: str, source: str) -> int:

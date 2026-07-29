@@ -9,6 +9,8 @@ import sys
 import secrets
 from lib.log.logger import Logger, ERROR, WARNING
 from lib.session.session import AuthSession, AuthSessionManager
+from lib.agent.profile import ProfileManager
+
 """
 Auth — Gestion de l'authentification sur l'agent
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
@@ -20,7 +22,7 @@ class Auth:
 
     #S'authentifier sur l'agent
     @staticmethod
-    def authenticate(authorization: dict):
+    def authenticate(authorization: dict, profile: str):
         #On récupère le service utilisé pour gérer l'authentification
         auth_service = ServiceManager.get(name=Config.get(key="authentication.service"))
         result = auth_service.checkAuthentication(authorization=authorization)
@@ -50,7 +52,7 @@ class Auth:
             Auth._session_id_var.set(payload["session_id"])
 
             token_hash = hashlib.sha256(token.encode()).hexdigest()
-            AuthSessionManager.add(payload["session_id"], payload["exp"].timestamp(), payload, auth_fingerprint=fingerprint, token_hash=token_hash)
+            AuthSessionManager.add(payload["session_id"], payload["exp"].timestamp(), payload, auth_fingerprint=fingerprint, token_hash=token_hash, profile=profile)
 
             #Le token comprend toutes les couches d'authentification aux services
             return token

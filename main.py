@@ -24,7 +24,7 @@ import sys
 sys.path.append('lib/')
 from lib.config.config import Config, StaticConfig
 from lib.log.logger import Logger, WARNING
-from lib.agent.agent import Agent
+from lib.agent.agent import Agent, AgentManager
 from lib.mcp.services import ServiceManager
 from lib.session.session import AuthSessionManager
 from lib.files.filestore import FileStore
@@ -32,6 +32,7 @@ from lib.files.localdata import LocalData
 from lib.agent.filters.llmfilter import LLMFilterManager
 from lib.connectors.connector import ConnectorManager
 from lib.cron.cronmanager import CronManager
+from lib.agent.profile import ProfileManager
 
 # ----------------------------------------------------------------
 # Initialisation configuration
@@ -44,14 +45,14 @@ Config.init()
 Logger.init(configuration=Config.get(key="logger"))
 
 # ----------------------------------------------------------------
+# Initialisation profils
+# ----------------------------------------------------------------
+ProfileManager.init()
+
+# ----------------------------------------------------------------
 # Initialisation localdata
 # ----------------------------------------------------------------
 LocalData.init()
-
-# ----------------------------------------------------------------
-# Initialisation filtres LLM
-# ----------------------------------------------------------------
-LLMFilterManager.init()
 
 # ----------------------------------------------------------------
 # Initialisation des tâches CRON
@@ -78,7 +79,7 @@ async def _session_cleaner():
     while True:
         await asyncio.sleep(60)
         AuthSessionManager.clear()
-        CronManager.execute()
+        await CronManager.execute()
 
 
 @asynccontextmanager
@@ -92,12 +93,15 @@ async def lifespan(app: FastAPI):
     #Gestion de la suppression des sessions et des fichiers temporaires
     cleaner = asyncio.create_task(_session_cleaner())
     async with mcp_manager.run():
-        lumi_router.agent = Agent(connector=Config.get(key="llm.connector"))
+        # ----------------------------------------------------------------
+        # Initialisation des agents (après démarrage MCP pour que les tools soient chargés)
+        # ----------------------------------------------------------------
+        AgentManager.init()
 
         # ----------------------------------------------------------------
         # Initialisation des connecteurs
         # ----------------------------------------------------------------
-        await ConnectorManager.init(agent=lumi_router.agent)
+        await ConnectorManager.init()
         for connector_router in ConnectorManager.get_routers():
             app.include_router(connector_router)
 

@@ -59,7 +59,13 @@ class VectorStore:
     async def sourceExists(collection: str, source: str) -> bool:
         VectorStore._connect()
         return await VectorStore._connector.sourceExists(collection=collection, source=source)
-        
+
+    #Retourne les métadonnées d'une source (document) déjà indexée, ou None si absente
+    @staticmethod
+    async def sourceMetadata(collection: str, source: str) -> dict | None:
+        VectorStore._connect()
+        return await VectorStore._connector.sourceMetadata(collection=collection, source=source)
+
     #Supprime une source (document)
     @staticmethod
     async def deleteBySource(collection: str, source: str) -> int:

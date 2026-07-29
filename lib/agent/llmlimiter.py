@@ -11,7 +11,7 @@ class LLMLimiter:
     #Retourne la limite de requêtes par minute
     @staticmethod
     def getFloodLimit():
-        limit = Config.get("llm.max_requests_minute")
+        limit = Config.get("usage.max_requests_minute")
         if limit is None or limit == -1:
             return None
         return limit
@@ -37,7 +37,7 @@ class LLMLimiter:
     #Retourne le nombre de tokens autorisés par mois
     @staticmethod
     def getTokenLimit():
-        limit = Config.get("llm.max_tokens_month")
+        limit = Config.get("usage.max_tokens_month")
         if limit == None or limit == -1:
             return None
         else:
@@ -46,7 +46,7 @@ class LLMLimiter:
     #Retourne le nombre de requeêtes autorisées par mois
     @staticmethod
     def getRequestLimit():
-        limit = Config.get("llm.max_requests_month")
+        limit = Config.get("usage.max_requests_month")
         if limit == None or limit == -1:
             return None
         else:

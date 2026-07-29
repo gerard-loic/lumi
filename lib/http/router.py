@@ -1,21 +1,29 @@
 import asyncio
+import tempfile
+import os
 from fastapi import APIRouter, HTTPException, Header, Request, UploadFile, File, Form, Depends, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
 from typing import Optional
-from lib.http.models import ToolInfo, AuthRequest, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse
+from lib.http.models import ToolInfo, AuthRequest, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse
 
 from lib.http.auth import Auth, AdminAuth
 from lib.session.session import AuthSessionManager
 from lib.mcp.client import mcp_manager
+from lib.mcp.tools import ToolLoader, MCPTool
 from lib.mcp.services import ServiceManager
 from lib.log.logger import Logger, ERROR, WARNING
 from lib.config.config import Config, StaticConfig
 from lib.rag.raghelper import RagHelper
+from lib.rag.textextractor import TextExtractor
 from lib.files.localdata import LocalData
+from lib.files.filestore import FileStore
 from lib.agent.llmlimiter import LLMLimiter
 from lib.agent.events import ErrorEvent
+from lib.rag.attachement import Attachement
+from lib.agent.profile import ProfileManager
+from lib.agent.agent import AgentManager
 
 _rag_basic_auth = HTTPBasic()
 _rag_basic_auth_optional = HTTPBasic(auto_error=False)
@@ -41,7 +49,6 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Router:
     def __init__(self):
-        self.agent = None
         self._active_ws = 0
         self.router = APIRouter()
         self.router.add_api_route("/health", self.health, methods=["GET"])
@@ -49,6 +56,7 @@ class Router:
         self.router.add_api_route("/tools", self.list_tools, methods=["GET"], response_model=list[ToolInfo])
         self.router.add_api_websocket_route("/ws", self.ws_chat)
         self.router.add_api_route("/files/{key}/{filename}", self.get_file, methods=["GET"])
+        self.router.add_api_route("/files/upload", self.upload_file, methods=["POST"])
         self.router.add_api_route("/auth", self.auth, methods=["POST"])
         self.router.add_api_route("/auth", self.logout, methods=["DELETE"])
         self.router.add_api_route("/rag/documents", self.rag_index, methods=["POST"])
@@ -91,24 +99,40 @@ class Router:
             _=Depends(_usage_auth_dep),
     ) -> UsageResponse:
         out = LocalData.getLLMUsage(currentMonth=True)[0]
-        out['token_limit'] = int(Config.get("llm.max_tokens_month"))
-        out['request_limit'] = int(Config.get("llm.max_requests_month"))
+        out['token_limit'] = int(Config.get("usage.max_tokens_month"))
+        out['request_limit'] = int(Config.get("usage.max_requests_month"))
         
         return out
 
     """
     Route [GET] /tools : renvoie les outils MCP actifs
     Auth    : Basic admin
-    Entrée  : (aucun paramètre)
+    Entrée  : profile (query, optionnel) — si fourni, ne renvoie que les outils autorisés
+              pour ce profil (`profiles.<profile>.mcp.tools_enabled`) ; sinon renvoie tous
+              les outils enregistrés sur le serveur MCP (union de tous les profils)
     Sortie  : list[ToolInfo] { name, description }
     """
     async def list_tools(
             self,
+            profile: str | None = Query(default=None),
             credentials: HTTPBasicCredentials = Depends(_rag_basic_auth),
     ) -> list[ToolInfo]:
         self._check_admin_auth(credentials)
+
+        tools_enabled = None
+        if profile is not None:
+            if not ProfileManager.profileExists(profile):
+                raise HTTPException(status_code=404, detail=f"Profile {profile} does not exist")
+            tools_enabled = ProfileManager.getProfile(profile).getConfigValue(key="mcp.tools_enabled", default=[])
+
         try:
-            return [ToolInfo(name=t.name, description=t.description) for t in mcp_manager.tools]
+            tools = mcp_manager.tools
+            if tools_enabled is not None:
+                tools = [
+                    t for t in tools
+                    if ToolLoader.is_enabled(t.name, MCPTool.get_meta(t.name).get("namespace", ""), tools_enabled)
+                ]
+            return [ToolInfo(name=t.name, description=t.description) for t in tools]
         except Exception as e:
             Logger.write(f"[HTTP] [503] list_tools — Unable reading tools: {e}", type=ERROR)
             raise HTTPException(status_code=503, detail="Unable reading tools")
@@ -119,6 +143,9 @@ class Router:
     Entrée  : token (query string)
               Messages JSON entrants :
                 {"type": "message",      "message": "..."}   — envoi d'un message à l'agent
+                                                                 (les fichiers joints via POST /files/upload sont
+                                                                 automatiquement consultables par l'agent via le tool
+                                                                 search_attached_files, pas besoin de les référencer ici)
                 {"type": "confirmation", "option": N}         — réponse à une demande de confirmation
     Sortie  : Messages JSON sortants (stream) :
                 {"type": "token",              "content": "..."}
@@ -151,12 +178,15 @@ class Router:
             await websocket.close(code=4003, reason="Unauthorized")
             return
 
-        if self.agent is None:
-            Logger.write("[HTTP] [WS] ws_chat — Agentnon available", type=ERROR)
-            await websocket.close(code=4503, reason="Agent non available")
-            return
 
         session_id: str | None = decodedToken.get("session_id")
+        session = AuthSessionManager.get(session_id)
+
+        agent = AgentManager.getAgent(name=session.getProfile()) if session else None
+        if agent is None:
+            Logger.write("[HTTP] [WS] ws_chat — Agent non available", type=ERROR)
+            await websocket.close(code=4503, reason="Agent non available")
+            return
 
         if not AuthSessionManager.claim_ws(session_id):
             Logger.write(f"[HTTP] [WS] ws_chat — Session {session_id} already connected", type=WARNING)
@@ -213,9 +243,9 @@ class Router:
                     if not message:
                         continue
 
-                    async def _stream(msg=message, sid=session_id):
+                    async def _stream(msg=message, sid=session_id, agent=agent):
                         try:
-                            async for event in self.agent.chatStream(msg, sid):
+                            async for event in agent.chatStream(msg, sid):
                                 await websocket.send_text(event)
                         except asyncio.CancelledError:
                             #Cas de déconnexion client. On termine silencieusement
@@ -275,14 +305,47 @@ class Router:
         return FileResponse(file_path, filename=filename)
 
     """
+    Route [POST] /files/upload : Upload d'une pièce jointe conversationnelle (texte extrait et rattaché à la session)
+    Auth    : Bearer token (header Authorization)
+    Entrée  : Authorization (header) — "Bearer <token>"
+              file          (multipart, requis) — fichier à joindre à la conversation
+    Sortie  : FileUploadResponse { key, filename, tokens }
+    """
+    async def upload_file(self, file: UploadFile = File(...), authorization: str | None = Header(default=None)) -> FileUploadResponse:
+        #Check présent autorisation
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Authentication required")
+        token = authorization[7:]
+
+        #Vérifie le token
+        decoded = Auth.checkAuthentification(token=token)
+        if not decoded:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        #Récupère la session
+        session = AuthSessionManager.get(decoded.get("session_id"))
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        try:
+            res = await Attachement.add(session=session, file=file)
+            return res
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"{str(e)}")
+
+    """
     Route [POST] /auth : Authentification au service, ouvre une session
     Auth    : (aucune — endpoint public)
-    Entrée  : AuthRequest { authorization: dict }
+    Entrée  : AuthRequest { authorization: dict, profile: str }
     Sortie  : AuthResponse { token: str }
     """
     async def auth(self, request: AuthRequest) -> AuthResponse:
+        #Vérification profil
+        if not ProfileManager.profileExists(request.profile):
+            raise HTTPException(status_code=401, detail=f"Profile {request.profile} does not exists")
+
         try:
-            token = Auth.authenticate(request.authorization)
+            token = Auth.authenticate(authorization=request.authorization, profile=request.profile)
         except Exception as e:
             Logger.write(f"[HTTP] [500] auth — Internal authentification error: {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=f"Internal authentification error")

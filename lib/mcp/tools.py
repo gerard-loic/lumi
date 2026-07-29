@@ -147,25 +147,29 @@ Les fichiers et dossiers dont le nom commence par `_` (modules internes,
 comme outil mais reste importable par les autres modules du sous-dossier
 via un import Python classique (ex. `tools.word._word_common`).
 
-`mcp.tools_enabled` contrôle quels outils sont exposés : elle accepte des
-noms d'outils exacts, ainsi que des motifs "namespace.*" comparés au chemin
-du module relatif à `tools.` (ex. `tools.word.word` -> "word.word") :
+`profiles.<profil>.mcp.tools_enabled` contrôle quels outils sont exposés : elle
+accepte des noms d'outils exacts, ainsi que des motifs "namespace.*" comparés au
+chemin du module relatif à `tools.` (ex. `tools.word.word` -> "word.word") :
 "word.*" active ainsi tous les outils situés dans `tools/word/`, et
 "datetime.*" active tous les outils du module `tools/datetime.py`, quel que
 soit leur nombre. Elle accepte aussi un motif "namespace/nom_outil" pour
 n'activer qu'un seul outil précis d'un sous-dossier ou module, ex.
 "pdf/generer_fichier_pdf" n'active que cet outil parmi ceux de `tools/pdf/`.
-Un outil non couvert par cette liste n'est pas enregistré.
+Un outil non couvert par la liste d'AUCUN profil n'est pas enregistré sur le
+serveur MCP (celui-ci est unique et partagé : `registerTools` enregistre
+l'union des `tools_enabled` de tous les profils). Le filtrage effectif par
+profil — quels outils un profil donné voit et peut appeler — se fait ensuite
+côté `MCPClientManager` (`lib/mcp/client.py`), à partir du même motif.
 
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class ToolLoader:
 
     @staticmethod
-    def _is_enabled(tool_name: str, modulename: str, enabled_tools: list) -> bool:
-        # Chemin du module relatif à `tools.` (ex. "tools.word.word" -> "word.word"),
+    def is_enabled(tool_name: str, namespace: str, enabled_tools: list) -> bool:
+        # `namespace` est le chemin du module relatif à `tools.` (ex. "tools.word.word" -> "word.word"),
         # utilisé par les motifs "namespace.*" désignant tout un sous-dossier ou module.
-        relative_module = modulename.removeprefix("tools.")
+        relative_module = namespace
         for pattern in enabled_tools:
             if pattern == tool_name:
                 return True
@@ -174,12 +178,22 @@ class ToolLoader:
                 if relative_module == prefix or relative_module.startswith(prefix + "."):
                     return True
             elif "/" in pattern:
-                namespace, _, name = pattern.rpartition("/")
-                if name == tool_name and (relative_module == namespace or relative_module.startswith(namespace + ".")):
+                pattern_namespace, _, name = pattern.rpartition("/")
+                if name == tool_name and (relative_module == pattern_namespace or relative_module.startswith(pattern_namespace + ".")):
                     return True
             elif ("*" in pattern or "?" in pattern) and fnmatch.fnmatch(relative_module, pattern):
                 return True
         return False
+
+    @staticmethod
+    def _enabled_tools_union() -> list:
+        """Union des `mcp.tools_enabled` de tous les profils : le serveur MCP est
+        unique et partagé, il doit donc exposer tout ce dont un profil au moins a besoin.
+        Le filtrage effectif par profil se fait ensuite côté MCPClientManager/LiteLLM."""
+        enabled = []
+        for profile_config in Config.get("profiles").values():
+            enabled.extend(profile_config.get("mcp", {}).get("tools_enabled", []))
+        return enabled
 
     @staticmethod
     def registerTools(app: FastMCP, toolsDir: str = None):
@@ -188,6 +202,8 @@ class ToolLoader:
                 os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                 "tools"
             )
+
+        enabled_tools = ToolLoader._enabled_tools_union()
 
         for dirpath, dirnames, filenames in os.walk(toolsDir):
             dirnames[:] = sorted(d for d in dirnames if not d.startswith("_") and not d.startswith("."))
@@ -209,8 +225,9 @@ class ToolLoader:
                         continue
                     if cls.__module__ != modulename:
                         continue
-                    enabled_tools = Config.get("mcp.tools_enabled")
+                    namespace = modulename.removeprefix("tools.")
                     for tool_fn in cls.get_tools():
-                        if not ToolLoader._is_enabled(tool_fn.__name__, modulename, enabled_tools):
+                        if not ToolLoader.is_enabled(tool_fn.__name__, namespace, enabled_tools):
                             continue
+                        MCPTool._registry[tool_fn.__name__]["namespace"] = namespace
                         app.tool()(tool_fn)

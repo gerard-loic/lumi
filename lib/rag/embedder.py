@@ -1,4 +1,3 @@
-from lib.config.config import Config
 from lib.agent.llmconnector.litellm import LiteLLMEmbedder
 from lib.log.logger import Logger, ERROR
 
@@ -8,7 +7,9 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Embedder:
     def __init__(self):
-        model_connector = Config.get("llm.connector")
+        #Connecteur LLM utilisé pour les embeddings. Par défaut celui du profil "default" (utilisé hors contexte de session)
+        from lib.agent.profile import ProfileManager
+        model_connector = ProfileManager.getProfile("default").getConfigValue("llm.connector")
         if model_connector == "LiteLLM":
             self.embedder = LiteLLMEmbedder()
         else:

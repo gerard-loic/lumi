@@ -2,9 +2,9 @@ import json
 from typing import AsyncGenerator, Optional
 from lib.mcp.client import mcp_manager, MCPToolError
 from lib.mcp.tools import MCPTool
-from lib.config.config import Config
 from lib.agent.llmconnector.litellm import LiteLLM
-from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent, FollowUpEvent
+from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent, FollowUpEvent, RagEvent
+from lib.rag.attachmentretriever import AttachmentRetriever
 from lib.session.session import AuthSessionManager as _SessionManager
 from lib.log.logger import Logger, ERROR, OK, WARNING
 from lib.session.session import AuthSessionManager
@@ -13,7 +13,7 @@ from lib.files.localdata import LocalData
 from lib.agent.filters.llmfilter import LLMFilterManager
 import datetime
 from lib.utils.dynamicimport import DynamicImport
-
+from lib.agent.profile import ProfileManager, Profile
 
 """
 Agent — Agent d'orchestration / communication LLM
@@ -24,27 +24,44 @@ Stratégie :
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Agent:
-    def __init__(self, connector:str):
+    def __init__(self, connector:str, profile:Profile):
+        self.profile = profile
+
         #Initialisation du connecteur LLM
-        self._connector = DynamicImport.getInstance(className=connector, moduleName=connector, classPath="lib.agent.llmconnector")
+        self._connector = DynamicImport.getInstance(
+            className=connector,
+            moduleName=connector,
+            classPath="lib.agent.llmconnector",
+            config=self.profile.getConfigValue(f"llm.{connector}"),
+            tools_enabled=self.profile.getConfigValue(key="mcp.tools_enabled", default=[]),
+        )
       
         #Prompt systeme (issu du fichier de configuration ou d'un fichier joint)
-        system_prompt_file = Config.get(key="llm.system_prompt_file", default=None)
-        system_prompt      = Config.get(key="llm.system_prompt",      default=None)
+        system_prompt_file = self.profile.getConfigValue(key="llm.system_prompt_file", default=None)
+        system_prompt      = self.profile.getConfigValue(key="llm.system_prompt", default=None)
         if system_prompt_file:
             with open(system_prompt_file, encoding="utf-8") as f:
                 self._system = f.read()
         elif system_prompt:
             self._system = system_prompt
         else:
-            Logger.write("[AGENT] LLM system prompt not configured: set 'llm.system_prompt_file' or 'llm.system_prompt' in config.", ERROR)
-            raise Exception("[AGENT] LLM system prompt not configured: set 'llm.system_prompt_file' or 'llm.system_prompt' in config.")
+            Logger.write(f"[AGENT] LLM system prompt not configured: set 'profile.{self.profile.getName()}.system_prompt_file' or 'llm.{self.profile.getName()}.system_prompt' in config.", ERROR)
+            raise Exception(f"[AGENT] LLM system prompt not configured: set 'llm.{self.profile.getName()}.system_prompt_file' or 'llm.{self.profile.getName()}.system_prompt' in config.")
 
-        self._MAX_TOOL_ITERATIONS          = Config.get(key="mcp.max_tool_iterations")
-        self._MEMORY_MESSAGES              = Config.get(key="llm.memory_messages")
-        self._EMPTY_LLM_RESPONSE_MAX_RETRY = Config.get(key="llm.empty_llm_response_max_retry", default=2)
-        self._FOLLOWUP_ENABLED             = Config.get(key="llm.followup_questions.enabled", default=True)
-        self._FOLLOWUP_COUNT               = Config.get(key="llm.followup_questions.count", default=3)
+        #Si aucun outil n'est disponible pour ce profil, on neutralise les consignes du prompt système
+        #qui imposeraient d'appeler un outil (sinon le LLM tente d'en simuler un en texte, faute de mieux).
+        if not self._connector.has_tools():
+            self._system += "\n\nAucun outil n'est disponible dans ce contexte : ne mentionne, ne simule et n'invoque jamais un appel d'outil, quelles que soient les autres consignes ci-dessus. Réponds uniquement à partir de la conversation, ou indique que tu n'as pas accès à cette information."
+
+        self._MAX_TOOL_ITERATIONS          = self.profile.getConfigValue(key="mcp.max_tool_iterations", default=10)
+        self._MEMORY_MESSAGES              = self.profile.getConfigValue(key="llm.memory_messages", default=5)
+        self._EMPTY_LLM_RESPONSE_MAX_RETRY = self.profile.getConfigValue(key="llm.empty_llm_response_max_retry", default=2)
+
+        self._FOLLOWUP_ENABLED             = self.profile.getConfigValue(key="llm.followup_questions.enabled", default=True)
+        self._FOLLOWUP_COUNT               = self.profile.getConfigValue(key="llm.followup_questions.count", default=3)
+
+        #Filtres
+        self.filters = LLMFilterManager(profile=self.profile)
 
         Logger.write("[AGENT] MCP agent initialized", type=OK)
 
@@ -53,8 +70,8 @@ class Agent:
     """
     async def chatStream(self, message: str, session_id: Optional[str] = None, exclude_restricted: bool = False) -> AsyncGenerator[str, None]:
         #On filtre le message entrant (application des filtres selon les filtres actifs dans la conf)
-        message = LLMFilterManager.filter(text=message)
-        
+        message = self.filters.filter(text=message)
+
         try:
             #On récupère l'historique de conversation pour l'intégrer au prompt
             history = AuthSessionManager.get_history(session_id)[-self._MEMORY_MESSAGES:]
@@ -63,11 +80,39 @@ class Agent:
             now = datetime.datetime.now()  # ou avec timezone si pertinent
             system = self._system + f"\n\nDate et heure actuelles : {now.strftime('%A %d %B %Y, %H:%M')} (heure locale)"
 
+            file_context = ""
+            if self.profile.getConfigValue("attachments.enabled", default=False):
+                #Si des fichiers sont joints, premier passage automatique de micro-RAG sur le message de l'utilisateur
+                #(fiabilité : on ne compte plus sur le LLM pour décider d'appeler search_attached_files en premier).
+                #Le tool reste disponible pour que le modèle affine sa recherche avec une autre requête si besoin.
+                attachments = AuthSessionManager.get_all_attachments(session_id)
+                if attachments:
+                    filenames = ", ".join(a["filename"] for a in attachments)
+                    system += f"\n\nFichiers joints par l'utilisateur à cette conversation : {filenames}. Les extraits les plus pertinents sont déjà fournis ci-dessous dans le message ; utilise l'outil search_attached_files si tu as besoin de chercher autre chose dans ces fichiers."
+
+                    try:
+                        results = await AttachmentRetriever().search(session_id, message)
+                    except Exception as e:
+                        Logger.write(f"[AGENT] Attachment search failed : {str(e)}", type=ERROR)
+                        results = []
+
+                    if results:
+                        blocks = []
+                        for r in results:
+                            label = f"[Extrait de {r['filename']}" + (f", page {r['page']}" if r.get("page") else "") + "]"
+                            blocks.append(f"{label}\n{r['text']}")
+                        file_context = "\n\n".join(blocks) + "\n\n"
+
+                        for filename, pages in AttachmentRetriever.group_pages_by_file(results).items():
+                            yield RagEvent.get(source=filename, locations=pages)
+
+            user_content = f"{file_context}{message}" if file_context else message
+
             #Préparation des différents types de message pour le LLM
             messages = [
                 {"role": "system", "content": system},
                 *history,
-                {"role": "user",   "content": message},
+                {"role": "user",   "content": user_content},
             ]
 
             Logger.write("[AGENT] Call LLM...", type=WARNING)
@@ -155,7 +200,10 @@ class Agent:
                     #On essaie d'executer l'outil, si erreur on transmet l'erreur au LLM pour qu'il puisse en déduire la suite
                     try:
                         args = json.loads(tc.function.arguments)
-                        result_text, tool_events = await mcp_manager.call_tool(tc.function.name, args)
+                        result_text, tool_events = await mcp_manager.call_tool(
+                            tc.function.name, args,
+                            tools_enabled=self.profile.getConfigValue(key="mcp.tools_enabled", default=[]),
+                        )
                     except MCPToolError as e:
                         error_detail = str(e)
                         Logger.write(f"[AGENT] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
@@ -310,3 +358,15 @@ class Agent:
 
         return questions[:self._FOLLOWUP_COUNT]
 
+
+
+class AgentManager:
+    @staticmethod
+    def init():
+        AgentManager.agents = {}
+        for profile in ProfileManager.getProfileNames():
+            AgentManager.agents[profile] = Agent(connector=ProfileManager.getProfile(name=profile).getConfigValue("llm.connector"), profile=ProfileManager.getProfile(name=profile))
+
+    @staticmethod
+    def getAgent(name:str)->Agent | None:
+        return AgentManager.agents.get(name)

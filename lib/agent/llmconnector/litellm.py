@@ -1,5 +1,4 @@
 import litellm
-from lib.config.config import Config
 from lib.mcp.client import mcp_manager
 from lib.files.localdata import LocalData
 from lib.http.auth import Auth
@@ -31,17 +30,21 @@ LiteLLM — Gestion communication modèle LLM avec LiteLLM
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class LiteLLM:
-    def __init__(self):
-        self._model    = Config.get(key="llm.litellm.model")
-        self._api_base = Config.get(key="llm.litellm.api_base")
-        self._api_key  = Config.get(key="llm.litellm.api_key")
-        self._tools              = mcp_manager.tools_as_openai_format(exclude_restricted=False)
-        self._tools_no_restricted = mcp_manager.tools_as_openai_format(exclude_restricted=True)
+    def __init__(self, config:dict, tools_enabled:list=None):
+        self._model    = config["model"]
+        self._api_base = config["api_base"]
+        self._api_key  = config["api_key"]
+        self._tools               = mcp_manager.tools_as_openai_format(exclude_restricted=False, tools_enabled=tools_enabled)
+        self._tools_no_restricted = mcp_manager.tools_as_openai_format(exclude_restricted=True, tools_enabled=tools_enabled)
 
         self._tracking = LiteLLMTrackingCallback()
         litellm.callbacks = [self._tracking]
 
         print(f"[Agent LiteLLM] {len(self._tools)} Loaded MCP tools : {[t['function']['name'] for t in self._tools]}")
+
+    #Indique si au moins un outil est disponible pour ce profil (utilisé pour adapter le prompt système)
+    def has_tools(self) -> bool:
+        return bool(self._tools)
 
     #Retourne un résumé texte (nom + description) des outils réellement disponibles, pour grounder des appels LLM annexes (ex: follow-up)
     def tools_summary(self, exclude_restricted: bool = False) -> str:
@@ -51,6 +54,7 @@ class LiteLLM:
     #Appel du LLM
     async def callLLM(self, messages: str, stream: bool, exclude_restricted: bool = False, use_tools: bool = True):
         tools = (self._tools_no_restricted if exclude_restricted else self._tools) if use_tools else None
+        tools = tools or None
         response = await litellm.acompletion(
             model=self._model,
             messages=messages,
@@ -68,9 +72,12 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class LiteLLMEmbedder:
     def __init__(self):
-        self._model    = Config.get("llm.litellm.embedding_model")
-        self._api_base = Config.get("llm.litellm.api_base")
-        self._api_key  = Config.get("llm.litellm.api_key")
+        #Configuration issue du profil "default" (utilisé hors contexte de session, ex: RAG/indexation)
+        from lib.agent.profile import ProfileManager
+        config = ProfileManager.getProfile("default").getConfigValue("llm.LiteLLM")
+        self._model    = config["embedding_model"]
+        self._api_base = config["api_base"]
+        self._api_key  = config["api_key"]
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         response = await litellm.aembedding(

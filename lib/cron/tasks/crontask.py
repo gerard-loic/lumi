@@ -28,7 +28,7 @@ class CronTask():
         raise Exception(f"[CronTask {self.className}] {str(text)}")
 
     #Execution de la tâche
-    def run(self):
+    async def run(self):
         self.log(text="Run", type=OK)
 
     #Test si la tâche doit être executée

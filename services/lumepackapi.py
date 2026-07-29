@@ -2,7 +2,6 @@ import base64
 import httpx
 from urllib.parse import urlencode
 from lib.mcp.services import Service
-from lib.config.config import Config
 from lib.log.logger import Logger, ERROR
 from pydantic import Field, BaseModel
 from typing import Annotated, Literal, Optional, Any
@@ -147,8 +146,10 @@ class LumePackAPI(Service):
         return False
 
 
-    def webexAuthenticate(self, username: str):
-        api_key = Config.get(key="connectors.webex.api_key")
+    #api_key : clé d'API propre au connecteur/profil Webex à l'origine de l'appel
+    #(cf profiles.<profil>.connectors.webex.api_key), fournie par l'appelant plutôt que
+    #lue depuis une config globale.
+    def webexAuthenticate(self, username: str, api_key: str):
         url = f"{self.getConfValue(key='url')}/api/webex/auth"
         try:
             with httpx.Client(timeout=self.timeout) as client:
@@ -162,7 +163,11 @@ class LumePackAPI(Service):
                     },
                 )
                 r.raise_for_status()
-                response_data = r.json()
+                try:
+                    response_data = r.json()
+                except ValueError:
+                    Logger.write(f"[LUMEPACKAPI] webexAuthenticate : réponse non-JSON (HTTP {r.status_code}) — {r.text!r}", type=ERROR)
+                    return False
                 token = response_data.get("data", {}).get("token")
                 if not token:
                     Logger.write(f"[LUMEPACKAPI] webexAuthenticate : token absent dans la réponse — {response_data}", type=ERROR)

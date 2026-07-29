@@ -86,7 +86,7 @@ class WebexWebhookHandler:
             #Authentification auprès du service principal d'authentification utilisé par Lumi
             auth_service_name = Config.get(key="authentication.service")
             auth_service = ServiceManager.get(name=auth_service_name)
-            auth_data = auth_service.webexAuthenticate(username=email)
+            auth_data = auth_service.webexAuthenticate(username=email, api_key=self._connector.api_key)
             if not auth_data:
                 Logger.write(f"[Connector webex] Authentication failed for {email}", type=ERROR)
                 await self._connector.send_message(room_id, f"❌ Votre compte **{email}** n'est pas autorisé à utiliser ce service.")

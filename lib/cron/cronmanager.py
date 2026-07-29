@@ -20,11 +20,11 @@ class CronManager:
 
     #Execute toutes les tâches CRON qui doivent être executées à ce moment précis
     @staticmethod
-    def execute():
+    async def execute():
         timestamp = int(time.time())
         for task in CronManager.tasks:
             try:
                 if task.testExecution(timestamp=timestamp):
-                    task.run()
+                    await task.run()
             except Exception as e:
                 Logger.write(f"[CronManager] task '{task.className}' failed: {str(e)}", ERROR)

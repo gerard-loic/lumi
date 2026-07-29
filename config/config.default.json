@@ -49,45 +49,61 @@
         }
     },
 
-    "llm" : {
-        "system_prompt_file" : "config/systemprompt.md",
-        "connector" : "LiteLLM",
-        "memory_messages" : 5,
-        "empty_llm_response_max_retry" : 2,
-        "max_tokens_month" : -1,
-        "max_requests_month" : -1,
-        "max_requests_minute" : 5,
-        "followup_questions" : {
-            "enabled" : true,
-            "count" : 3
-        },
-        "litellm" : {
-            "model" : "openai/openai/gpt-oss-120b",
-            "embedding_model" : "openai/Qwen/Qwen3-Embedding-0.6B",
-            "api_base" : "https://provider.fr/v1",
-            "api_key" : ""
-        },
-        "filters" : {
-            "CodeFilter" : {
+    "profiles" : {
+        "default" : {
+            "llm" : {
+                "system_prompt_file": "config/systemprompt.md",
+                "connector": "LiteLLM",
+                "memory_messages": 5,
+                "empty_llm_response_max_retry": 2,
+                "followup_questions": {
+                    "enabled": true,
+                    "count": 3
+                },
+                "filters": {
+                    "CodeFilter": {}
+                },
+                "LiteLLM": {
+                    "model": "openai/openai/gpt-oss-120b",
+                    "embedding_model": "openai/Qwen/Qwen3-Embedding-0.6B",
+                    "api_base": "https://provider.fr/v1",
+                    "api_key": ""
+                }
+            },
+            "mcp" : {
+                "max_tool_iterations": 10,
+                "tools_enabled": [
+                    "datetime.*",
+                    "eligibility.*",
+                    "geobase.*",
+                    "orders.*",
+                    "references.*",
+                    "search_knowledge_base",
+                    "generer_fichier_excel",
+                    "generer_fichier_pdf",
+                    "rechercher_sur_internet",
+                    "lire_page_web",
+                    "word.*",
+                    "files.*"
+                ]
+            },
+            "attachments" : {
+                "enabled" : true,
+                "max_file_size_mb" : 20,
+                "file_context_top_k": 8,
+                "max_files" : 5,
+                "allowed_extensions" : [".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls", ".md", ".html", ".htm", ".py", ".js", ".ts", ".txt", ".csv"]
+            },
+            "rag" : {
+                "collection" : "demo"
             }
         }
     },
 
-    "mcp" : {
-        "max_tool_iterations" : 10,
-        "tools_enabled" : [
-            "datetime.*",
-            "eligibility.*",
-            "geobase.*",
-            "orders.*",
-            "references.*",
-            "search_knowledge_base",
-            "generer_fichier_excel",
-            "generer_fichier_pdf",
-            "rechercher_sur_internet",
-            "lire_page_web",
-            "word.*"
-        ]
+    "llm" : {
+        "max_tokens_month" : -1,
+        "max_requests_month" : -1,
+        "max_requests_minute" : 5
     },
 
     "files" : {
@@ -115,7 +131,6 @@
     },
 
     "rag" : {
-        "collection" : "demo",
         "embedding_dim" : 1024,
         "top_k" : 5,
         "chunk_size" : 500,

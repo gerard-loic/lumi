@@ -37,6 +37,20 @@ class FileStore:
             url += f"?t={session.token_hash}"
         return url
 
+    #Enregistrement d'un fichier entrant (upload utilisateur), sans URL de téléchargement publique
+    @staticmethod
+    def saveUpload(filename: str, content: bytes) -> str:
+        tmpdir = Path(Config.get("files.temp_dir"))
+        tmpdir.mkdir(exist_ok=True)
+        key = secrets.token_hex(16)
+        (tmpdir / key).write_bytes(content)
+
+        session = AuthSessionManager.get(Auth.getSessionId())
+        if session:
+            session.addFile(key)
+
+        return key
+
     @staticmethod
     def key_from_url(url: str) -> str:
         match = _KEY_URL_RE.search(url)

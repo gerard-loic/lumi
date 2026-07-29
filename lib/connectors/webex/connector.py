@@ -12,8 +12,8 @@ WebexConnector — connecteur agent pour Webex
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class WebexConnector(Connector):
-    def __init__(self, agent:Agent, config:dict={}):
-        super().__init__('webex', agent, config)
+    def __init__(self, agent:Agent, config:dict={}, profile:str=None):
+        super().__init__('webex', agent, config, profile=profile)
 
     async def start(self):
         webhook_secret = self._config.get("webhook_secret", "")
@@ -25,8 +25,9 @@ class WebexConnector(Connector):
         await self._bot.init()
 
         #Configuraion du gestionnaire webhook pour webex
+        #La route est propre au profil pour permettre plusieurs bots Webex (un par profil) en parallèle
         self._handler = WebexWebhookHandler(agent=self._agent, connector=self._bot)
-        webhook_url = Config.get(key="app.url").rstrip("/") + "/webex/webhook"
+        webhook_url = Config.get(key="app.url").rstrip("/") + f"/webex/webhook/{self._profile}"
         await self._bot.register_webhook(target_url=webhook_url, secret=webhook_secret)
 
         await super().start()
@@ -37,8 +38,8 @@ class WebexConnector(Connector):
     #Retourne les méthodes à implémenter dans le router
     def get_router(self) -> APIRouter:
         router = APIRouter()
-        #ajout de la route pour la gestion des webhook webex
-        router.add_api_route("/webex/webhook", self._webhook_endpoint, methods=["POST"])
+        #ajout de la route pour la gestion des webhook webex, propre à ce profil
+        router.add_api_route(f"/webex/webhook/{self._profile}", self._webhook_endpoint, methods=["POST"])
         return router
 
     #Methode utiliser par la route webex/webhook

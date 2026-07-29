@@ -40,8 +40,9 @@ Flux principal :
 """
 class Indexer:
     def __init__(self, collection: str = None):
-        #Collection utilisée. Par défaut celle dans la conf
-        self._collection    = collection or Config.get("rag.collection")
+        #Collection utilisée. Par défaut celle du profil "default" (utilisé hors contexte de session : cron, endpoints admin)
+        from lib.agent.profile import ProfileManager
+        self._collection    = collection or ProfileManager.getProfile("default").getConfigValue("rag.collection")
         self._chunk_size    = Config.get("rag.chunk_size") # taille maximale (en tokens ou caractères) de chaque morceau de texte
         self._chunk_overlap = Config.get("rag.chunk_overlap") #nombre de tokens/caractères qui se chevauchent entre deux chunks consécutifs
         self._embedder      = Embedder()
@@ -75,19 +76,21 @@ class Indexer:
         Autres formats : conversion Markdown via MarkItDown puis chunking texte.
         """
     async def indexFile(self, path: str, source: str = None, metadata: dict = None) -> int:
-        
+
         await VectorStore.ensureTable()
         src = source or os.path.basename(path)
         ext = os.path.splitext(src)[-1].lower()
         base_meta = {**(metadata or {}), "source": src}
+        if "mtime" not in base_meta:
+            base_meta["mtime"] = os.path.getmtime(path)
 
         if ext == ".pdf":
             from lib.rag.contenttype.pdf import PdfIndexer
             return await PdfIndexer.index(self, path, base_meta)
         else:
-            from markitdown import MarkItDown
-            result = await asyncio.to_thread(MarkItDown().convert, path)
-            return await self.indexText(result.text_content, metadata=base_meta)
+            from lib.rag.textextractor import TextExtractor
+            text = await TextExtractor.extract(path, ext)
+            return await self.indexText(text, metadata=base_meta)
 
     #Réindexation d'un fichier
     async def reindexFile(self, path: str, source: str = None, metadata: dict = None) -> dict:

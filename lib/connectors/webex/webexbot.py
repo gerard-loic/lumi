@@ -19,6 +19,9 @@ class WebexBot:
         self._token = bot_token
         self._connector = connector
         self._webex_api = connector.getConfValue("webex_api")
+        #Clé d'API utilisée pour authentifier les utilisateurs Webex auprès du service d'authentification
+        #(ex: Nexora), propre au profil/connecteur — cf LumePackAPI.webexAuthenticate
+        self.api_key = connector.getConfValue("api_key")
         self._headers = {
             "Authorization": f"Bearer {bot_token}",
             "Content-Type": "application/json",

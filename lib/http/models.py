@@ -11,6 +11,7 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class AuthRequest(BaseModel):
     authorization: dict
+    profile: str
 
 """
 RagIndexRequest — Format requête HTTP indexation RAG (form-data + fichier optionnel)
@@ -117,3 +118,11 @@ RagDeleteCollectionResponse - Format retour suppression collection RAG
 class RagDeleteCollectionResponse(BaseModel):
     deleted_chunks: int
     collection: str
+
+"""
+FileUploadResponse - Format retour upload d'une pièce jointe conversationnelle
+"""
+class FileUploadResponse(BaseModel):
+    key: str
+    filename: str
+    tokens: int

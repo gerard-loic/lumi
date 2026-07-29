@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 from lib.config.config import Config
-from lib.mcp.tools import MCPTool
+from lib.mcp.tools import MCPTool, ToolLoader
 from lib.http.auth import Auth
 from lib.log.logger import Logger, ERROR
 import sys
@@ -73,11 +73,23 @@ class MCPClientManager:
     def tools(self) -> list:
         return self._tools
 
+    #Indique si un outil est autorisé pour un profil donné (liste de motifs `mcp.tools_enabled`).
+    #tools_enabled=None désactive le filtrage (tous les outils enregistrés sont autorisés).
+    def _is_allowed(self, tool_name: str, tools_enabled: list | None) -> bool:
+        if tools_enabled is None:
+            return True
+        namespace = MCPTool.get_meta(tool_name).get("namespace", "")
+        return ToolLoader.is_enabled(tool_name, namespace, tools_enabled)
+
     #Convertit les tools MCP au format attendu par le LLM.
-    def tools_as_openai_format(self, exclude_restricted: bool = False) -> list[dict]:
+    #tools_enabled : motifs `mcp.tools_enabled` du profil courant, pour ne présenter au LLM
+    #que les outils autorisés pour ce profil (le serveur MCP, lui, les a tous enregistrés).
+    def tools_as_openai_format(self, exclude_restricted: bool = False, tools_enabled: list | None = None) -> list[dict]:
         result = []
         for t in self._tools:
             if exclude_restricted and MCPTool.get_meta(t.name).get("restricted", False):
+                continue
+            if not self._is_allowed(t.name, tools_enabled):
                 continue
             schema = dict(t.inputSchema)
             # lumi_session_id est un paramètre interne — on le masque au LLM
@@ -94,7 +106,14 @@ class MCPClientManager:
         return result
 
     #Appelle un outil MCP.
-    async def call_tool(self, name: str, arguments: dict):
+    #tools_enabled : motifs `mcp.tools_enabled` du profil courant. Vérifié même si l'outil
+    #n'a pas été proposé au LLM par tools_as_openai_format, pour ne pas se reposer uniquement
+    #sur le fait que le LLM ne "voit" pas l'outil (ex. nom halluciné, ou disponible sur un autre profil).
+    async def call_tool(self, name: str, arguments: dict, tools_enabled: list | None = None):
+        if not self._is_allowed(name, tools_enabled):
+            Logger.write(f"MCP tool {name} is not enabled for this profile", type=ERROR)
+            raise MCPToolError(f"Tool '{name}' is not available")
+
         # lumi_session_id est injecté ici pour que le wrapper de l'outil puisse
         # configurer l'auth de la bonne session sans passer par un état global.
         arguments = {**arguments, "lumi_session_id": Auth.getSessionId() or ""}
