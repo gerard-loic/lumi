@@ -1,9 +1,4 @@
 
-import asyncio
-import json
-import psycopg2
-import psycopg2.extras
-from pgvector.psycopg2 import register_vector
 from lib.config.config import Config
 from lib.log.logger import Logger, ERROR
 from lib.rag.ragconnector.pgvector import PgVector

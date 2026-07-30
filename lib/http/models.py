@@ -11,7 +11,7 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class AuthRequest(BaseModel):
     authorization: dict
-    profile: str
+    profile: Optional[str] = None
 
 """
 RagIndexRequest — Format requête HTTP indexation RAG (form-data + fichier optionnel)

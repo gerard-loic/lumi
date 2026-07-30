@@ -1,21 +1,3 @@
-PHOSPHOR
-- [x] RAG local sur un fichier 
-- [x] Envoi de fichiers à l'agent
-- [x] RAG local ou dans le prompt en fonction de la taille
-- [x] Limitations des envois de fichiers
-- [x] option pour retourner les infos des documents
-- [x] Indexation RAG Word, Excel 
-- [x] Cron Indexer RAG
-- [x] Sources de stockage RAG
-- [x] Cache pour l'indexer
-- [ ] Versions
-- [x] Profils
-- [x] RAG par profil
-- [x] MCP par profil
-- [x] Retester toutes les fonctionnalités
-- [ ] Supprimer les anciennes libs
-- [ ] Refactor
-- [ ] Modification readme
 
 ----------------------------
 BACKLOG
@@ -45,6 +27,8 @@ BACKLOG
 - [ ] problèmes des retours LLM vides
 - [ ] Gestion de profils LLM
 - [ ] Traduction
+- [ ] Simplification et refactor des classes pour le RAG
+
 ------------
 Versions à venir : 
 
@@ -140,6 +124,28 @@ Version AURORA :
 - [x] Follow-up 
 - [x] Modification version
 - [x] Ajout FollowUpEvent Event
+
+Version PHOSPHOR :
+- [x] RAG local sur un fichier 
+- [x] Envoi de fichiers à l'agent
+- [x] RAG local ou dans le prompt en fonction de la taille
+- [x] Limitations des envois de fichiers
+- [x] option pour retourner les infos des documents
+- [x] Indexation RAG Word, Excel 
+- [x] Cron Indexer RAG
+- [x] Sources de stockage RAG
+- [x] Cache pour l'indexer
+- [x] Versions
+- [x] Profils
+- [x] RAG par profil
+- [x] MCP par profil
+- [x] Retester toutes les fonctionnalités
+- [x] Supprimer les anciennes libs
+- [x] Refactor
+- [x] Modification readme
+- [x] Garder les fichiers sources du RAG
+- [x] Evenement Rag, intégrer une Url pour accéder au fichier
+- [x] Dans route auth, profile par défaut
 ------------
 
 Installer cloudflared

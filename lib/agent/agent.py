@@ -2,7 +2,6 @@ import json
 from typing import AsyncGenerator, Optional
 from lib.mcp.client import mcp_manager, MCPToolError
 from lib.mcp.tools import MCPTool
-from lib.agent.llmconnector.litellm import LiteLLM
 from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent, FollowUpEvent, RagEvent
 from lib.rag.attachmentretriever import AttachmentRetriever
 from lib.session.session import AuthSessionManager as _SessionManager
@@ -14,6 +13,29 @@ from lib.agent.filters.llmfilter import LLMFilterManager
 import datetime
 from lib.utils.dynamicimport import DynamicImport
 from lib.agent.profile import ProfileManager, Profile
+
+#Accumule un événement RAG (source dédoublonnée, pages fusionnées) plutôt que de l'émettre immédiatement :
+#le LLM peut appeler l'outil de recherche RAG plusieurs fois (ou combiner pré-recherche sur pièces jointes et
+#outil RAG) pour une même réponse, ce qui produirait sinon des citations dupliquées/entrelacées avec les tokens
+#de la réponse. Retourne True si l'événement a été absorbé (événement de type "rag"), False sinon.
+def _accumulate_rag_event(rag_sources: dict, raw_event: str) -> bool:
+    try:
+        data = json.loads(raw_event)
+    except (TypeError, ValueError):
+        return False
+    if data.get("type") != "rag":
+        return False
+    entry = rag_sources.setdefault(data["source"], {"locations": [], "url": None})
+    for loc in data.get("locations") or []:
+        if loc not in entry["locations"]:
+            entry["locations"].append(loc)
+    if data.get("url") and not entry["url"]:
+        entry["url"] = data["url"]
+    return True
+
+#Construit les événements RAG groupés à partir de l'accumulateur, une fois la réponse prête
+def _rag_events_from(rag_sources: dict) -> list:
+    return [RagEvent.get(source=source, locations=data["locations"], url=data["url"]) for source, data in rag_sources.items()]
 
 """
 Agent — Agent d'orchestration / communication LLM
@@ -72,6 +94,10 @@ class Agent:
         #On filtre le message entrant (application des filtres selon les filtres actifs dans la conf)
         message = self.filters.filter(text=message)
 
+        #Accumulateur des événements RAG de tout le tour de conversation (pré-recherche pièces jointes +
+        #tool calls, sur toutes les itérations) : émis groupés une fois la réponse finale prête (voir plus bas)
+        rag_sources: dict = {}
+
         try:
             #On récupère l'historique de conversation pour l'intégrer au prompt
             history = AuthSessionManager.get_history(session_id)[-self._MEMORY_MESSAGES:]
@@ -104,7 +130,7 @@ class Agent:
                         file_context = "\n\n".join(blocks) + "\n\n"
 
                         for filename, pages in AttachmentRetriever.group_pages_by_file(results).items():
-                            yield RagEvent.get(source=filename, locations=pages)
+                            _accumulate_rag_event(rag_sources, RagEvent.get(source=filename, locations=pages))
 
             user_content = f"{file_context}{message}" if file_context else message
 
@@ -229,7 +255,8 @@ class Agent:
                     yield ToolEvent.get(tool_name=tc.function.name, status="OK")
 
                     for event in tool_events:
-                        yield event
+                        if not _accumulate_rag_event(rag_sources, event):
+                            yield event
 
                     # Interception des actions spéciales — le LLM n'est pas rappelé
                     #TODO
@@ -293,6 +320,11 @@ class Agent:
                 return
 
             Logger.write("[AGENT] Call LLM for final answer OK !", type=OK)
+
+            #Emission groupée des citations RAG accumulées pendant tout le tour (dédoublonnées par source),
+            #une fois la réponse finale prête plutôt qu'au fil des tool calls
+            for rag_event in _rag_events_from(rag_sources):
+                yield rag_event
 
             #On construit la chaine complète depuis les tokens
             assistant_reply = "".join(assistant_reply_tokens)

@@ -1,5 +1,7 @@
 .venv
 .env
+storage_rag/*
+!storage_rag/.gitkeep
 temp/*
 !temp/.gitkeep
 data/*

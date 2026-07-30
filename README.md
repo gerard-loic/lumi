@@ -1,8 +1,8 @@
-![alt text](https://raw.githubusercontent.com/gerard-loic/lumi/refs/heads/master/public/lumi-aurora.jpg?raw=true)
+![alt text](https://raw.githubusercontent.com/gerard-loic/lumi/refs/heads/master/public/lumi-phosphor.jpg?raw=true)
 
 # Lumi
 
-Lumi version 1.3.2 (Aurora)
+Lumi version 1.4.0 (Phosphor)
 
 Lumi is an open-source AI chatbot backend built on top of **FastAPI** and the **Model Context Protocol (MCP)**. It exposes a WebSocket chat API that connects a Large Language Model to a set of custom tools and a **RAG knowledge base**, enabling the agent to answer questions grounded in real data rather than hallucinated knowledge.
 
@@ -14,22 +14,25 @@ Lumi is an open-source AI chatbot backend built on top of **FastAPI** and the **
 - **Document generation** — native tools for generating PDF, Word, and Excel files, including embedded charts (bar, pie, line). Word documents follow a customizable company **template (gabarit)**, with a cover page, header/footer, auto-generated table of contents, and table styles.
 - **Follow-up suggestions** — after each reply, the agent can propose short follow-up questions to help guide the conversation.
 - **Configurable LLM backend** — uses LiteLLM under the hood, so you can point it at any compatible model (OpenAI, Azure, local models, etc.) by changing a config value.
+- **Configuration profiles** — a single Lumi instance can serve several independent agents (different LLM model, tools, attachment policy, RAG collection, connectors) side by side, selected per session via [profiles](#profiles).
+- **File attachments** — users can attach files to a conversation; the agent reasons over their content through an ephemeral, per-session RAG index — see [File attachments](#file-attachments).
+- **Source citations** — replies built from the knowledge base or from attached files come with `rag` events pointing back to the originating document, page, and (for the persistent RAG) a secure download URL.
 - **Authentication** — a JWT-based `/auth` endpoint protects the chat API and temporary file downloads. Admin endpoints use HTTP Basic Auth.
 - **Temporary file serving** — tools can produce files that are made available for download through a secure, time-limited URL.
 - **Webex connector** — the agent can be deployed as a Webex bot, receiving and answering messages from Webex spaces via webhooks.
-- **Scheduled CRON tasks** — a built-in scheduler runs background maintenance tasks (e.g. log retention/shredding) on a configurable minute/hour schedule.
+- **Scheduled CRON tasks** — a built-in scheduler runs background maintenance tasks (log retention/shredding, RAG folder indexing) on a configurable minute/hour schedule.
 - **Usage statistics** — a `/usage` endpoint returns token and request consumption for the current month.
 - **Extensible by design** — add custom tools, services, LLM filters, and CRON tasks by dropping files into their respective directories. All dynamic class loading goes through a single, allow-listed mechanism for safety. Which MCP tools are exposed is finely controlled via `mcp.tools_enabled` (exact names, whole-group wildcards, or single-tool overrides).
 
-## What's new in v1.3.0 — Aurora
+## What's new in v1.4.0 — Phosphor
 
-- **Reorganized MCP tool structure** — tools can now be grouped into subfolders (e.g. `tools/word/`), and `mcp.tools_enabled` gained flexible matching patterns: exact tool names, `namespace.*` wildcards to enable a whole group at once, and `namespace/tool_name` to enable a single tool from a group (see [Adding tools](#adding-tools)).
-- **Advanced Word MCP tools** — Word generation now builds on a customizable company **template (gabarit)**: cover page, header/footer, auto-generated table of contents, table styles, chart embedding, targeted section insertion, table updates, document merging, and Word → PDF conversion (see [Word document templates](#word-document-templates-gabarits)).
-- **CRON task engine** — a new scheduler (`CronManager`) runs background tasks on a configurable minute/hour schedule, defined in the `cron` config section (see [`cron`](#cron)).
-- **Log shredding CRON task** — a built-in `Shredding` task automatically deletes old log files past a configurable retention period.
-- **Refactored, secured dynamic import system** — services, LLM filters, connectors, and CRON tasks are now all instantiated through a single, allow-listed dynamic import mechanism, preventing arbitrary class loading from configuration.
-- **Follow-up question suggestions** — the agent can generate short, relevant follow-up questions after each reply, configurable via `llm.followup_questions`.
-- **New `followup` client event** — a `FollowUpEvent` delivers the generated follow-up questions to the WebSocket client (see [WebSocket protocol](#websocket-protocol)).
+- **File attachments** — users can attach files to a conversation via `POST /files/upload`. The agent can then search their content through the `search_attached_files` MCP tool, with the most relevant excerpts also injected directly into context automatically.
+- **Attachment limits & restrictions** — attached files are governed by a configurable `attachments` block (enable/disable, max number of files, max file size, allowed extensions), enforced per profile.
+- **Per-session RAG** — attached files are chunked and embedded on the fly into an ephemeral, in-memory vector index (never written to the persistent RAG store), giving the LLM the same retrieval-based reasoning over conversation attachments as over the main knowledge base.
+- **Source citations** — replies that relied on the RAG knowledge base or on attached files now come with `rag` events pointing back to the source document (and page, when applicable), so the origin of an answer can be traced and, for the persistent RAG, opened via a secure URL.
+- **RAG folder indexing CRON task** — a new `Ragindexer` task scans one or more source folders and automatically (re)indexes new or modified documents into the RAG vector store on a schedule.
+- **Configuration profiles** — the `llm`, `mcp`, `attachments`, `rag`, and `connectors` settings are now grouped under named `profiles`, so a single Lumi instance can run several agents with different models, tools, and behaviors, selected at authentication time.
+- **Persistent RAG source files with secure URLs** — indexed documents are kept alongside their vector chunks and served back through a time-limited, signed URL when cited in a reply, instead of being discarded after indexing.
 
 ## Getting started
 
@@ -111,35 +114,101 @@ Built-in handlers live in the `services/` directory. See [Adding services](#addi
 | `file.enabled` | bool | Write logs to a file. |
 | `file.path` | string | Directory where log files are written. |
 
-### `llm`
+### `profiles`
+
+Lumi can serve several independent agent configurations from a single running instance. Each key under `profiles` is a profile name — `default` must always be defined — bundling its own `llm`, `mcp`, `attachments`, `rag`, and `connectors` settings.
+
+A client selects a profile when opening a session, via the `profile` field of `POST /auth` (see [HTTP API → Authentication](#http-api)). If the requested profile doesn't exist, Lumi falls back to `default`. Admin endpoints that list or filter tools (`GET /tools`) also accept a `profile` query parameter.
+
+```json
+"profiles": {
+  "default": {
+    "llm": { "...": "..." },
+    "mcp": { "...": "..." },
+    "attachments": { "...": "..." },
+    "rag": { "collection": "demo" },
+    "connectors": { "...": "..." }
+  },
+  "another_profile": {
+    "...": "..."
+  }
+}
+```
+
+Everything below (`llm`, `mcp`, `attachments`, `rag.collection`, `connectors`) is scoped under `profiles.<name>`.
+
+#### `profiles.<name>.llm`
 
 LLM and agent settings.
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `system_prompt_file` | string | Path to the system prompt Markdown file. |
+| `system_prompt` | string | Inline system prompt, used instead of `system_prompt_file` if set. |
 | `connector` | string | LLM connector to use (`LiteLLM`). |
 | `memory_messages` | int | Number of past exchanges kept in context. |
 | `empty_llm_response_max_retry` | int | Max retries when the LLM returns an empty response. |
-| `max_tokens_month` | int | Monthly token budget (`-1` = unlimited). |
-| `max_requests_month` | int | Monthly request budget (`-1` = unlimited). |
-| `max_requests_minute` | int | Per-minute rate limit per session. |
 | `followup_questions.enabled` | bool | Generate follow-up question suggestions after each reply. |
 | `followup_questions.count` | int | Number of follow-up questions to generate. |
-| `litellm.model` | string | LiteLLM model identifier. |
-| `litellm.embedding_model` | string | LiteLLM model identifier used for RAG embeddings. |
-| `litellm.api_base` | string | Base URL of the LLM provider API. |
-| `litellm.api_key` | string | API key for the LLM provider. |
 | `filters` | object | Active output filters. Currently supports `CodeFilter` (strips markdown code fences). |
+| `<connector>.model` | string | Model identifier for the connector named in `connector` (e.g. `LiteLLM.model`). |
+| `<connector>.embedding_model` | string | Embedding model identifier, used for this profile's session-attachment RAG. |
+| `<connector>.api_base` | string | Base URL of the LLM provider API. |
+| `<connector>.api_key` | string | API key for the LLM provider. |
 
-### `mcp`
+The persistent RAG knowledge base (indexing, and search via `search_knowledge_base`) always embeds using the `default` profile's LLM connector, regardless of which profile the session belongs to — only session-attachment search follows the current profile's embedding model.
+
+#### `profiles.<name>.mcp`
 
 MCP tool settings.
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `max_tool_iterations` | int | Maximum number of consecutive tool calls per agent turn. |
-| `tools_enabled` | array | Patterns controlling which tools are exposed. A tool not covered by this list is not registered. Accepts: exact tool function names (e.g. `search_knowledge_base`); `namespace.*` to enable every tool of a module or subfolder, matched against the tool's module path relative to `tools.` (e.g. `word.*` enables all tools in `tools/word/`, `datetime.*` enables all tools in `tools/datetime.py`); `namespace/tool_name` to enable a single tool from a group (e.g. `pdf/generer_fichier_pdf`); and general glob patterns (`*`, `?`) matched against the module path. |
+| `tools_enabled` | array | Patterns controlling which tools are exposed to this profile's agent. A tool not covered by this list is not registered. Accepts: exact tool function names (e.g. `search_knowledge_base`); `namespace.*` to enable every tool of a module or subfolder, matched against the tool's module path relative to `tools.` (e.g. `word.*` enables all tools in `tools/word/`, `datetime.*` enables all tools in `tools/datetime.py`); `namespace/tool_name` to enable a single tool from a group (e.g. `pdf/generer_fichier_pdf`); and general glob patterns (`*`, `?`) matched against the module path. |
+
+#### `profiles.<name>.attachments`
+
+Controls the [file attachment](#file-attachments) feature for this profile.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `enabled` | bool | Allow users to attach files to a conversation via `POST /files/upload`. |
+| `max_files` | int | Maximum number of files attached at once per session. |
+| `max_file_size_mb` | int | Maximum size, in MB, of a single attached file. |
+| `allowed_extensions` | array | File extensions accepted for upload (e.g. `.pdf`, `.docx`, `.xlsx`, `.md`, `.txt`, `.csv`, ...). |
+| `file_context_top_k` | int | Number of attachment chunks retrieved (and injected into context, or returned by `search_attached_files`) per query. |
+
+#### `profiles.<name>.rag`
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `collection` | string | Default RAG collection searched by `search_knowledge_base` for sessions on this profile. |
+
+#### `profiles.<name>.connectors`
+
+Connectors extend this profile's agent to additional communication channels. Each profile can enable its own connectors independently — see [Webex connector](#webex-connector).
+
+##### `profiles.<name>.connectors.webex`
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `enabled` | bool | Enable or disable the Webex connector for this profile. |
+| `bot_token` | string | Webex bot access token. |
+| `webhook_secret` | string | Secret used to verify incoming webhook signatures. |
+| `webex_api` | string | Webex API base URL (`https://webexapis.com/v1`). |
+| `api_key` | string | Optional API key passed to the authentication service for Webex users of this profile. |
+| `allow_group_messages` | bool | If `true`, the bot responds in group spaces; if `false`, only in 1-to-1 spaces. |
+
+### `usage`
+
+Global usage limits, shared across all profiles.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `max_tokens_month` | int | Monthly token budget (`-1` = unlimited). |
+| `max_requests_month` | int | Monthly request budget (`-1` = unlimited). |
+| `max_requests_minute` | int | Per-minute rate limit per session. |
 
 ### `files`
 
@@ -167,17 +236,17 @@ Settings for the Word document template (gabarit) used by the `word.*` MCP tools
 
 ### `rag`
 
-RAG knowledge base settings.
+Persistent RAG knowledge base settings, shared across profiles (the collection searched is set per profile, see [`profiles.<name>.rag`](#profilesnamerag)).
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `collection` | string | Default collection name. |
 | `embedding_dim` | int | Embedding vector dimension (must match the embedding model). |
 | `top_k` | int | Number of chunks returned per search. |
 | `chunk_size` | int | Target chunk size in tokens. |
 | `chunk_overlap` | int | Overlap between consecutive chunks. |
 | `connector` | string | Vector store backend (`PgVector`). |
 | `pgvector.table` | string | PostgreSQL table used to store vectors. |
+| `storage_dir` | string | Directory where indexed source files are kept (see [source file retention](#rag-knowledge-base)), served back via signed URLs. |
 
 ### `cron`
 
@@ -189,6 +258,11 @@ An array of scheduled background tasks, executed once a minute by `CronManager`.
     "task": "Shredding",
     "time": { "minute": "/5", "heure": "*" },
     "config": { "log_max_days": 30 }
+  },
+  {
+    "task": "Ragindexer",
+    "time": { "minute": "/10", "heure": "*" },
+    "config": { "folders": ["/data/docs"], "profile": "default" }
   }
 ]
 ```
@@ -199,22 +273,9 @@ An array of scheduled background tasks, executed once a minute by `CronManager`.
 | `time` | object | Schedule, matched against the current minute/hour. Each field (`minute`, `heure`) accepts `"*"` (always), `"/N"` (every N units), or a fixed integer (exact match). Omitted fields always match. |
 | `config` | object | Task-specific configuration, passed to the task instance. |
 
-Built-in tasks live in `lib/cron/tasks/`. The bundled `Shredding` task deletes log files older than `config.log_max_days` days (log delestage/retention).
-
-### `connectors`
-
-Connectors extend the agent to additional communication channels.
-
-#### `connectors.webex`
-
-| Key | Type | Description |
-|-----|------|-------------|
-| `enabled` | bool | Enable or disable the Webex connector. |
-| `bot_token` | string | Webex bot access token. |
-| `webhook_secret` | string | Secret used to verify incoming webhook signatures. |
-| `webex_api` | string | Webex API base URL (`https://webexapis.com/v1`). |
-| `api_key` | string | Optional API key passed to the authentication service for Webex users. |
-| `allow_group_messages` | bool | If `true`, the bot responds in group spaces; if `false`, only in 1-to-1 spaces. |
+Built-in tasks live in `lib/cron/tasks/`:
+- `Shredding` deletes log files older than `config.log_max_days` days (log delestage/retention).
+- `Ragindexer` walks each folder in `config.folders`, and indexes (or re-indexes) into the RAG knowledge base any file that isn't already indexed or whose on-disk modification time is newer than its indexed version. The RAG collection used is `profiles.<config.profile>.rag.collection` (`config.profile` defaults to `default`).
 
 ---
 
@@ -230,8 +291,10 @@ Connectors extend the agent to additional communication channels.
 **POST /auth** — body:
 
 ```json
-{ "authorization": { "token": "<user-token>" } }
+{ "authorization": { "token": "<user-token>" }, "profile": "default" }
 ```
+
+`profile` selects which [profile](#profiles) the session runs on (its LLM, tools, attachment policy, RAG collection, connectors); falls back to `default` if the name doesn't match a configured profile.
 
 Response:
 
@@ -258,13 +321,26 @@ Response:
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/health` | Basic admin | Service health and active WebSocket connections. |
-| `GET` | `/tools` | Basic admin | List of active MCP tools. |
+| `GET` | `/tools` | Basic admin | List of active MCP tools. Accepts an optional `?profile=<name>` query param to filter down to the tools enabled for that profile (`profiles.<name>.mcp.tools_enabled`); without it, returns the union of tools registered across all profiles. |
+
+### File upload
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/files/upload` | Bearer | Attach a file to the current session's conversation — see [File attachments](#file-attachments). |
+
+**POST /files/upload** — `multipart/form-data` with a single `file` field. Response:
+
+```json
+{ "key": "...", "filename": "report.pdf", "tokens": 1520 }
+```
 
 ### File download
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/files/{key}/{filename}` | Bearer or `?t=` hash | Download a file generated by a tool. |
+| `GET` | `/files/{key}/{filename}` | Bearer or `?t=` hash | Download a temporary file generated by a tool. |
+| `GET` | `/files/rag/{collection}/{key}/{filename}` | Bearer, `?t=` hash, or Basic admin | Download a source document retained by the RAG knowledge base (see [source file retention](#rag-knowledge-base)). |
 
 ---
 
@@ -279,12 +355,14 @@ Connect to `ws://host:8001/ws?token=<jwt>`.
 { "type": "confirmation", "option": 0 }
 ```
 
+Files attached via `POST /files/upload` (see [File attachments](#file-attachments)) don't need to be referenced in the message — the agent automatically searches them for every message once at least one is attached.
+
 **Outgoing events (server → client):**
 
 ```json
 { "type": "token",               "content": "..." }
 { "type": "tool_call",           "tools": "...", "status": "PENDING|OK|ERROR" }
-{ "type": "rag",                 "source": "...", "locations": [...] }
+{ "type": "rag",                 "source": "...", "locations": [...], "url": "..." }
 { "type": "file",                "name": "...", "url": "..." }
 { "type": "url",                 "name": "...", "url": "..." }
 { "type": "followup",            "questions": [...] }
@@ -298,13 +376,19 @@ Connect to `ws://host:8001/ws?token=<jwt>`.
 
 ## RAG knowledge base
 
-The RAG layer indexes documents into a **PostgreSQL / pgvector** vector store. The agent queries it automatically via the `search_knowledge_base` tool.
+The RAG layer indexes documents into a **PostgreSQL / pgvector** vector store. The agent queries it automatically via the `search_knowledge_base` tool, which is scoped to the RAG collection configured on the session's [profile](#profilesnamerag) (`profiles.<name>.rag.collection`), unless the LLM explicitly requests another collection.
+
+Documents can be indexed manually via the [document management API](#document-management-api), or automatically from folders on disk via the [`Ragindexer` CRON task](#cron).
 
 ### Supported document formats
 
 PDF, Word (`.docx`/`.doc`), PowerPoint (`.pptx`/`.ppt`), Excel (`.xlsx`/`.xls`), Markdown, HTML, plain text, CSV, and source code files (`.py`, `.js`, `.ts`).
 
 PDF pages are extracted individually (with a `page` metadata field). All other formats are converted to Markdown via [MarkItDown](https://github.com/microsoft/markitdown) before chunking.
+
+### Source file retention & citations
+
+Whenever a file is indexed (via the document management API or `Ragindexer`), a copy of the original source file is kept in `rag.storage_dir` (`RagStore`), alongside its vector chunks. When `search_knowledge_base` uses chunks from that file to answer a question, the agent emits a `rag` WebSocket event carrying the source name, the pages used, and a **signed, time-limited download URL** (`GET /files/rag/{collection}/{key}/{filename}`, see [File download](#file-download)) pointing back to that retained file. Re-indexing or deleting a document also deletes its retained copy.
 
 ### Document management API
 
@@ -325,18 +409,49 @@ Both `POST` and `PUT` accept `multipart/form-data` with the fields:
 | `file` | file | Document to index (mutually exclusive with `text`). |
 | `text` | string | Raw text to index (mutually exclusive with `file`). |
 | `source` | string | Identifier for the document (defaults to the filename). |
-| `collection` | string | Target collection (defaults to `rag.collection` in config). |
+| `collection` | string | Target collection (defaults to the `default` profile's `rag.collection`). |
+
+---
+
+## File attachments
+
+Users can attach files directly to a conversation, so the agent can reason over their content without indexing them into the shared knowledge base.
+
+### Uploading a file
+
+```
+POST /files/upload
+Authorization: Bearer <jwt>
+Content-Type: multipart/form-data
+
+file=<binary>
+```
+
+Requires `profiles.<name>.attachments.enabled` to be `true` for the session's profile. The upload is rejected (`400`) if it exceeds `attachments.max_files` already attached, `attachments.max_file_size_mb`, or if the extension isn't in `attachments.allowed_extensions` — see [`profiles.<name>.attachments`](#profilesnameattachments). Text is extracted the same way as for the [RAG knowledge base](#supported-document-formats) (PDFs page by page, other formats via MarkItDown). Response:
+
+```json
+{ "key": "...", "filename": "report.pdf", "tokens": 1520 }
+```
+
+### Per-session RAG
+
+Attached files are never written to the persistent pgvector store. Instead, each file is chunked and embedded on the fly into an **ephemeral, in-memory index** scoped to the session — cached for the lifetime of the session and discarded when it ends. On every user message, Lumi automatically retrieves the most relevant chunks (`attachments.file_context_top_k`) across all attached files and injects them into the prompt. The `search_attached_files` MCP tool remains available for the LLM to run additional, more targeted searches.
+
+### Citations
+
+Like `search_knowledge_base`, using attached-file content triggers a `rag` WebSocket event per source file (`{ "type": "rag", "source": "report.pdf", "locations": [2, 5] }`) so the client can show which file (and page, for paginated files) an answer drew from. Since attachments aren't persisted, these events carry no download `url`.
 
 ---
 
 ## Built-in tools
 
-Lumi ships with the following generic MCP tool groups in `tools/`. Enable a group (or a single tool within it) via [`mcp.tools_enabled`](#mcp).
+Lumi ships with the following generic MCP tool groups in `tools/`. Enable a group (or a single tool within it) via [`mcp.tools_enabled`](#profilesnamemcp).
 
 | Group | Module | Tools | Description |
 |-------|--------|-------|-------------|
 | `datetime` | `tools/context/datetime.py` | `get_business_days`, `next_business_day`, `get_public_holidays` | Date arithmetic and French public-holiday / business-day calculations. |
 | `excel` | `tools/excel/excel.py` | `generer_fichier_excel` | Generates Excel (`.xlsx`) files, including embedded charts. |
+| `files` | `tools/files/files.py` | `search_attached_files` | Searches files attached to the conversation — see [File attachments](#file-attachments). |
 | `pdf` | `tools/pdf/pdf.py` | `generer_fichier_pdf` | Generates templated PDF documents (cover page, header/footer, tables, charts). |
 | `rag` | `tools/rag/rag.py` | `search_knowledge_base` | Searches the RAG knowledge base — see [RAG knowledge base](#rag-knowledge-base). |
 | `web` | `tools/web/web.py` | `rechercher_sur_internet`, `lire_page_web` | Web search and web page reading. |
@@ -348,7 +463,7 @@ Lumi ships with the following generic MCP tool groups in `tools/`. Enable a grou
 
 ## Adding tools
 
-Tools live in the `tools/` directory (optionally grouped in subfolders, e.g. `tools/word/`). Each file is auto-discovered at startup. Files and folders starting with `_` are ignored. A tool method is only exposed if it matches an entry in `mcp.tools_enabled` (see the `mcp` config section above).
+Tools live in the `tools/` directory (optionally grouped in subfolders, e.g. `tools/word/`). Each file is auto-discovered at startup. Files and folders starting with `_` are ignored. A tool method is only exposed to a given profile if it matches an entry in that profile's `mcp.tools_enabled` (see [`profiles.<name>.mcp`](#profilesnamemcp) above).
 
 ### Creating a tool class
 
@@ -549,47 +664,52 @@ class MyTask(CronTask):
     def __init__(self, config: dict):
         super().__init__(className="MyTask", config=config)
 
-    def run(self):
-        super().run()
+    async def run(self):
+        await super().run()
         # self.config holds the task-specific "config" block from the cron entry
         ...
 ```
 
-`CronManager` calls `testExecution(timestamp)` once a minute for every configured task, and runs `run()` when the current minute/hour match the task's `time` schedule.
+`CronManager` calls `testExecution(timestamp)` once a minute for every configured task, and awaits `run()` when the current minute/hour match the task's `time` schedule.
 
 ---
 
 ## Webex connector
 
-The Webex connector turns Lumi into a Webex bot that receives messages from Webex spaces and replies via the agent.
+The Webex connector turns Lumi into a Webex bot that receives messages from Webex spaces and replies via the agent. Since v1.4.0, `webex` is configured per [profile](#profiles) (`profiles.<name>.connectors.webex`) rather than globally — each profile with `enabled: true` gets its own bot, its own webhook route, and talks to its own agent, so a single Lumi instance can run several Webex bots side by side.
 
 ### Step 1 — Create a Webex bot
 
 1. Go to [developer.webex.com](https://developer.webex.com) and sign in.
 2. Open **My Webex Apps** → **Create a New App** → **Create a Bot**.
 3. Fill in the bot name, username, and icon, then click **Add Bot**.
-4. Copy the **Bot Access Token** — this is the value of `connectors.webex.bot_token` in your config. The token is shown only once; store it securely.
+4. Copy the **Bot Access Token** — this is the value of `connectors.webex.bot_token` for the profile in your config. The token is shown only once; store it securely.
 
 ### Step 2 — Configure the connector
 
-In `config/config.json`:
+In `config/config.json`, under the target profile:
 
 ```json
-"connectors": {
-  "webex": {
-    "enabled": true,
-    "bot_token": "<bot-access-token>",
-    "webhook_secret": "<a-random-secret-string>",
-    "webex_api": "https://webexapis.com/v1",
-    "api_key": "",
-    "allow_group_messages": false
+"profiles": {
+  "default": {
+    "connectors": {
+      "webex": {
+        "enabled": true,
+        "bot_token": "<bot-access-token>",
+        "webhook_secret": "<a-random-secret-string>",
+        "webex_api": "https://webexapis.com/v1",
+        "api_key": "",
+        "allow_group_messages": false
+      }
+    }
   }
 }
 ```
 
 - `webhook_secret`: choose any random string. Lumi uses it to verify that incoming webhook requests genuinely come from Webex.
 - `allow_group_messages`: set to `true` if the bot should respond in group spaces. When `false`, the bot only processes direct (1-to-1) messages.
-- `app.url` must point to the public URL of the Lumi server (e.g. `https://lumi.example.com`). Lumi registers the webhook at `<app.url>/webex/webhook` on startup.
+- `api_key`: passed to the authentication service (see [How it works](#how-it-works)) when authenticating a Webex user for this profile.
+- `app.url` must point to the public URL of the Lumi server (e.g. `https://lumi.example.com`). Lumi registers the webhook at `<app.url>/webex/webhook/<profile>` on startup, where `<profile>` is the profile's name.
 
 ### Step 3 — Expose the server
 
@@ -602,24 +722,36 @@ ngrok http 8001
 
 ### Step 4 — Start Lumi
 
-On startup, the connector:
+On startup, for every profile with `connectors.webex.enabled: true`, the connector:
 1. Authenticates the bot with the Webex API to retrieve its identity.
-2. Registers (or updates) a webhook named `lumi-webhook` on your Webex account, pointing to `<app.url>/webex/webhook`.
+2. Registers (or updates) a webhook named `lumi-webhook` on that bot's Webex account, pointing to `<app.url>/webex/webhook/<profile>`.
 
 ### How it works
 
-- When a user sends a message to the bot, Webex calls `POST /webex/webhook`.
-- Lumi verifies the `X-Spark-Signature` header using the `webhook_secret`.
-- The message is dispatched to the agent, and the reply is sent back to the Webex space.
-- User authentication is handled transparently: the bot identifies the sender by their Webex email and calls `connectors.webex.api_key` + the configured authentication service to obtain a session token.
+- When a user sends a message to a bot, Webex calls `POST /webex/webhook/<profile>` for the corresponding profile.
+- Lumi verifies the `X-Spark-Signature` header using that profile's `webhook_secret`.
+- The message is dispatched to that profile's agent, and the reply is sent back to the Webex space.
+- User authentication is handled transparently: the bot identifies the sender by their Webex email and calls the profile's `connectors.webex.api_key` + the configured authentication service to obtain a session token.
 
 ---
 
 ## Changelog
 
+
+
+### v1.4.0 — Phosphor
+
+See [What's new in v1.4.0](#whats-new-in-v140--phosphor).
+
 ### v1.3.0 — Aurora
 
-See [What's new in v1.3.0](#whats-new-in-v130--aurora).
+- **Reorganized MCP tool structure** — tools can now be grouped into subfolders (e.g. `tools/word/`), and `mcp.tools_enabled` gained flexible matching patterns: exact tool names, `namespace.*` wildcards to enable a whole group at once, and `namespace/tool_name` to enable a single tool from a group (see [Adding tools](#adding-tools)).
+- **Advanced Word MCP tools** — Word generation now builds on a customizable company **template (gabarit)**: cover page, header/footer, auto-generated table of contents, table styles, chart embedding, targeted section insertion, table updates, document merging, and Word → PDF conversion (see [Word document templates](#word-document-templates-gabarits)).
+- **CRON task engine** — a new scheduler (`CronManager`) runs background tasks on a configurable minute/hour schedule, defined in the `cron` config section (see [`cron`](#cron)).
+- **Log shredding CRON task** — a built-in `Shredding` task automatically deletes old log files past a configurable retention period.
+- **Refactored, secured dynamic import system** — services, LLM filters, connectors, and CRON tasks are now all instantiated through a single, allow-listed dynamic import mechanism, preventing arbitrary class loading from configuration.
+- **Follow-up question suggestions** — the agent can generate short, relevant follow-up questions after each reply, configurable via `llm.followup_questions`.
+- **New `followup` client event** — a `FollowUpEvent` delivers the generated follow-up questions to the WebSocket client (see [WebSocket protocol](#websocket-protocol)).
 
 ### v1.2.0 — Spark
 

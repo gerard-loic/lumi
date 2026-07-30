@@ -211,8 +211,8 @@
     .resource-attachment.type-rag::before  { content: '▤  '; opacity: 0.6; }
     .resource-attachment.mine { align-self: flex-end; }
 
-    /* Citation de source (non cliquable, informative) : visuellement distincte des ressources
-       actionnables (fichier généré / url), qui elles restent cliquables avec le hover en accent. */
+    /* Citation de source sans fichier accessible (span, non cliquable, informative) : visuellement
+       distincte des ressources actionnables (fichier généré / url). */
     .resource-attachment.type-rag {
       color: var(--muted);
       border-style: dashed;
@@ -221,6 +221,16 @@
     .resource-attachment.type-rag:hover {
       border-color: var(--border);
       color: var(--muted);
+    }
+    /* Citation avec fichier source accessible (rendue en <a> par addRagSource) : redevient actionnable */
+    a.resource-attachment.type-rag {
+      color: var(--text);
+      border-style: solid;
+      cursor: pointer;
+    }
+    a.resource-attachment.type-rag:hover {
+      border-color: var(--accent);
+      color: var(--accent);
     }
 
     /* ── Pièces jointes en cours de rédaction (avant envoi) ── */
@@ -1032,12 +1042,19 @@
 
   // ── Ajouter la citation d'une source utilisée (RAG persistant ou fichiers joints) ──
   function addRagSource(msg, event) {
-    const el = document.createElement("span");
+    const el = document.createElement(event.url ? "a" : "span");
     el.className = "resource-attachment type-rag";
     const label = event.locations && event.locations.length
       ? `${event.source} — p. ${event.locations.join(", ")}`
       : event.source;
     el.textContent = escapeHtml(label || "Source");
+    if (event.url) {
+      //Navigation directe (URL déjà signée côté serveur via ?t=) plutôt qu'un fetch authentifié :
+      //évite le préflight CORS, peu fiable depuis un fichier local via un tunnel.
+      el.href = event.url;
+      el.target = "_blank";
+      el.rel = "noopener noreferrer";
+    }
     msg.appendChild(el);
     return el;
   }

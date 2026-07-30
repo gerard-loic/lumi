@@ -1,13 +1,10 @@
 import asyncio
-import tempfile
-import os
-from fastapi import APIRouter, HTTPException, Header, Request, UploadFile, File, Form, Depends, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, HTTPException, Header, Request, UploadFile, File, Depends, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
 from typing import Optional
 from lib.http.models import ToolInfo, AuthRequest, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse
-
 from lib.http.auth import Auth, AdminAuth
 from lib.session.session import AuthSessionManager
 from lib.mcp.client import mcp_manager
@@ -16,9 +13,7 @@ from lib.mcp.services import ServiceManager
 from lib.log.logger import Logger, ERROR, WARNING
 from lib.config.config import Config, StaticConfig
 from lib.rag.raghelper import RagHelper
-from lib.rag.textextractor import TextExtractor
 from lib.files.localdata import LocalData
-from lib.files.filestore import FileStore
 from lib.agent.llmlimiter import LLMLimiter
 from lib.agent.events import ErrorEvent
 from lib.rag.attachement import Attachement
@@ -56,6 +51,7 @@ class Router:
         self.router.add_api_route("/tools", self.list_tools, methods=["GET"], response_model=list[ToolInfo])
         self.router.add_api_websocket_route("/ws", self.ws_chat)
         self.router.add_api_route("/files/{key}/{filename}", self.get_file, methods=["GET"])
+        self.router.add_api_route("/files/rag/{collection}/{key}/{filename}", self.get_rag_file, methods=["GET"])
         self.router.add_api_route("/files/upload", self.upload_file, methods=["POST"])
         self.router.add_api_route("/auth", self.auth, methods=["POST"])
         self.router.add_api_route("/auth", self.logout, methods=["DELETE"])
@@ -305,6 +301,49 @@ class Router:
         return FileResponse(file_path, filename=filename)
 
     """
+    Route [GET] /files/rag/{collection}/{key}/{filename} : renvoie un fichier source conservé dans l'espace de stockage RAG
+    Auth    : Bearer token (session active) OU hash du token via query param ?t= OU Basic admin
+    Entrée  : collection (path)  — collection RAG concernée
+              key        (path)  — identifiant du fichier dans RagStore
+              filename   (path)  — nom du fichier à retourner dans la réponse
+              Authorization      (header, optionnel) — "Bearer <token>"
+              t                  (query,  optionnel)  — sha256 du token d'une session active
+    Sortie  : FileResponse (contenu binaire du fichier)
+    """
+    async def get_rag_file(
+        self,
+        collection: str,
+        key: str,
+        filename: str,
+        authorization: str | None = Header(default=None),
+        t: str | None = Query(default=None),
+        credentials: Optional[HTTPBasicCredentials] = Depends(_rag_basic_auth_optional),
+    ) -> FileResponse:
+        authorized = False
+
+        if authorization and authorization.startswith("Bearer "):
+            decoded = Auth.checkAuthentification(token=authorization[7:])
+            authorized = bool(decoded and AuthSessionManager.get(decoded.get("session_id")))
+        elif t:
+            authorized = AuthSessionManager.get_by_token_hash(t) is not None
+        elif credentials and AdminAuth.checkAdminCredentials(credentials.username, credentials.password):
+            authorized = True
+
+        if not authorized:
+            Logger.write(f"[HTTP] [403] get_rag_file — Accès non autorisé à {collection}/{key}", type=ERROR)
+            raise HTTPException(status_code=403, detail="Unauthorized")
+
+        storage_root = Path(Config.get("rag.storage_dir")).resolve()
+        file_path = (storage_root / collection / key).resolve()
+        if not file_path.is_relative_to(storage_root):
+            Logger.write(f"[HTTP] [400] get_rag_file — File path not valid : {file_path}", type=ERROR)
+            raise HTTPException(status_code=400, detail="File path not valid")
+        if not file_path.exists():
+            Logger.write(f"[HTTP] [404] get_rag_file — file not found : {filename}", type=ERROR)
+            raise HTTPException(status_code=404, detail="File not found")
+        return FileResponse(file_path, filename=filename)
+
+    """
     Route [POST] /files/upload : Upload d'une pièce jointe conversationnelle (texte extrait et rattaché à la session)
     Auth    : Bearer token (header Authorization)
     Entrée  : Authorization (header) — "Bearer <token>"
@@ -341,11 +380,12 @@ class Router:
     """
     async def auth(self, request: AuthRequest) -> AuthResponse:
         #Vérification profil
-        if not ProfileManager.profileExists(request.profile):
-            raise HTTPException(status_code=401, detail=f"Profile {request.profile} does not exists")
+        profile = "default"
+        if ProfileManager.profileExists(request.profile):
+            profile = request.profile
 
         try:
-            token = Auth.authenticate(authorization=request.authorization, profile=request.profile)
+            token = Auth.authenticate(authorization=request.authorization, profile=profile)
         except Exception as e:
             Logger.write(f"[HTTP] [500] auth — Internal authentification error: {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=f"Internal authentification error")
@@ -462,9 +502,10 @@ class Router:
     """
     async def rag_delete_document(self, req: RagDeleteDocumentRequest = Depends(), credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> RagDeleteDocumentResponse:
         self._check_admin_auth(credentials)
-        from lib.rag.vectorstore import VectorStore
+        from lib.rag.indexer import Indexer
         try:
-            deleted = await VectorStore.deleteBySource(req.collection, req.source)
+            indexer = Indexer(collection=req.collection)
+            deleted = await indexer.deleteDocument(req.source, req.collection)
             if deleted == 0:
                 raise HTTPException(status_code=404, detail=f"No document with source '{req.source}' in collection '{req.collection}'")
             return {"deleted_chunks": deleted, "source": req.source, "collection": req.collection}

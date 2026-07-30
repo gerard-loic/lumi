@@ -96,11 +96,21 @@
             },
             "rag" : {
                 "collection" : "demo"
+            },
+            "connectors" : {
+                "webex" : {
+                    "enabled": false,
+                    "bot_token": "",
+                    "webhook_secret": "",
+                    "webex_api" : "https://webexapis.com/v1",
+                    "api_key" : "",
+                    "allow_group_messages": false
+                }
             }
         }
     },
 
-    "llm" : {
+    "usage" : {
         "max_tokens_month" : -1,
         "max_requests_month" : -1,
         "max_requests_minute" : 5
@@ -138,19 +148,9 @@
         "connector" : "PgVector",
         "pgvector" : {
             "table" : "rag_documents"
-        }
+        },
+        "storage_dir" : "storage_rag"
     },
 
-    "connectors" : {
-        "webex" : {
-            "enabled": false,
-            "bot_token": "",
-            "webhook_secret": "",
-            "webex_api" : "https://webexapis.com/v1",
-            "api_key" : "",
-            "allow_group_messages": false
-        }
-    }
-
-    
+    "cron" : []
 }

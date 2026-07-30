@@ -4,7 +4,6 @@ from lib.connectors.connector import Connector
 from lib.connectors.webex.webexbot import WebexBot
 from lib.connectors.webex.webhook import WebexWebhookHandler
 from lib.config.config import Config
-from lib.log.logger import Logger, ERROR, WARNING
 from lib.agent.agent import Agent
 
 """

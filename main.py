@@ -23,13 +23,12 @@ from lib.http.router import Router
 import sys
 sys.path.append('lib/')
 from lib.config.config import Config, StaticConfig
-from lib.log.logger import Logger, WARNING
-from lib.agent.agent import Agent, AgentManager
+from lib.log.logger import Logger
+from lib.agent.agent import AgentManager
 from lib.mcp.services import ServiceManager
 from lib.session.session import AuthSessionManager
 from lib.files.filestore import FileStore
 from lib.files.localdata import LocalData
-from lib.agent.filters.llmfilter import LLMFilterManager
 from lib.connectors.connector import ConnectorManager
 from lib.cron.cronmanager import CronManager
 from lib.agent.profile import ProfileManager

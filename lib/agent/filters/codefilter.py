@@ -35,7 +35,6 @@ class CodeFilter(LLMFilter):
         super().__init__(configuration)
 
     def filter(self, text = ""):
-        Logger.write("FILTER !!!!!!!!!!!!!!!!!!!!!!!!")
         text = super().filter(text)
         text = self._FENCED_BLOCK.sub('', text)
         text = self._INLINE_CODE.sub('', text)

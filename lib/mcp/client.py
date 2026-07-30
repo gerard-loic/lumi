@@ -10,11 +10,9 @@ import anyio
 from contextlib import asynccontextmanager
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
-from lib.config.config import Config
 from lib.mcp.tools import MCPTool, ToolLoader
 from lib.http.auth import Auth
 from lib.log.logger import Logger, ERROR
-import sys
 
 class MCPToolError(Exception):
     """Levée quand un outil MCP retourne une erreur applicative."""

@@ -1,3 +1,4 @@
+import os
 from typing import Annotated, Optional
 from pydantic import Field
 from lib.mcp.tools import MCPTool
@@ -5,6 +6,7 @@ from lib.agent.events import RagEvent
 from lib.rag.retriever import Retriever
 from lib.http.auth import Auth
 from lib.session.session import AuthSessionManager
+from lib.files.ragstore import RagStore
 
 class RAGTool(MCPTool):
     name = "rag"
@@ -34,15 +36,23 @@ class RAGTool(MCPTool):
         #`results` est déjà trié par similarité décroissante (ORDER BY embedding <=> ... dans PgVector.search) :
         #on préserve cet ordre plutôt que de trier les pages par numéro.
         pages_by_source: dict[str, list[int]] = {}
+        url_by_source: dict[str, str] = {}
+        label_by_source: dict[str, str] = {}
         for r in results:
-            source = r.get("metadata", {}).get("source")
+            metadata = r.get("metadata", {})
+            source = metadata.get("source")
             if not source:
                 continue
             pages = pages_by_source.setdefault(source, [])
-            page = r["metadata"].get("page")
+            page = metadata.get("page")
             if page is not None and page not in pages:
                 pages.append(page)
+            if metadata.get("file_url"):
+                url_by_source.setdefault(source, metadata["file_url"])
+            #`filename` absent pour les documents indexés avant son introduction : repli sur le basename de `source`
+            label_by_source.setdefault(source, metadata.get("filename") or os.path.basename(source))
         for source, pages in pages_by_source.items():
-            self.emit(RagEvent.get(source=source, locations=pages))
+            url = url_by_source.get(source)
+            self.emit(RagEvent.get(source=label_by_source[source], locations=pages, url=RagStore.signUrl(url) if url else None))
 
         return results

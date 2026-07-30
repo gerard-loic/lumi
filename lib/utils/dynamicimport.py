@@ -1,5 +1,4 @@
 import importlib
-from lib.config.config import Config
 from lib.log.logger import Logger, ERROR
 
 _AUTHORIZED_CLASS_PATH = [

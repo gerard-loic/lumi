@@ -79,8 +79,8 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class RagEvent:
     @staticmethod
-    def get(source:str, locations:list = []):
-        return Event.get(eventType="rag", payload={"source":source, "locations":locations})
+    def get(source:str, locations:list = [], url:str = None):
+        return Event.get(eventType="rag", payload={"source":source, "locations":locations, "url":url})
     
 
 """

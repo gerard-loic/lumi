@@ -1,5 +1,3 @@
-import importlib
-from lib.config.config import Config
 from lib.log.logger import Logger, ERROR
 from lib.utils.dynamicimport import DynamicImport
 from lib.agent.profile import Profile

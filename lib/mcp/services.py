@@ -1,6 +1,5 @@
 import importlib
 import importlib.util
-import sys
 import os
 from lib.config.config import Config
 from lib.log.logger import Logger, ERROR, OK, WARNING

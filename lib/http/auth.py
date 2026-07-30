@@ -5,11 +5,9 @@ import contextvars
 from datetime import datetime, timezone, timedelta
 from lib.mcp.services import ServiceManager, Service
 from lib.config.config import Config
-import sys
 import secrets
 from lib.log.logger import Logger, ERROR, WARNING
-from lib.session.session import AuthSession, AuthSessionManager
-from lib.agent.profile import ProfileManager
+from lib.session.session import AuthSessionManager
 
 """
 Auth — Gestion de l'authentification sur l'agent

@@ -1,6 +1,5 @@
 
 import os
-import asyncio
 from lib.rag.embedder import Embedder
 from lib.rag.vectorstore import VectorStore
 from lib.config.config import Config
@@ -79,10 +78,19 @@ class Indexer:
 
         await VectorStore.ensureTable()
         src = source or os.path.basename(path)
+        filename = os.path.basename(src)
         ext = os.path.splitext(src)[-1].lower()
-        base_meta = {**(metadata or {}), "source": src}
+        #`source` sert d'identifiant unique (ex. chemin complet pour les fichiers indexés via cron, voir
+        #Ragindexer._exists) ; `filename` est le nom seul, utilisé pour l'affichage et le stockage RagStore.
+        base_meta = {**(metadata or {}), "source": src, "filename": filename}
         if "mtime" not in base_meta:
             base_meta["mtime"] = os.path.getmtime(path)
+
+        #Conservation du fichier source dans l'espace de stockage rémanent du RAG
+        from lib.files.ragstore import RagStore
+        with open(path, "rb") as f:
+            content = f.read()
+        base_meta["file_url"] = RagStore.save(filename=filename, content=content, collection=self._collection)
 
         if ext == ".pdf":
             from lib.rag.contenttype.pdf import PdfIndexer
@@ -96,14 +104,34 @@ class Indexer:
     async def reindexFile(self, path: str, source: str = None, metadata: dict = None) -> dict:
         await VectorStore.ensureTable()
         src = source or os.path.basename(path)
+        old_meta = await VectorStore.sourceMetadata(self._collection, src)
         deleted = await VectorStore.deleteBySource(self._collection, src)
         indexed = await self.indexFile(path, source=src, metadata=metadata)
+
+        #Nettoie l'ancien fichier stocké dans RagStore (remplacé par la nouvelle version indexée ci-dessus)
+        if old_meta and old_meta.get("file_url"):
+            from lib.files.ragstore import RagStore
+            RagStore.deleteByUrl(old_meta["file_url"])
+
         return {"deleted_chunks": deleted, "chunks_indexed": indexed}
 
-    
+    # Suppression d'un document (et du fichier source associé dans RagStore, le cas échéant)
+    async def deleteDocument(self, source: str, collection: str = None) -> int:
+        coll = collection or self._collection
+        old_meta = await VectorStore.sourceMetadata(coll, source)
+        deleted = await VectorStore.deleteBySource(coll, source)
+        if old_meta and old_meta.get("file_url"):
+            from lib.files.ragstore import RagStore
+            RagStore.deleteByUrl(old_meta["file_url"])
+        return deleted
+
     # Suppression d'une collection complete
     async def deleteCollection(self, collection: str = None) -> int:
-        return await VectorStore.deleteCollection(collection or self._collection)
+        coll = collection or self._collection
+        deleted = await VectorStore.deleteCollection(coll)
+        from lib.files.ragstore import RagStore
+        RagStore.deleteAll(coll)
+        return deleted
 
 
     # Chunking avec offsets
