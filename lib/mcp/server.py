@@ -1,6 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 from lib.config.config import Config
-from lib.mcp.tools import ToolLoader
+from lib.mcp.toolloader import ToolLoader
 
 
 def create_app() -> FastMCP:

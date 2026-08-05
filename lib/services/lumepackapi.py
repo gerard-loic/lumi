@@ -1,7 +1,7 @@
 import base64
 import httpx
 from urllib.parse import urlencode
-from lib.mcp.services import Service
+from lib.services.services import Service
 from lib.log.logger import Logger, ERROR
 from pydantic import Field, BaseModel
 from typing import Annotated, Literal, Optional, Any

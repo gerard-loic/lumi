@@ -4,12 +4,12 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
 from typing import Optional
-from lib.http.models import ToolInfo, AuthRequest, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse
+from lib.http.models import ToolInfo, AuthRequest, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse, AuthSessionResponse
 from lib.http.auth import Auth, AdminAuth
 from lib.session.session import AuthSessionManager
 from lib.mcp.client import mcp_manager
-from lib.mcp.tools import ToolLoader, MCPTool
-from lib.mcp.services import ServiceManager
+from lib.mcp.toolloader import ToolLoader, MCPTool
+from lib.services.services import ServiceManager
 from lib.log.logger import Logger, ERROR, WARNING
 from lib.config.config import Config, StaticConfig
 from lib.rag.raghelper import RagHelper
@@ -19,6 +19,8 @@ from lib.agent.events import ErrorEvent
 from lib.rag.attachement import Attachement
 from lib.agent.profile import ProfileManager
 from lib.agent.agent import AgentManager
+from lib.localization.language import LanguageManager, Language
+from lib.localization.traduction import Traduction
 
 _rag_basic_auth = HTTPBasic()
 _rag_basic_auth_optional = HTTPBasic(auto_error=False)
@@ -55,6 +57,7 @@ class Router:
         self.router.add_api_route("/files/upload", self.upload_file, methods=["POST"])
         self.router.add_api_route("/auth", self.auth, methods=["POST"])
         self.router.add_api_route("/auth", self.logout, methods=["DELETE"])
+        self.router.add_api_route("/auth", self.auth_session, methods=["GET"])
         self.router.add_api_route("/rag/documents", self.rag_index, methods=["POST"])
         self.router.add_api_route("/rag/documents", self.rag_update, methods=["PUT"])
         self.router.add_api_route("/rag/stats", self.rag_stats, methods=["GET"])
@@ -81,6 +84,46 @@ class Router:
         }
         for name in ServiceManager.services:
             out["services"].append(name)
+
+        return out
+
+
+    """
+    Route [GET] /auth : Récupère les informations de la session
+    Auth    : Bearer token (header Authorization)
+    Entrée  : Authorization (header) — "Bearer <token>"
+    Sortie  : FileUploadResponse { key, filename, tokens }
+    """
+    async def auth_session(self, authorization: str | None = Header(default=None))->AuthSessionResponse:
+        #Check présent autorisation
+        if not authorization or not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Authentication required")
+        token = authorization[7:]
+
+        #Vérifie le token
+        decoded = Auth.checkAuthentification(token=token)
+        if not decoded:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        #Récupère la session
+        session = AuthSessionManager.get(decoded.get("session_id"))
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+        #récupère le profil
+        profil = ProfileManager.getProfile(session.getProfile())
+
+        #récupère le language
+        language = session.getLanguage()
+
+        out = {
+            'followup_questions' : profil.getConfigValue(key="llm.followup_questions.enabled", default=False),
+            'language' : language.getCode(),
+            'attachements' : profil.getConfigValue(key="attachments.enabled", default=False),
+            'attachements_max_file_size_mb' : profil.getConfigValue(key="attachments.max_file_size_mb", default=0),
+            'attachements_max_files' : profil.getConfigValue(key="attachments.max_files", default=0),
+            'attachements_allowed_extensions' : profil.getConfigValue(key="attachments.allowed_extensions", default=[])
+        }
 
         return out
     
@@ -177,6 +220,8 @@ class Router:
 
         session_id: str | None = decodedToken.get("session_id")
         session = AuthSessionManager.get(session_id)
+        language = session.getLanguage()
+        t = Traduction(language=language)
 
         agent = AgentManager.getAgent(name=session.getProfile()) if session else None
         if agent is None:
@@ -223,15 +268,15 @@ class Router:
                 elif msg_type == "message":
                     #Verification du droit d'appel du LLM
                     if LLMLimiter.isRequestUsageExceeded() or LLMLimiter.isTokenUsageExceeded():
-                        await websocket.send_text(ErrorEvent.get(error_code="RATE_LIMIT_EXCEEDED", message="Request usage limit exceeded"))
+                        await websocket.send_text(ErrorEvent.get(error_code="RATE_LIMIT_EXCEEDED", message=t.trad("[agent.rate_limit_exceeded.usage]")))
                         continue
 
                     if LLMLimiter.isFloodDetected(session_id):
-                        await websocket.send_text(ErrorEvent.get(error_code="RATE_LIMIT_EXCEEDED", message="Too many requests, please slow down"))
+                        await websocket.send_text(ErrorEvent.get(error_code="RATE_LIMIT_EXCEEDED", message="[agent.rate_limit_exceeded.request]"))
                         continue
 
                     if active_stream and not active_stream.done():
-                        await websocket.send_text(ErrorEvent.get(error_code="RESPONSE_IN_PROGRESS", message="A response is already in progress, please wait"))
+                        await websocket.send_text(ErrorEvent.get(error_code="RESPONSE_IN_PROGRESS", message=t.trad("[agent.response_in_progress]")))
                         continue
 
                     #Appel LLM OK : on récupère le message
@@ -333,7 +378,7 @@ class Router:
             Logger.write(f"[HTTP] [403] get_rag_file — Accès non autorisé à {collection}/{key}", type=ERROR)
             raise HTTPException(status_code=403, detail="Unauthorized")
 
-        storage_root = Path(Config.get("rag.storage_dir")).resolve()
+        storage_root = Path(Config.get("directories.rag_storage_dir")).resolve()
         file_path = (storage_root / collection / key).resolve()
         if not file_path.is_relative_to(storage_root):
             Logger.write(f"[HTTP] [400] get_rag_file — File path not valid : {file_path}", type=ERROR)
@@ -384,8 +429,19 @@ class Router:
         if ProfileManager.profileExists(request.profile):
             profile = request.profile
 
+        #Language
+        language = Config.get("app.default_language")
+        if request.language is not None:
+            if LanguageManager.languageExists(request.language):
+                language = request.language
+            else:
+                raise HTTPException(status_code=400, detail=f"Language '{request.language}' does not exist")
+            if language not in Config.get(f"profiles.{profile}.languages", [Config.get("app.default_language")]):
+                raise HTTPException(status_code=400, detail=f"Language '{language}' not allowed for profile '{profile}'")
+        language = LanguageManager.getLanguage(code=language)
+            
         try:
-            token = Auth.authenticate(authorization=request.authorization, profile=profile)
+            token = Auth.authenticate(authorization=request.authorization, profile=profile, language=language)
         except Exception as e:
             Logger.write(f"[HTTP] [500] auth — Internal authentification error: {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=f"Internal authentification error")

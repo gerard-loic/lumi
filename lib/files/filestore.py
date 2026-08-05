@@ -16,7 +16,7 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 class FileStore:
     @staticmethod
     def save(filename: str, content: bytes | str)->str:
-        tmpdir = Path(Config.get("files.temp_dir"))
+        tmpdir = Path(Config.get("directories.temp_dir"))
 
         tmpdir.mkdir(exist_ok=True)
         key = secrets.token_hex(16)
@@ -40,7 +40,7 @@ class FileStore:
     #Enregistrement d'un fichier entrant (upload utilisateur), sans URL de téléchargement publique
     @staticmethod
     def saveUpload(filename: str, content: bytes) -> str:
-        tmpdir = Path(Config.get("files.temp_dir"))
+        tmpdir = Path(Config.get("directories.temp_dir"))
         tmpdir.mkdir(exist_ok=True)
         key = secrets.token_hex(16)
         (tmpdir / key).write_bytes(content)
@@ -71,7 +71,7 @@ class FileStore:
         if not session or key not in session.files:
             raise ValueError("Fichier introuvable ou inaccessible pour cette session.")
 
-        tmpdir = Path(Config.get("files.temp_dir")).resolve()
+        tmpdir = Path(Config.get("directories.temp_dir")).resolve()
         file_path = (tmpdir / key).resolve()
         if not file_path.is_relative_to(tmpdir) or not file_path.exists():
             raise ValueError("Fichier introuvable.")
@@ -79,7 +79,7 @@ class FileStore:
 
     @staticmethod
     def delete(key:str) -> bool:
-        file_path = f"{Config.get("files.temp_dir")}/{key}"
+        file_path = f"{Config.get("directories.temp_dir")}/{key}"
         if os.path.exists(file_path):
             os.remove(file_path)
             return True
@@ -87,7 +87,7 @@ class FileStore:
 
     @staticmethod
     def deleteAll() -> int:
-        tmpdir = Path(Config.get("files.temp_dir"))
+        tmpdir = Path(Config.get("directories.temp_dir"))
         count = 0
         for f in tmpdir.iterdir():
             if f.is_file() and f.name != ".gitkeep":

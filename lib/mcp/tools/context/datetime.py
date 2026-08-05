@@ -3,7 +3,7 @@ from typing import Annotated
 from pydantic import Field
 import holidays
 
-from lib.mcp.tools import MCPTool, tool_description
+from lib.mcp.toolloader import MCPTool, tool_description
 
 _fr_holidays = holidays.France(years=range(date.today().year, date.today().year + 5))
 
@@ -23,7 +23,7 @@ class DateTimeTools(MCPTool):
     name = "datetime"
     description = "Outils de calendrier et jours ouvrés"
 
-    @tool_description(name="Calcul de jours ouvrés")
+    @tool_description(name="[datetime.get_business_days]")
     def get_business_days(
         self,
         date_start: Annotated[str, Field(description="Date de début au format YYYY-MM-DD (incluse)")],
@@ -64,7 +64,7 @@ class DateTimeTools(MCPTool):
             "public_holidays": public_holidays_in_range,
         }
 
-    @tool_description(name="Prochain jour ouvré")
+    @tool_description(name="[datetime.next_business_day]")
     def next_business_day(
         self,
         from_date: Annotated[str, Field(description="Date de référence au format YYYY-MM-DD")],
@@ -86,7 +86,7 @@ class DateTimeTools(MCPTool):
             "day_name": ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"][nxt.weekday()],
         }
 
-    @tool_description(name="Jours fériés")
+    @tool_description(name="[datetime.get_public_holidays]")
     def get_public_holidays(
         self,
         year: Annotated[int, Field(description="Année (ex: 2025)")],

@@ -3,11 +3,12 @@ import json
 import hashlib
 import contextvars
 from datetime import datetime, timezone, timedelta
-from lib.mcp.services import ServiceManager, Service
+from lib.services.services import ServiceManager, Service
 from lib.config.config import Config
 import secrets
 from lib.log.logger import Logger, ERROR, WARNING
 from lib.session.session import AuthSessionManager
+from lib.localization.language import Language
 
 """
 Auth — Gestion de l'authentification sur l'agent
@@ -20,7 +21,7 @@ class Auth:
 
     #S'authentifier sur l'agent
     @staticmethod
-    def authenticate(authorization: dict, profile: str):
+    def authenticate(authorization: dict, profile: str, language: Language):
         #On récupère le service utilisé pour gérer l'authentification
         auth_service = ServiceManager.get(name=Config.get(key="authentication.service"))
         result = auth_service.checkAuthentication(authorization=authorization)
@@ -50,7 +51,7 @@ class Auth:
             Auth._session_id_var.set(payload["session_id"])
 
             token_hash = hashlib.sha256(token.encode()).hexdigest()
-            AuthSessionManager.add(payload["session_id"], payload["exp"].timestamp(), payload, auth_fingerprint=fingerprint, token_hash=token_hash, profile=profile)
+            AuthSessionManager.add(payload["session_id"], payload["exp"].timestamp(), payload, auth_fingerprint=fingerprint, token_hash=token_hash, profile=profile, language=language)
 
             #Le token comprend toutes les couches d'authentification aux services
             return token

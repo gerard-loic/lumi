@@ -16,7 +16,7 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 class RagStore:
     @staticmethod
     def save(filename: str, content: bytes | str, collection: str)->str:
-        tmpdir = Path(Config.get("rag.storage_dir"))
+        tmpdir = Path(Config.get("directories.rag_storage_dir"))
         RagStore._createCollectionFolder(collection=collection)
 
         key = secrets.token_hex(16)
@@ -47,7 +47,7 @@ class RagStore:
 
     @staticmethod
     def delete(key:str, collection:str ) -> bool:
-        file_path = f"{Config.get("rag.storage_dir")}/{collection}/{key}"
+        file_path = f"{Config.get("directories.rag_storage_dir")}/{collection}/{key}"
         if os.path.exists(file_path):
             os.remove(file_path)
             return True
@@ -64,7 +64,7 @@ class RagStore:
 
     @staticmethod
     def deleteAll(collection:str) -> int:
-        collection_dir = Path(Config.get("rag.storage_dir")) / collection
+        collection_dir = Path(Config.get("directories.rag_storage_dir")) / collection
         if not collection_dir.exists():
             return 0
         count = sum(1 for f in collection_dir.iterdir() if f.is_file())
@@ -73,7 +73,7 @@ class RagStore:
 
     @staticmethod
     def _createCollectionFolder(collection: str):
-        tmpdir = Path(Config.get("rag.storage_dir"))
+        tmpdir = Path(Config.get("directories.rag_storage_dir"))
         collection_dir = tmpdir / collection
         if not collection_dir.exists():
             collection_dir.mkdir(parents=True)

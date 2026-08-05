@@ -4,10 +4,7 @@ import os
 from lib.config.config import Config
 from lib.log.logger import Logger, ERROR, OK, WARNING
 
-_SERVICES_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "services"
-)
+_SERVICES_DIR = 'lib/services/'
 
 
 """
@@ -99,7 +96,19 @@ class ServiceManager:
                 ServiceManager.services[name] = cls(data)
                 print(f"[ServiceManager] Service {name} initialized")
             except Exception as e:
-                Logger.write(f"[ServiceManager] Handler '{handler}' failed for service '{name}' : {str(e)}", type=ERROR)
+                filepath = os.path.join(Config.get("directories.custom_services_dir"), f"{handler.lower()}.py")
+                try:
+                    spec = importlib.util.spec_from_file_location(module_name, filepath)
+                    if spec is None:
+                        raise ImportError(f"File not found: {filepath}")
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+                    cls = getattr(module, handler)
+                    ServiceManager.services[name] = cls(data)
+                    print(f"[ServiceManager] Service {name} initialized")
+                except Exception as e:
+                                    
+                    Logger.write(f"[ServiceManager] Handler '{handler}' failed for service '{name}' : {str(e)}", type=ERROR)
 
         #Gestion de l'authentification aux services
         if authorization:

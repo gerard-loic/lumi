@@ -4,7 +4,7 @@ from typing import Annotated, Optional
 from pydantic import BaseModel, Field
 from ddgs import DDGS
 from markitdown import MarkItDown
-from lib.mcp.tools import MCPTool, slow_tool
+from lib.mcp.toolloader import MCPTool, slow_tool, tool_description
 
 _MAX_PAGE_CHARS = 12_000
 _HTTPX_TIMEOUT = 15
@@ -32,6 +32,7 @@ class WebService(MCPTool):
     description = "Recherche sur internet et lecture de pages web"
 
     @slow_tool
+    @tool_description(name="[web.rechercher_sur_internet]")
     def rechercher_sur_internet(
         self,
         requete: Annotated[
@@ -64,6 +65,7 @@ class WebService(MCPTool):
         return ResultatsRecherche(resultats=resultats)
 
     @slow_tool
+    @tool_description(name="[web.lire_page_web]")
     def lire_page_web(
         self,
         url: Annotated[

@@ -23,7 +23,6 @@ class LLMFilterManager:
     def __init__(self, profile:Profile):
         self.filters = []
         for filter_name in profile.getConfigValue("llm.filters", default={}):
-            Logger.write("INIT F")
             self.filters.append(DynamicImport.getInstance(className=filter_name, moduleName=filter_name, classPath="lib.agent.filters", configuration=profile.getConfigValue(f"llm.filters.{filter_name}")))
 
     #Filtre un contenu en fonction des filtres appliqués

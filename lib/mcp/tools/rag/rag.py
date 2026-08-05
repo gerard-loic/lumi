@@ -1,17 +1,18 @@
 import os
 from typing import Annotated, Optional
 from pydantic import Field
-from lib.mcp.tools import MCPTool
 from lib.agent.events import RagEvent
 from lib.rag.retriever import Retriever
 from lib.http.auth import Auth
 from lib.session.session import AuthSessionManager
 from lib.files.ragstore import RagStore
+from lib.mcp.toolloader import MCPTool, tool_description
 
 class RAGTool(MCPTool):
     name = "rag"
     description = "Recherche dans la base de connaissances"
 
+    @tool_description(name="[mcp.search_knowledge_base]")
     async def search_knowledge_base(
         self,
         query: Annotated[str, Field(description="Question ou sujet à rechercher dans la base de connaissances")],

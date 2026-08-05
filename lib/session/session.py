@@ -1,12 +1,14 @@
 import asyncio
 import secrets
 from datetime import datetime, timezone
+from lib.localization.language import Language
+
 """
 AuthSession — Session d'authentification
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class AuthSession:
-    def __init__(self, session_id: str, expires_at: int, authentication: dict, auth_fingerprint: str = "", token_hash: str = "", profile: str = "default"):
+    def __init__(self, session_id: str, expires_at: int, authentication: dict, auth_fingerprint: str = "", token_hash: str = "", profile: str = "default", language: Language = None):
         self.session_id      = session_id                              # Identifiant unique de la session
         self.expires_at      = expires_at                              # Timestamp d'expiration de la session
         self.authentication  = authentication                          # Payload d'authentification (infos utilisateur/connecteur)
@@ -18,6 +20,7 @@ class AuthSession:
         self.flood_timestamps: list[float] = []                        # Horodatages des derniers appels LLM, utilisés pour le rate-limiting (voir llmlimiter.py)
         self.attachments: dict[str, dict] = {}                         # Pièces jointes conversationnelles (texte extrait, tokens, chunks RAG), indexées par clé
         self.profile = profile                                         # Profil de configuration LLM
+        self.language = language                                       # Language appliqué
 
     #Supprimer les ressources associées à la session
     def clear(self):
@@ -31,6 +34,9 @@ class AuthSession:
 
     def getProfile(self)->str:
         return self.profile
+
+    def getLanguage(self)->Language:
+        return self.language
 
     #Ajouter une pièce jointe conversationnelle (texte déjà extrait) à la session
     #`pages` : list[tuple[int,str]] pour un PDF (texte par page), None si le format n'a pas de pagination.
@@ -48,10 +54,18 @@ class AuthSessionManager:
 
     #Ajout d'une session
     @staticmethod
-    def add(session_id: str, expires_at: int, authentication: dict, auth_fingerprint: str = "", token_hash: str = "", profile: str = "default"):
+    def add(session_id: str, expires_at: int, authentication: dict, auth_fingerprint: str = "", token_hash: str = "", profile: str = "default", language: Language = None):
         AuthSessionManager._sessions.append(
-            AuthSession(session_id=session_id, expires_at=expires_at, authentication=authentication, auth_fingerprint=auth_fingerprint, token_hash=token_hash, profile=profile)
+            AuthSession(session_id=session_id, expires_at=expires_at, authentication=authentication, auth_fingerprint=auth_fingerprint, token_hash=token_hash, profile=profile, language=language)
         )
+
+    #Recupération d'une session par son ID
+    @staticmethod
+    def get_by_session_id(session_id:str) -> 'AuthSession | None':
+        for session in AuthSessionManager._sessions:
+            if session.session_id == session_id:
+                return session
+        return None
 
     #Récupération d'une session en fonction de sa signature
     @staticmethod
@@ -83,6 +97,11 @@ class AuthSessionManager:
     def get_all_attachments(session_id: str | None) -> list[dict]:
         session = AuthSessionManager.get(session_id) if session_id else None
         return list(session.attachments.values()) if session else []
+
+    #Obtenir la langue utilisée par la session
+    def get_language(session_id: str | None) -> dict:
+        session = AuthSessionManager.get(session_id) if session_id else None
+        return session.language
 
     #Obtenir le profil de configuration associé à une session
     @staticmethod

@@ -1,8 +1,8 @@
-![alt text](https://raw.githubusercontent.com/gerard-loic/lumi/refs/heads/master/public/lumi-phosphor.jpg?raw=true)
+![alt text](https://raw.githubusercontent.com/gerard-loic/lumi/refs/heads/master/public/lumi-waves.jpg?raw=true)
 
 # Lumi
 
-Lumi version 1.4.1 (Phosphor)
+Lumi version 1.5.0 (Waves)
 
 Lumi is an open-source AI chatbot backend built on top of **FastAPI** and the **Model Context Protocol (MCP)**. It exposes a WebSocket chat API that connects a Large Language Model to a set of custom tools and a **RAG knowledge base**, enabling the agent to answer questions grounded in real data rather than hallucinated knowledge.
 
@@ -15,6 +15,8 @@ Lumi is an open-source AI chatbot backend built on top of **FastAPI** and the **
 - **Follow-up suggestions** — after each reply, the agent can propose short follow-up questions to help guide the conversation.
 - **Configurable LLM backend** — uses LiteLLM under the hood, so you can point it at any compatible model (OpenAI, Azure, local models, etc.) by changing a config value.
 - **Configuration profiles** — a single Lumi instance can serve several independent agents (different LLM model, tools, attachment policy, RAG collection, connectors) side by side, selected per session via [profiles](#profiles).
+- **Multilingual conversations** — each profile declares which languages it supports; a session picks one at authentication time, and the agent's system prompt, tool descriptions, confirmation prompts, and error messages are all translated accordingly — see [Localization](#localization).
+- **Session info endpoint** — `GET /auth` returns the calling session's profile-derived configuration (follow-up questions, language, attachment policy) so a client can adapt its UI without hardcoding per-profile behavior — see [HTTP API](#http-api).
 - **File attachments** — users can attach files to a conversation; the agent reasons over their content through an ephemeral, per-session RAG index — see [File attachments](#file-attachments).
 - **Source citations** — replies built from the knowledge base or from attached files come with `rag` events pointing back to the originating document, page, and (for the persistent RAG) a secure download URL.
 - **Authentication** — a JWT-based `/auth` endpoint protects the chat API and temporary file downloads. Admin endpoints use HTTP Basic Auth.
@@ -22,17 +24,16 @@ Lumi is an open-source AI chatbot backend built on top of **FastAPI** and the **
 - **Webex connector** — the agent can be deployed as a Webex bot, receiving and answering messages from Webex spaces via webhooks.
 - **Scheduled CRON tasks** — a built-in scheduler runs background maintenance tasks (log retention/shredding, RAG folder indexing) on a configurable minute/hour schedule.
 - **Usage statistics** — a `/usage` endpoint returns token and request consumption for the current month.
-- **Extensible by design** — add custom tools, services, LLM filters, and CRON tasks by dropping files into their respective directories. All dynamic class loading goes through a single, allow-listed mechanism for safety. Which MCP tools are exposed is finely controlled via `mcp.tools_enabled` (exact names, whole-group wildcards, or single-tool overrides).
+- **Docker-friendly layout** — everything deployment-specific (config, custom tools/services, prompts, templates, secrets) lives under `config/`, and everything Lumi writes at runtime (temp files, logs, local DB, RAG storage) lives under `storage/`. The rest of the tree is the application itself, so a container image only needs those two directories mounted as volumes — see [`config/` directory layout](#config-directory-layout).
+- **Extensible by design** — add custom tools, services, LLM filters, and CRON tasks by dropping files into their respective directories, without touching the built-in `lib/` code. Which MCP tools are exposed is finely controlled via `mcp.tools_enabled` (exact names, whole-group wildcards, or single-tool overrides).
 
-## What's new in v1.4.0 — Phosphor
+## What's new in v1.5.0 — Waves
 
-- **File attachments** — users can attach files to a conversation via `POST /files/upload`. The agent can then search their content through the `search_attached_files` MCP tool, with the most relevant excerpts also injected directly into context automatically.
-- **Attachment limits & restrictions** — attached files are governed by a configurable `attachments` block (enable/disable, max number of files, max file size, allowed extensions), enforced per profile.
-- **Per-session RAG** — attached files are chunked and embedded on the fly into an ephemeral, in-memory vector index (never written to the persistent RAG store), giving the LLM the same retrieval-based reasoning over conversation attachments as over the main knowledge base.
-- **Source citations** — replies that relied on the RAG knowledge base or on attached files now come with `rag` events pointing back to the source document (and page, when applicable), so the origin of an answer can be traced and, for the persistent RAG, opened via a secure URL.
-- **RAG folder indexing CRON task** — a new `Ragindexer` task scans one or more source folders and automatically (re)indexes new or modified documents into the RAG vector store on a schedule.
-- **Configuration profiles** — the `llm`, `mcp`, `attachments`, `rag`, and `connectors` settings are now grouped under named `profiles`, so a single Lumi instance can run several agents with different models, tools, and behaviors, selected at authentication time.
-- **Persistent RAG source files with secure URLs** — indexed documents are kept alongside their vector chunks and served back through a time-limited, signed URL when cited in a reply, instead of being discarded after indexing.
+- **Multilingual LLM conversations** — profiles now declare an allowed `languages` list; a session selects one via `POST /auth`, and the agent substitutes it into the system prompt (`%language%`) so replies are generated in that language.
+- **Translation manager** — a new `LanguageManager` / `Language` / `Traduction` layer loads per-language JSON dictionaries from `static/languages/<code>/` (built-in) and merges in overrides from `config/languages/<code>/` (deployment-specific), keyed by dotted translation codes (e.g. `[word.generer_fichier_word.confirmation]`).
+- **Translated MCP tool helpers, confirmations, and errors** — tool display names, confirmation questions/options, and system error messages (rate limiting, response-in-progress, …) are now resolved through the session's language instead of being hardcoded.
+- **`GET /auth` session info endpoint** — returns the current session's effective configuration (follow-up questions enabled, language, attachment policy) derived from its profile, so the client can adapt the agent's UI directly instead of duplicating profile settings.
+- **Reorganized directory layout for Docker** — built-in code moved under `lib/` (`lib/mcp/tools/`, `lib/services/`), and everything deployment-specific was consolidated under two directories: `config/` (configuration, custom tools/services/languages, prompts, templates, secrets) and `storage/` (temp files, logs, local DB, RAG storage). See [`config/` directory layout](#config-directory-layout).
 
 ## Getting started
 
@@ -49,6 +50,31 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 The interactive API docs are available at `http://localhost:8001/docs`.
+
+Everything Lumi reads or writes outside its own code lives under two directories, both entirely excluded from version control (`.gitignore`) except for a tracked `config/config.default.json` template:
+
+- **`config/`** — deployment configuration and any deployment-specific code/assets: `config.json`, system prompt file(s), custom MCP tools, custom services, custom language overrides, Word template, RAG source documents, etc. See [`config/` directory layout](#config-directory-layout) for the full list.
+- **`storage/`** — everything Lumi produces at runtime: temporary files, logs, the local SQLite database, and retained RAG source files. Ships with empty, git-ignored `temp/`, `data/`, `logs/`, and `rag/` subfolders (kept via `.gitkeep`).
+
+This split is what makes the service easy to containerize: the application image itself is stateless, and a deployment only needs to mount `config/` (read-only) and `storage/` (read-write) as volumes.
+
+---
+
+## `config/` directory layout
+
+`config/` is the only directory a deployment needs to populate. It's entirely git-ignored except for the tracked `config.default.json` template (copy it to `config.json` — see [Getting started](#getting-started)). Depending on which features are enabled, it can contain:
+
+| Path | Required | Purpose |
+|------|----------|---------|
+| `config.json` | Yes | The active configuration file (see [Configuration reference](#configuration-reference) below). |
+| `systemprompt.md` (or whatever `llm.system_prompt_file` points to) | Yes per profile, unless `llm.system_prompt` is set inline instead | Agent system prompt(s) — see [`profiles.<name>.llm`](#profilesnamellm). |
+| `languages/<code>/*.json` | No | Custom/override translation files — see [Localization](#localization). Path configurable via [`directories.custom_languages_dir`](#directories). |
+| `services/*.py` | No | Custom service handler classes not shipped in `lib/services/` — see [Adding services](#adding-services). Path configurable via [`directories.custom_services_dir`](#directories). |
+| `tools/**/*.py` | No | Custom MCP tools not shipped in `lib/mcp/tools/` — see [Adding tools](#adding-tools). Path configurable via [`directories.custom_mcp_tools_dir`](#directories). May itself contain further subfolders (e.g. `models/`) for shared code imported by those tools. |
+| `templates/*.docx` | No | Word template(s) (gabarit) referenced by [`word.template`](#word) — see [Word document templates](#word-document-templates-gabarits). |
+| any folder referenced by a `Ragindexer` CRON task's `config.folders` (e.g. `source-rag/`) | No | Source documents to automatically (re)index into the RAG knowledge base — see [`cron`](#cron). The folder name/location is an arbitrary config value, not a fixed convention. |
+
+Other than `config.json` itself — loaded directly by `Config.init()` — none of these paths are hardcoded: each is a configuration value with the default shown above, so a deployment is free to relocate them as long as the config is updated to match. Runtime data (temp files, logs, local DB, RAG storage), by contrast, lives entirely under `storage/` — see [`directories`](#directories).
 
 ---
 
@@ -70,6 +96,7 @@ General application settings.
 | `allowed_cors_headers` | array | Allowed CORS headers. |
 | `ws_inactivity_timeout` | int | WebSocket inactivity timeout in seconds (default: 300). |
 | `admin_users` | array | List of `{ username, password }` objects for HTTP Basic Auth on admin endpoints. |
+| `default_language` | string | Language code used when `POST /auth` doesn't specify one — see [Localization](#localization). |
 
 ### `authentication`
 
@@ -104,7 +131,7 @@ Declares external services available to the tools. Each key is the logical name 
 }
 ```
 
-Built-in handlers live in the `services/` directory. See [Adding services](#adding-services) to create custom ones.
+Built-in handlers live in `lib/services/`. Deployment-specific handlers go in `directories.custom_services_dir` (default `config/services`) instead, without touching `lib/`. See [Adding services](#adding-services) to create custom ones.
 
 ### `logger`
 
@@ -118,7 +145,7 @@ Built-in handlers live in the `services/` directory. See [Adding services](#addi
 
 Lumi can serve several independent agent configurations from a single running instance. Each key under `profiles` is a profile name — `default` must always be defined — bundling its own `llm`, `mcp`, `attachments`, `rag`, and `connectors` settings.
 
-A client selects a profile when opening a session, via the `profile` field of `POST /auth` (see [HTTP API → Authentication](#http-api)). If the requested profile doesn't exist, Lumi falls back to `default`. Admin endpoints that list or filter tools (`GET /tools`) also accept a `profile` query parameter.
+A client selects a profile when opening a session, via the `profile` field of `POST /auth` (see [HTTP API → Authentication](#authentication)). If the requested profile doesn't exist, Lumi falls back to `default`. Admin endpoints that list or filter tools (`GET /tools`) also accept a `profile` query parameter.
 
 ```json
 "profiles": {
@@ -135,7 +162,11 @@ A client selects a profile when opening a session, via the `profile` field of `P
 }
 ```
 
-Everything below (`llm`, `mcp`, `attachments`, `rag.collection`, `connectors`) is scoped under `profiles.<name>`.
+Everything below (`llm`, `languages`, `mcp`, `attachments`, `rag.collection`, `connectors`) is scoped under `profiles.<name>`.
+
+#### `profiles.<name>.languages`
+
+Array of language codes (e.g. `["fr", "en"]`) a session on this profile is allowed to select via `POST /auth`. Optional — if omitted, only `app.default_language` is allowed for that profile. See [Localization](#localization).
 
 #### `profiles.<name>.llm`
 
@@ -143,8 +174,8 @@ LLM and agent settings.
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `system_prompt_file` | string | Path to the system prompt Markdown file. |
-| `system_prompt` | string | Inline system prompt, used instead of `system_prompt_file` if set. |
+| `system_prompt_file` | string | Path to the system prompt Markdown file. May contain the `%language%` placeholder, replaced at call time with the session's language name (e.g. `français`) — see [Localization](#localization). |
+| `system_prompt` | string | Inline system prompt, used instead of `system_prompt_file` if set. Also supports `%language%`. |
 | `connector` | string | LLM connector to use (`LiteLLM`). |
 | `memory_messages` | int | Number of past exchanges kept in context. |
 | `empty_llm_response_max_retry` | int | Max retries when the LLM returns an empty response. |
@@ -210,12 +241,19 @@ Global usage limits, shared across all profiles.
 | `max_requests_month` | int | Monthly request budget (`-1` = unlimited). |
 | `max_requests_minute` | int | Per-minute rate limit per session. |
 
-### `files`
+### `directories`
+
+Filesystem paths used across Lumi. Built-in ones default to locations under `storage/` (runtime data) or `static/` (built-in language files); the `custom_*` override directories default to locations under `config/` — see [`config/` directory layout](#config-directory-layout).
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `temp_dir` | string | Directory for temporary files produced by tools (e.g. generated PDFs). |
-| `local_storage_dir` | string | Directory for persistent local data (e.g. usage statistics). |
+| `temp_dir` | string | Directory for temporary files produced by tools and user uploads (e.g. generated PDFs). Default: `storage/temp`. |
+| `local_storage_dir` | string | Directory for persistent local data (the usage-statistics SQLite database). Default: `storage/data`. |
+| `languages_dir` | string | Directory of built-in translation files, one subfolder per language code (`<languages_dir>/<code>/*.json`). Default: `static/languages`. |
+| `rag_storage_dir` | string | Directory where indexed RAG source files are kept, per collection (see [source file retention](#rag-knowledge-base)). Default: `storage/rag`. |
+| `custom_languages_dir` | string | Directory of deployment-specific translation overrides/additions, same layout as `languages_dir`, merged on top of it. Default: `config/languages`. |
+| `custom_services_dir` | string | Fallback directory scanned for service handler classes not found in `lib/services/` — see [Adding services](#adding-services). Default: `config/services`. |
+| `custom_mcp_tools_dir` | string | Additional directory scanned for MCP tools alongside `lib/mcp/tools/` — see [Adding tools](#adding-tools). Default: `config/tools`. |
 
 ### `word`
 
@@ -223,7 +261,7 @@ Settings for the Word document template (gabarit) used by the `word.*` MCP tools
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `template` | string | Path to the `.docx` template file. Auto-generated on first use if it doesn't exist. |
+| `template` | string | Path to the `.docx` template file, typically under `config/templates/` (see [`config/` directory layout](#config-directory-layout)). Auto-generated on first use if it doesn't exist. |
 | `template_placeholder` | string | Placeholder replaced by the generated body content. |
 | `template_summary_placeholder` | string | Placeholder replaced by the auto-generated table of contents. |
 | `template_title_placeholder` | string | Placeholder replaced by the document title (cover page and header). |
@@ -246,7 +284,8 @@ Persistent RAG knowledge base settings, shared across profiles (the collection s
 | `chunk_overlap` | int | Overlap between consecutive chunks. |
 | `connector` | string | Vector store backend (`PgVector`). |
 | `pgvector.table` | string | PostgreSQL table used to store vectors. |
-| `storage_dir` | string | Directory where indexed source files are kept (see [source file retention](#rag-knowledge-base)), served back via signed URLs. |
+
+Indexed source files are kept for citation/download purposes under `directories.rag_storage_dir` (see [`directories`](#directories) and [source file retention](#rag-knowledge-base)).
 
 ### `cron`
 
@@ -287,14 +326,17 @@ Built-in tasks live in `lib/cron/tasks/`:
 |--------|----------|------|-------------|
 | `POST` | `/auth` | — | Authenticate and open a session. Returns a JWT token. |
 | `DELETE` | `/auth` | Bearer | Close the current session. |
+| `GET` | `/auth` | Bearer | Return the current session's effective, profile-derived configuration — see [Localization](#localization). |
 
 **POST /auth** — body:
 
 ```json
-{ "authorization": { "token": "<user-token>" }, "profile": "default" }
+{ "authorization": { "token": "<user-token>" }, "profile": "default", "language": "fr" }
 ```
 
 `profile` selects which [profile](#profiles) the session runs on (its LLM, tools, attachment policy, RAG collection, connectors); falls back to `default` if the name doesn't match a configured profile.
+
+`language` (optional) selects the session's language among the codes allowed by `profiles.<profile>.languages` (see [Localization](#localization)); returns `400` if the code doesn't exist or isn't allowed for the profile. Falls back to `app.default_language` if omitted.
 
 Response:
 
@@ -303,6 +345,21 @@ Response:
 ```
 
 **DELETE /auth** — requires `Authorization: Bearer <jwt>` header. Returns `{ "detail": "Session closed" }`.
+
+**GET /auth** — requires `Authorization: Bearer <jwt>` header. Returns the calling session's effective configuration, derived from its profile:
+
+```json
+{
+  "followup_questions": true,
+  "language": "fr",
+  "attachements": true,
+  "attachements_max_file_size_mb": 20,
+  "attachements_max_files": 5,
+  "attachements_allowed_extensions": [".pdf", ".docx", ".md", "..."]
+}
+```
+
+Lets a client adapt its UI (e.g. show/hide the attachment button, enforce size limits, display follow-up suggestions) directly from the session's own configuration instead of duplicating each profile's settings client-side.
 
 ### Usage
 
@@ -341,6 +398,39 @@ Response:
 |--------|----------|------|-------------|
 | `GET` | `/files/{key}/{filename}` | Bearer or `?t=` hash | Download a temporary file generated by a tool. |
 | `GET` | `/files/rag/{collection}/{key}/{filename}` | Bearer, `?t=` hash, or Basic admin | Download a source document retained by the RAG knowledge base (see [source file retention](#rag-knowledge-base)). |
+
+---
+
+## Localization
+
+Conversations, MCP tool metadata (display names, confirmation prompts), and system error messages can all be served in the language chosen by the session.
+
+### Selecting a language
+
+A profile declares which languages it supports via [`profiles.<name>.languages`](#profilesnamelanguages) (e.g. `["fr", "en"]`). A client selects one when opening a session, via the `language` field of `POST /auth` (see [HTTP API → Authentication](#authentication)); if omitted, the session falls back to [`app.default_language`](#app). `POST /auth` returns `400` if the requested language doesn't exist or isn't in the profile's `languages` list. The session's language is also reported back by [`GET /auth`](#authentication).
+
+### Translation files
+
+Translations are plain JSON dictionaries of `"dotted.key": "text"` pairs, one file per topic, under one subfolder per language code:
+
+- `directories.languages_dir` (default `static/languages/<code>/*.json`) — built-in translations shipped with Lumi (MCP tool names/confirmations in `mcp.json`, system error messages in `errors.json`).
+- `directories.custom_languages_dir` (default `config/languages/<code>/*.json`) — deployment-specific translations, loaded on top of the built-in ones (same key overwrites, new keys are added). Use this to translate your own custom tools' descriptions and confirmation prompts, or to add a language Lumi doesn't ship translations for yet.
+
+```json
+// config/languages/fr/mcp.json
+{
+  "nexora.orders.list": "Liste les commandes",
+  "nexora.orders.list.confirmation": "Je vais lister les commandes. Dois-je continuer ?"
+}
+```
+
+A missing key resolves to `[the.key]` (the bracketed code itself) rather than raising, so an untranslated string is easy to spot without breaking the conversation.
+
+### Where translations are applied
+
+- **System prompt** — the `%language%` placeholder in `llm.system_prompt` / `llm.system_prompt_file` is replaced with the session's language name (e.g. `français`), so the LLM knows which language to answer in.
+- **Tool display names and confirmation prompts** — an MCP tool's `@tool_description` name and, for `@confirmation_tool`, its question and options, are looked up as translation keys (falling back to the raw tool name / text if no matching key exists) and sent to the client already translated.
+- **System error messages** — WebSocket-level errors such as rate limiting (`agent.rate_limit_exceeded.*`) or an in-progress response (`agent.response_in_progress`) are resolved through the same mechanism (`errors.json`).
 
 ---
 
@@ -388,7 +478,7 @@ PDF pages are extracted individually (with a `page` metadata field). All other f
 
 ### Source file retention & citations
 
-Whenever a file is indexed (via the document management API or `Ragindexer`), a copy of the original source file is kept in `rag.storage_dir` (`RagStore`), alongside its vector chunks. When `search_knowledge_base` uses chunks from that file to answer a question, the agent emits a `rag` WebSocket event carrying the source name, the pages used, and a **signed, time-limited download URL** (`GET /files/rag/{collection}/{key}/{filename}`, see [File download](#file-download)) pointing back to that retained file. Re-indexing or deleting a document also deletes its retained copy.
+Whenever a file is indexed (via the document management API or `Ragindexer`), a copy of the original source file is kept in `directories.rag_storage_dir` (`RagStore`), alongside its vector chunks. When `search_knowledge_base` uses chunks from that file to answer a question, the agent emits a `rag` WebSocket event carrying the source name, the pages used, and a **signed, time-limited download URL** (`GET /files/rag/{collection}/{key}/{filename}`, see [File download](#file-download)) pointing back to that retained file. Re-indexing or deleting a document also deletes its retained copy.
 
 ### Document management API
 
@@ -445,17 +535,17 @@ Like `search_knowledge_base`, using attached-file content triggers a `rag` WebSo
 
 ## Built-in tools
 
-Lumi ships with the following generic MCP tool groups in `tools/`. Enable a group (or a single tool within it) via [`mcp.tools_enabled`](#profilesnamemcp).
+Lumi ships with the following generic MCP tool groups in `lib/mcp/tools/`. Enable a group (or a single tool within it) via [`mcp.tools_enabled`](#profilesnamemcp).
 
 | Group | Module | Tools | Description |
 |-------|--------|-------|-------------|
-| `datetime` | `tools/context/datetime.py` | `get_business_days`, `next_business_day`, `get_public_holidays` | Date arithmetic and French public-holiday / business-day calculations. |
-| `excel` | `tools/excel/excel.py` | `generer_fichier_excel` | Generates Excel (`.xlsx`) files, including embedded charts. |
-| `files` | `tools/files/files.py` | `search_attached_files` | Searches files attached to the conversation — see [File attachments](#file-attachments). |
-| `pdf` | `tools/pdf/pdf.py` | `generer_fichier_pdf` | Generates templated PDF documents (cover page, header/footer, tables, charts). |
-| `rag` | `tools/rag/rag.py` | `search_knowledge_base` | Searches the RAG knowledge base — see [RAG knowledge base](#rag-knowledge-base). |
-| `web` | `tools/web/web.py` | `rechercher_sur_internet`, `lire_page_web` | Web search and web page reading. |
-| `word` | `tools/word/word.py` | 8 tools | Word document generation and editing on top of a company template — see [Word document templates](#word-document-templates-gabarits). |
+| `datetime` | `lib/mcp/tools/context/datetime.py` | `get_business_days`, `next_business_day`, `get_public_holidays` | Date arithmetic and French public-holiday / business-day calculations. |
+| `excel` | `lib/mcp/tools/excel/excel.py` | `generer_fichier_excel` | Generates Excel (`.xlsx`) files, including embedded charts. |
+| `files` | `lib/mcp/tools/files/files.py` | `search_attached_files` | Searches files attached to the conversation — see [File attachments](#file-attachments). |
+| `pdf` | `lib/mcp/tools/pdf/pdf.py` | `generer_fichier_pdf` | Generates templated PDF documents (cover page, header/footer, tables, charts). |
+| `rag` | `lib/mcp/tools/rag/rag.py` | `search_knowledge_base` | Searches the RAG knowledge base — see [RAG knowledge base](#rag-knowledge-base). |
+| `web` | `lib/mcp/tools/web/web.py` | `rechercher_sur_internet`, `lire_page_web` | Web search and web page reading. |
+| `word` | `lib/mcp/tools/word/word.py` | 8 tools | Word document generation and editing on top of a company template — see [Word document templates](#word-document-templates-gabarits). |
 
 
 
@@ -463,14 +553,16 @@ Lumi ships with the following generic MCP tool groups in `tools/`. Enable a grou
 
 ## Adding tools
 
-Tools live in the `tools/` directory (optionally grouped in subfolders, e.g. `tools/word/`). Each file is auto-discovered at startup. Files and folders starting with `_` are ignored. A tool method is only exposed to a given profile if it matches an entry in that profile's `mcp.tools_enabled` (see [`profiles.<name>.mcp`](#profilesnamemcp) above).
+Built-in tools live in `lib/mcp/tools/` (optionally grouped in subfolders, e.g. `lib/mcp/tools/word/`). Deployment-specific tools go in `directories.custom_mcp_tools_dir` (default `config/tools`) instead, following the exact same layout — that way custom tools ship with the deployment's config, not with the application code. Both directories are scanned the same way at startup: each `.py` file is auto-discovered, files and folders starting with `_` are ignored (still importable as regular Python modules, e.g. for shared helpers — see below), and a tool method is only exposed to a given profile if it matches an entry in that profile's `mcp.tools_enabled` (see [`profiles.<name>.mcp`](#profilesnamemcp) above).
+
+Since the project root is on the Python path, a custom tool file can import shared code from anywhere under `config/` as a regular package — e.g. `config/models/` for Pydantic models shared across several custom tool files, imported as `from config.models.mymodels import ...`.
 
 ### Creating a tool class
 
-Create a file in `tools/` and define a class that extends `MCPTool`:
+Create a file in `lib/mcp/tools/` (or your `custom_mcp_tools_dir`) and define a class that extends `MCPTool`:
 
 ```python
-from lib.mcp.tools import MCPTool, tool_description, slow_tool, confirmation_tool, restricted_tool
+from lib.mcp.toolloader import MCPTool, tool_description, slow_tool, confirmation_tool, restricted_tool
 from typing import Annotated
 from pydantic import Field
 
@@ -492,7 +584,7 @@ Each public method of the class becomes an MCP tool. The method docstring is use
 
 ### Decorators
 
-Decorators are imported from `lib.mcp.tools` and applied to individual tool methods.
+Decorators are imported from `lib.mcp.toolloader` and applied to individual tool methods.
 
 #### `@tool_description(name: str)`
 
@@ -556,7 +648,7 @@ def my_tool(self, ...):
 
 ## Word document templates (gabarits)
 
-The `word.*` MCP tools (`tools/word/word.py`) generate and edit `.docx` files on top of a company **template (gabarit)** configured under [`word`](#word), rather than plain documents. If the configured `word.template` file doesn't exist yet, Lumi builds a default one automatically on first use (cover page, header/footer, table of contents area, heading and table styles).
+The `word.*` MCP tools (`lib/mcp/tools/word/word.py`) generate and edit `.docx` files on top of a company **template (gabarit)** configured under [`word`](#word), rather than plain documents. If the configured `word.template` file doesn't exist yet, Lumi builds a default one automatically on first use (cover page, header/footer, table of contents area, heading and table styles).
 
 The template contains placeholders (`word.template_placeholder`, `word.template_title_placeholder`, `word.template_summary_placeholder`, `word.template_date_placeholder`) that tools fill in with the generated content, title, table of contents, and date, plus a named table style (`word.template_array_style`) applied to generated tables.
 
@@ -592,14 +684,14 @@ Standard Markdown is also supported: headings (`#`/`##`/`###`, auto-collected in
 
 ## Adding services
 
-Services are reusable HTTP or database clients made available to tools via `ServiceManager`. They live in the `services/` directory.
+Services are reusable HTTP or database clients made available to tools via `ServiceManager`. Built-in handlers live in `lib/services/`; deployment-specific ones go in `directories.custom_services_dir` (default `config/services`) instead. For each configured service, `ServiceManager` looks for `<handler>.py` in `lib/services/` first, then falls back to the custom directory if not found there.
 
 ### Creating a service
 
-Create a file in `services/` and define a class that extends `Service`:
+Create a file named after your handler (lowercased) in `lib/services/` or your `custom_services_dir`, and define a class that extends `Service`:
 
 ```python
-from lib.mcp.services import Service
+from lib.services.services import Service
 
 class MyService(Service):
 
@@ -631,7 +723,7 @@ Add the service to `services` in `config.json`. The `handler` key must match the
 ### Using a service from a tool
 
 ```python
-from lib.mcp.services import ServiceManager
+from lib.services.services import ServiceManager
 
 class MyTools(MCPTool):
     def my_tool(self, ...):
@@ -645,7 +737,9 @@ Services can implement the `checkAuthentication(authorization: dict)` method to 
 
 ### Dynamic class loading
 
-Services, LLM filters, connectors, and CRON tasks are all instantiated through a single mechanism, `DynamicImport.getInstance` (`lib/utils/dynamicimport.py`). It only imports classes from a fixed allow-list of module paths (`lib.cron.tasks`, `lib.agent.filters`, `lib.agent.llmconnector`, `lib.connectors.webex`), so configuration values can never trigger the loading of arbitrary code — dropping a new class in one of these packages is enough to make it loadable, but the package itself must be explicitly allow-listed.
+LLM filters, LLM connectors, connectors (e.g. Webex), and CRON tasks are all instantiated through a single mechanism, `DynamicImport.getInstance` (`lib/utils/dynamicimport.py`). It only imports classes from a fixed allow-list of module paths (`lib.cron.tasks`, `lib.agent.filters`, `lib.agent.llmconnector`, `lib.connectors.webex`), so configuration values can never trigger the loading of arbitrary code — dropping a new class in one of these packages is enough to make it loadable, but the package itself must be explicitly allow-listed.
+
+Services follow a separate, path-based loading mechanism instead (`ServiceManager`, see [Adding services](#adding-services) above): the `handler` name in a service's config is resolved to a `.py` file in `lib/services/`, falling back to `directories.custom_services_dir`, rather than going through `DynamicImport`'s allow-list.
 
 ---
 
@@ -739,11 +833,21 @@ On startup, for every profile with `connectors.webex.enabled: true`, the connect
 
 
 
-### v1.4.0 — Phosphor
+### v1.5.x — Waves
 
-See [What's new in v1.4.0](#whats-new-in-v140--phosphor).
+See [What's new in v1.5.0](#whats-new-in-v150--waves).
 
-### v1.3.0 — Aurora
+### v1.4.x - Phosphor
+
+- **File attachments** — users can attach files to a conversation via `POST /files/upload`. The agent can then search their content through the `search_attached_files` MCP tool, with the most relevant excerpts also injected directly into context automatically.
+- **Attachment limits & restrictions** — attached files are governed by a configurable `attachments` block (enable/disable, max number of files, max file size, allowed extensions), enforced per profile.
+- **Per-session RAG** — attached files are chunked and embedded on the fly into an ephemeral, in-memory vector index (never written to the persistent RAG store), giving the LLM the same retrieval-based reasoning over conversation attachments as over the main knowledge base.
+- **Source citations** — replies that relied on the RAG knowledge base or on attached files now come with `rag` events pointing back to the source document (and page, when applicable), so the origin of an answer can be traced and, for the persistent RAG, opened via a secure URL.
+- **RAG folder indexing CRON task** — a new `Ragindexer` task scans one or more source folders and automatically (re)indexes new or modified documents into the RAG vector store on a schedule.
+- **Configuration profiles** — the `llm`, `mcp`, `attachments`, `rag`, and `connectors` settings are now grouped under named `profiles`, so a single Lumi instance can run several agents with different models, tools, and behaviors, selected at authentication time.
+- **Persistent RAG source files with secure URLs** — indexed documents are kept alongside their vector chunks and served back through a time-limited, signed URL when cited in a reply, instead of being discarded after indexing.
+
+### v1.3.x — Aurora
 
 - **Reorganized MCP tool structure** — tools can now be grouped into subfolders (e.g. `tools/word/`), and `mcp.tools_enabled` gained flexible matching patterns: exact tool names, `namespace.*` wildcards to enable a whole group at once, and `namespace/tool_name` to enable a single tool from a group (see [Adding tools](#adding-tools)).
 - **Advanced Word MCP tools** — Word generation now builds on a customizable company **template (gabarit)**: cover page, header/footer, auto-generated table of contents, table styles, chart embedding, targeted section insertion, table updates, document merging, and Word → PDF conversion (see [Word document templates](#word-document-templates-gabarits)).
@@ -753,7 +857,7 @@ See [What's new in v1.4.0](#whats-new-in-v140--phosphor).
 - **Follow-up question suggestions** — the agent can generate short, relevant follow-up questions after each reply, configurable via `llm.followup_questions`.
 - **New `followup` client event** — a `FollowUpEvent` delivers the generated follow-up questions to the WebSocket client (see [WebSocket protocol](#websocket-protocol)).
 
-### v1.2.0 — Spark
+### v1.2.x — Spark
 
 - **Webex connector** — the agent can be deployed as a Webex bot (see [Webex connector](#webex-connector)).
 - **PDF and Word tools** — new native tools for generating richly formatted PDF and Word documents.
@@ -764,7 +868,7 @@ See [What's new in v1.4.0](#whats-new-in-v140--phosphor).
 - **System prompt refactoring** — the system prompt is now fully driven by a Markdown file (`config/systemprompt.md`).
 - Various LumePackAPI service fixes.
 
-### v1.1.0 — Sense
+### v1.1.x — Sense
 
 - Initial public release.
 - WebSocket chat, MCP tool integration, RAG / pgvector knowledge base, JWT authentication, Excel file generation.
@@ -798,4 +902,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-Dynam

@@ -45,7 +45,7 @@ def _inject_session_auth(session_id: str) -> None:
     if not session_id:
         return
     from lib.session.session import AuthSessionManager
-    from lib.mcp.services import ServiceManager
+    from lib.services.services import ServiceManager
     from lib.http.auth import Auth
     session = AuthSessionManager.get(session_id)
     if session:
@@ -140,7 +140,10 @@ ToolLoader — chargement dynamique des tools MCP.
 Parcourt récursivement le répertoire `tools/` (les outils peuvent être
 regroupés dans des sous-dossiers, ex. `tools/word/`), importe chaque
 module Python, détecte les sous-classes de MCPService et enregistre
-leurs outils auprès de l'instance FastMCP fournie.
+leurs outils auprès de l'instance FastMCP fournie. Le répertoire
+`directories.custom_mcp_tools_dir` (s'il existe) est ensuite parcouru
+de la même façon, pour permettre l'ajout d'outils supplémentaires sans
+toucher à `tools/`.
 
 Les fichiers et dossiers dont le nom commence par `_` (modules internes,
 `__pycache__`) sont ignorés : un fichier de ce type n'est jamais exposé
@@ -197,14 +200,18 @@ class ToolLoader:
 
     @staticmethod
     def registerTools(app: FastMCP, toolsDir: str = None):
-        if toolsDir is None:
-            toolsDir = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                "tools"
-            )
+        toolsDir = "lib/mcp/tools"
 
         enabled_tools = ToolLoader._enabled_tools_union()
 
+        ToolLoader._registerToolsFromDir(app, toolsDir, enabled_tools)
+
+        customToolsDir = Config.get("directories.custom_mcp_tools_dir", default=None)
+        if customToolsDir and os.path.isdir(customToolsDir):
+            ToolLoader._registerToolsFromDir(app, customToolsDir, enabled_tools)
+
+    @staticmethod
+    def _registerToolsFromDir(app: FastMCP, toolsDir: str, enabled_tools: list):
         for dirpath, dirnames, filenames in os.walk(toolsDir):
             dirnames[:] = sorted(d for d in dirnames if not d.startswith("_") and not d.startswith("."))
             package_parts = os.path.relpath(dirpath, toolsDir).split(os.sep) if dirpath != toolsDir else []

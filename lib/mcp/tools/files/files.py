@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 from pydantic import BaseModel, Field
-from lib.mcp.tools import MCPTool, slow_tool
+from lib.mcp.toolloader import MCPTool, slow_tool, tool_description
 from lib.http.auth import Auth
 from lib.agent.events import RagEvent
 from lib.rag.attachmentretriever import AttachmentRetriever
@@ -21,6 +21,7 @@ class FilesTool(MCPTool):
     description = "Recherche dans les fichiers joints à la conversation par l'utilisateur"
 
     @slow_tool
+    @tool_description(name="[files.search_attached_files]")
     async def search_attached_files(
         self,
         query: Annotated[str, Field(description="Question ou sujet à rechercher dans les fichiers joints par l'utilisateur à la conversation")],

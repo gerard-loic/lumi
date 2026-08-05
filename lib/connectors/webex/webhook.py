@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from lib.connectors.webex.webexbot import WebexBot
 from lib.session.session import AuthSessionManager
-from lib.mcp.services import ServiceManager
+from lib.services.services import ServiceManager
 from lib.config.config import Config
 from lib.http.auth import Auth
 from lib.log.logger import Logger, ERROR, WARNING, OK

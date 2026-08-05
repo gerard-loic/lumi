@@ -12,6 +12,7 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 class AuthRequest(BaseModel):
     authorization: dict
     profile: Optional[str] = None
+    language: Optional[str] = None
 
 """
 RagIndexRequest — Format requête HTTP indexation RAG (form-data + fichier optionnel)
@@ -69,6 +70,17 @@ class HealthResponse(BaseModel):
     active_ws: int 
     version: str 
     version_name: str
+
+"""
+HealthResponse - Format retour endpoint GET auth
+"""
+class AuthSessionResponse(BaseModel):
+    followup_questions: bool
+    language: str
+    attachements: bool
+    attachements_max_file_size_mb: int
+    attachements_max_files: int
+    attachements_allowed_extensions: list
 
 """
 UsageResponse - Format retour endpoint usage

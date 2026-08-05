@@ -1,7 +1,7 @@
 import json
 from typing import AsyncGenerator, Optional
 from lib.mcp.client import mcp_manager, MCPToolError
-from lib.mcp.tools import MCPTool
+from lib.mcp.toolloader import MCPTool
 from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent, FollowUpEvent, RagEvent
 from lib.rag.attachmentretriever import AttachmentRetriever
 from lib.session.session import AuthSessionManager as _SessionManager
@@ -13,6 +13,7 @@ from lib.agent.filters.llmfilter import LLMFilterManager
 import datetime
 from lib.utils.dynamicimport import DynamicImport
 from lib.agent.profile import ProfileManager, Profile
+from lib.localization.traduction import Traduction
 
 #Accumule un événement RAG (source dédoublonnée, pages fusionnées) plutôt que de l'émettre immédiatement :
 #le LLM peut appeler l'outil de recherche RAG plusieurs fois (ou combiner pré-recherche sur pièces jointes et
@@ -67,8 +68,8 @@ class Agent:
         elif system_prompt:
             self._system = system_prompt
         else:
-            Logger.write(f"[AGENT] LLM system prompt not configured: set 'profile.{self.profile.getName()}.system_prompt_file' or 'llm.{self.profile.getName()}.system_prompt' in config.", ERROR)
-            raise Exception(f"[AGENT] LLM system prompt not configured: set 'llm.{self.profile.getName()}.system_prompt_file' or 'llm.{self.profile.getName()}.system_prompt' in config.")
+            Logger.write(f"[AGENT {profile.getName()}] LLM system prompt not configured: set 'profile.{self.profile.getName()}.system_prompt_file' or 'llm.{self.profile.getName()}.system_prompt' in config.", ERROR)
+            raise Exception(f"[AGENT {profile.getName()}] LLM system prompt not configured: set 'llm.{self.profile.getName()}.system_prompt_file' or 'llm.{self.profile.getName()}.system_prompt' in config.")
 
         #Si aucun outil n'est disponible pour ce profil, on neutralise les consignes du prompt système
         #qui imposeraient d'appeler un outil (sinon le LLM tente d'en simuler un en texte, faute de mieux).
@@ -85,7 +86,7 @@ class Agent:
         #Filtres
         self.filters = LLMFilterManager(profile=self.profile)
 
-        Logger.write("[AGENT] MCP agent initialized", type=OK)
+        Logger.write(f"[AGENT {profile.getName()}] MCP agent initialized", type=OK)
 
     """
     Gestion d'une connexion SSE (correspondant à une requête client)
@@ -94,17 +95,29 @@ class Agent:
         #On filtre le message entrant (application des filtres selon les filtres actifs dans la conf)
         message = self.filters.filter(text=message)
 
+        #Session d'auth
+        authSession = AuthSessionManager.get_by_session_id(session_id=session_id)
+
+        #Language
+        language = authSession.getLanguage()
+        t = Traduction(language=language)
+
         #Accumulateur des événements RAG de tout le tour de conversation (pré-recherche pièces jointes +
         #tool calls, sur toutes les itérations) : émis groupés une fois la réponse finale prête (voir plus bas)
         rag_sources: dict = {}
 
         try:
             #On récupère l'historique de conversation pour l'intégrer au prompt
+            #TODO : passer sur authSession
             history = AuthSessionManager.get_history(session_id)[-self._MEMORY_MESSAGES:]
 
             #Ajout de la date heure courante au prompt
             now = datetime.datetime.now()  # ou avec timezone si pertinent
             system = self._system + f"\n\nDate et heure actuelles : {now.strftime('%A %d %B %Y, %H:%M')} (heure locale)"
+
+            #Modification de la variable de langue
+            #TODO : passer sur authSession
+            system = system.replace("%language%", AuthSessionManager.get_language(session_id=session_id).getName())
 
             file_context = ""
             if self.profile.getConfigValue("attachments.enabled", default=False):
@@ -141,7 +154,7 @@ class Agent:
                 {"role": "user",   "content": user_content},
             ]
 
-            Logger.write("[AGENT] Call LLM...", type=WARNING)
+            Logger.write(f"[AGENT {self.profile.getName()}] Call LLM...", type=WARNING)
             # ----------------------------------------------------------------
             # ÉTAPE 1 — Appel non streamé pour détecter les tool calls
             # ----------------------------------------------------------------
@@ -149,21 +162,21 @@ class Agent:
                 try:
                     response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
                 except Exception as e:
-                    Logger.write(f"[AGENT] LLM call failure : {str(e)}", type=ERROR)
+                    Logger.write(f"[AGENT {self.profile.getName()}] LLM call failure : {str(e)}", type=ERROR)
                     yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
                     yield DoneEvent.get()
                     return
                 if response.choices:
                     break
                 if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
-                    Logger.write("[AGENT] LLM returned empty response, retrying...", type=WARNING)
+                    Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response, retrying...", type=WARNING)
             else:
                 Logger.write("[AGENT] LLM returned empty response after retries", type=ERROR)
                 yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty LLM answer")
                 yield DoneEvent.get()
                 return
             assistant_msg = response.choices[0].message
-            Logger.write("[AGENT] Call LLM OK !", type=OK)
+            Logger.write("[AGENT {self.profile.getName()}] Call LLM OK !", type=OK)
 
             # ----------------------------------------------------------------
             # ÉTAPE 2 — Boucle de résolution des tool calls
@@ -172,7 +185,7 @@ class Agent:
             while assistant_msg.tool_calls:
                 iteration += 1
                 if iteration > self._MAX_TOOL_ITERATIONS:
-                    Logger.write("[AGENT] Too many consecutive tool calls", type=ERROR)
+                    Logger.write("[AGENT {self.profile.getName()}] Too many consecutive tool calls", type=ERROR)
                     yield ErrorEvent.get(
                         error_code="MCP_TOOL_LIMIT_EXCEEDED",
                         message="Too many consecutive tool calls",
@@ -199,17 +212,22 @@ class Agent:
 
                 #Appels des outils MCP
                 for tc in assistant_msg.tool_calls:
-                    Logger.write(f"[AGENT] Call MCP tool {tc.function.name}...", type=WARNING)
+                    Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name}...", type=WARNING)
                     meta = MCPTool.get_meta(tc.function.name)
                     description = meta.get("description", tc.function.name)
                     if description == False:
                         description = tc.function.name
 
+                    #Traduction de la description
+                    description = t.trad(description)
+
                     #Verifier si l'outil nécessite une confirmation préalable
                     if meta.get("confirmation", False) and session_id:
+                        options = meta.get("confirmation_options", [])
+                        options = [t.trad(option) for option in options]
                         yield ConfirmationEvent.get(
-                            question=meta.get("confirmation_question", False),
-                            options=meta.get("confirmation_options", False)
+                            question=t.trad(t.trad(meta.get("confirmation_question", ""))),
+                            options=options
                         )
                         try:
                             answer = await _SessionManager.wait_confirmation(session_id)
@@ -232,7 +250,7 @@ class Agent:
                         )
                     except MCPToolError as e:
                         error_detail = str(e)
-                        Logger.write(f"[AGENT] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
+                        Logger.write(f"[AGENT {self.profile.getName()}] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
                         yield ToolEvent.get(tool_name=tc.function.name, status="ERROR", message=error_detail)
                         messages.append({
                             "role": "tool",
@@ -242,7 +260,7 @@ class Agent:
                         continue
                     except Exception as e:
                         error_detail = str(e)
-                        Logger.write(f"[AGENT] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
+                        Logger.write(f"[AGENT {self.profile.getName()}] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
                         yield ToolEvent.get(tool_name=tc.function.name, status="ERROR", message=error_detail)
                         messages.append({
                             "role": "tool",
@@ -251,7 +269,7 @@ class Agent:
                         })
                         continue
 
-                    Logger.write(f"[AGENT] Call MCP tool {tc.function.name} OK !", type=OK)
+                    Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name} OK !", type=OK)
                     yield ToolEvent.get(tool_name=tc.function.name, status="OK")
 
                     for event in tool_events:
@@ -269,12 +287,12 @@ class Agent:
                     })
 
 
-                Logger.write("[AGENT] Call LLM...", type=WARNING)
+                Logger.write("[AGENT {self.profile.getName()}] Call LLM...", type=WARNING)
                 for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
                     try:
                         response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
                     except Exception as e:
-                        Logger.write(f"[AGENT] LLM call failure (iteration {str(iteration)}) : {str(e)}", type=ERROR)
+                        Logger.write(f"[AGENT {self.profile.getName()}] LLM call failure (iteration {str(iteration)}) : {str(e)}", type=ERROR)
                         yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
                         yield DoneEvent.get()
                         return
@@ -283,19 +301,19 @@ class Agent:
                     if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
                         Logger.write("[AGENT] LLM returned empty response, retrying...", type=WARNING)
                 else:
-                    Logger.write("[AGENT] LLM returned empty response after retries", type=ERROR)
+                    Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response after retries", type=ERROR)
                     yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty LLM answer")
                     yield DoneEvent.get()
                     return
                 assistant_msg = response.choices[0].message
-                Logger.write("[AGENT] Call LLM OK !", type=OK)
+                Logger.write("[AGENT {self.profile.getName()}] Call LLM OK !", type=OK)
 
             # ----------------------------------------------------------------
             # ÉTAPE 3 — Réponse finale streamée token par token (1 retry si vide)
             # ----------------------------------------------------------------
             assistant_reply_tokens = []
             for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
-                Logger.write(f"[AGENT] Call LLM for final answer (attempt {attempt + 1}/{self._EMPTY_LLM_RESPONSE_MAX_RETRY})...", type=WARNING)
+                Logger.write(f"[AGENT {self.profile.getName()}] Call LLM for final answer (attempt {attempt + 1}/{self._EMPTY_LLM_RESPONSE_MAX_RETRY})...", type=WARNING)
                 try:
                     async for chunk in await self._connector.callLLM(messages=messages, stream=True, exclude_restricted=exclude_restricted):
                         token = chunk.choices[0].delta.content
@@ -303,7 +321,7 @@ class Agent:
                             assistant_reply_tokens.append(token)
                             yield TokenEvent.get(token=token)
                 except Exception as e:
-                    Logger.write(f"[AGENT] LLM streaming error : {str(e)}", type=ERROR)
+                    Logger.write(f"[AGENT {self.profile.getName()}] LLM streaming error : {str(e)}", type=ERROR)
                     yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM streaming error", details=str(e))
                     yield DoneEvent.get()
                     return
@@ -311,15 +329,15 @@ class Agent:
                 if assistant_reply_tokens:
                     break
                 if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
-                    Logger.write("[AGENT] LLM returned empty response, retrying...", type=WARNING)
+                    Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response, retrying...", type=WARNING)
 
             if not assistant_reply_tokens:
-                Logger.write("[AGENT] LLM returned empty response after retry", type=ERROR)
+                Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response after retry", type=ERROR)
                 yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty response from LLM")
                 yield DoneEvent.get()
                 return
 
-            Logger.write("[AGENT] Call LLM for final answer OK !", type=OK)
+            Logger.write("[AGENT {self.profile.getName()}] Call LLM for final answer OK !", type=OK)
 
             #Emission groupée des citations RAG accumulées pendant tout le tour (dédoublonnées par source),
             #une fois la réponse finale prête plutôt qu'au fil des tool calls
@@ -345,11 +363,11 @@ class Agent:
                     if followup_questions:
                         yield FollowUpEvent.get(questions=followup_questions)
                 except Exception as e:
-                    Logger.write(f"[AGENT] Follow-up questions generation failed : {str(e)}", type=WARNING)
+                    Logger.write(f"[AGENT {self.profile.getName()}] Follow-up questions generation failed : {str(e)}", type=WARNING)
 
             yield DoneEvent.get()
         except Exception as e:
-            Logger.write(f"[AGENT] Unexpected error : {str(e)}", type=ERROR)
+            Logger.write(f"[AGENT {self.profile.getName()}] Unexpected error : {str(e)}", type=ERROR)
             yield ErrorEvent.get(error_code="UNEXPECTED", message="Unexpected error", details=str(e))
             yield DoneEvent.get()
 

@@ -11,7 +11,7 @@ from docx.shared import Inches, Pt
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
-from tools.word._word_template import (
+from lib.mcp.tools.word._word_template import (
     DOCUMENT_TITLE_BOOKMARK,
     SUMMARY_END_BOOKMARK,
     SUMMARY_START_BOOKMARK,

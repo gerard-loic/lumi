@@ -10,7 +10,7 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 class LocalData:
     @staticmethod
     def init():
-        storage_dir = Config.get("files.local_storage_dir")
+        storage_dir = Config.get("directories.local_storage_dir")
         os.makedirs(storage_dir, exist_ok=True)
         LocalData.cnx = sqlite3.connect(os.path.join(storage_dir, "local.db"))
         LocalData.cnx.row_factory = sqlite3.Row

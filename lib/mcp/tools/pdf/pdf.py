@@ -7,11 +7,11 @@ from fpdf import FPDF
 from fpdf.fonts import FontFace
 from pydantic import BaseModel, Field
 
-from tools.charts._charts import render_chart
-from tools.pdf import _pdf_template as pt
+from lib.mcp.tools.charts._charts import render_chart
+from lib.mcp.tools.pdf import _pdf_template as pt
 from lib.agent.events import FileEvent
 from lib.files.filestore import FileStore
-from lib.mcp.tools import MCPTool, confirmation_tool
+from lib.mcp.toolloader import MCPTool, confirmation_tool, tool_description
 
 _LINE_H = 6
 _FONT = "DejaVuSans"
@@ -152,10 +152,11 @@ class PdfService(MCPTool):
     description = "Génération de fichiers PDF"
 
     @confirmation_tool(
-        question="Je vais générer le fichier PDF. Dois-je continuer ?",
-        options=["Oui", "Non"],
+        question="[pdf.generer_fichier_pdf.confirmation]",
+        options=["[mcp.std.oui]", "[mcp.std.non]"],
         validation_option=0,
     )
+    @tool_description(name="[pdf.generer_fichier_pdf]")
     def generer_fichier_pdf(
         self,
         contenu_markdown: Annotated[

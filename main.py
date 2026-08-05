@@ -20,18 +20,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from lib.mcp.client import mcp_manager
 from lib.http.router import Router
 
-import sys
-sys.path.append('lib/')
 from lib.config.config import Config, StaticConfig
 from lib.log.logger import Logger
 from lib.agent.agent import AgentManager
-from lib.mcp.services import ServiceManager
+from lib.services.services import ServiceManager
 from lib.session.session import AuthSessionManager
 from lib.files.filestore import FileStore
 from lib.files.localdata import LocalData
 from lib.connectors.connector import ConnectorManager
 from lib.cron.cronmanager import CronManager
 from lib.agent.profile import ProfileManager
+from lib.localization.language import LanguageManager
+
+print("###############################################################################")
+print('# LUMI - IA agent with MCP toolkit')
+print(f"# Version {StaticConfig.version()} ({StaticConfig.versionName()})")
+print("###############################################################################")
 
 # ----------------------------------------------------------------
 # Initialisation configuration
@@ -58,10 +62,13 @@ LocalData.init()
 # ----------------------------------------------------------------
 CronManager.init()
 
-print("###############################################################################")
-print('# LUMI - IA agent with MCP toolkit')
-print(f"# Version {StaticConfig.version()} ({StaticConfig.versionName()})")
-print("###############################################################################")
+# ----------------------------------------------------------------
+# Initialisation des traductions
+# ----------------------------------------------------------------
+LanguageManager.init()
+l = LanguageManager.getLanguage(code="en")
+print(l._translations)
+
 
 # ----------------------------------------------------------------
 # Initialisation gestionnaire de services (pour authentification)

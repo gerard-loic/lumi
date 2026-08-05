@@ -8,6 +8,7 @@
        "allowed_cors_headers" : ["*"],
        "url" : "https://service.fr",
        "ws_inactivity_timeout" : 300,
+       "default_language" : "fr",
        "admin_users" : [
             {
                 "username" : "",
@@ -70,6 +71,10 @@
                     "api_key": ""
                 }
             },
+            "languages" : [
+                "fr",
+                "en"
+            ],
             "mcp" : {
                 "max_tool_iterations": 10,
                 "tools_enabled": [
@@ -116,13 +121,18 @@
         "max_requests_minute" : 5
     },
 
-    "files" : {
-        "temp_dir" : "temp",
-        "local_storage_dir" : "data"
+    "directories" : {
+        "temp_dir" : "storage/temp",
+        "local_storage_dir" : "storage/data",
+        "languages_dir" : "static/languages",
+        "rag_storage_dir" : "storage/rag",
+        "custom_languages_dir" : "config/languages",
+        "custom_services_dir" : "config/services",
+        "custom_mcp_tools_dir" : "config/tools"
     },
 
     "word" : {
-        "template" : "templates/gabarit-document.docx",
+        "template" : "config/templates/gabarit-document.docx",
         "template_placeholder" : "{{content}}",
         "template_summary_placeholder" : "{{summary}}",
         "template_title_placeholder" : "{{title}}",
@@ -148,8 +158,7 @@
         "connector" : "PgVector",
         "pgvector" : {
             "table" : "rag_documents"
-        },
-        "storage_dir" : "storage_rag"
+        }
     },
 
     "cron" : []

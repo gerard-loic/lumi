@@ -591,7 +591,8 @@
   "authorization": {
     "token": ""
   },
-  "profile": "default"
+  "profile": "default",
+  "language" : "fr"
 }</textarea>
     <div class="modal-error" id="authError"></div>
     <div class="modal-actions">
@@ -819,7 +820,7 @@
 
     } else if (data.type === "tool_call") {
       if (data.status === "PENDING") {
-        const el = addToolIndicator(msg, bubble, data.tools);
+        const el = addToolIndicator(msg, bubble, data.message || data.tools);
         toolIndicators.set(data.tools, el);
       } else if (data.status === "OK") {
         const el = toolIndicators.get(data.tools);

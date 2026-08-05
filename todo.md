@@ -1,7 +1,18 @@
+WAVE
+- [x] Implémentation des traductions LLM
+- [x] Traduction des codes d'erreur
+- [x] Gestion des noms d'outils MCP en multilingue
+- [x] Gestionnaire de traduction
+- [x] API pour avoir la configuration d'un profil
+- [x] Réorganiser les fichiers / dossiers
+- [ ] Refactor
+- [ ] Fichiers dans les autres langues
+- [x] Version
+- [ ] Readme
+- [x] Optimisation pour déploiement Docker
 
 ----------------------------
 BACKLOG
-- [ ] Implémentation des traductions
 - [ ] Gérer d'autres sources de données ?
 - [ ] Limiter la sortie ?
 - [ ] Support OCR / modèle de compréhension d'image
@@ -26,14 +37,12 @@ BACKLOG
 - [ ] Revoir les limites d'appels d'outils
 - [ ] problèmes des retours LLM vides
 - [ ] Gestion de profils LLM
-- [ ] Traduction
 - [ ] Simplification et refactor des classes pour le RAG
+- [ ] Refactor AuthSessionManager
+- [ ] Gestionnaire de codes d'erreur
 
 ------------
 Versions à venir : 
-
-Wave
-Focalisé sur les traductions
 
 Abyss
 Focalisé sur les pipelines
@@ -49,6 +58,8 @@ Focalisé sur l'optimisation de l'orchestrateur
 
 Nimbus 
 Focalisé sur les capacités audio
+
+Focalisé sur les capacités à créer des schémas
 
 
 - [x] Events des appels d'outils (2 états)

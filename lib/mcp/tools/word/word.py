@@ -9,12 +9,12 @@ from typing import Annotated, Optional
 from docx import Document
 from pydantic import BaseModel, Field
 
-from tools.charts._charts import render_chart
-from tools.word import _word_common as wc
-from tools.word._word_template import ensure_template, placeholder_content
+from lib.mcp.tools.charts._charts import render_chart
+from lib.mcp.tools.word import _word_common as wc
+from lib.mcp.tools.word._word_template import ensure_template, placeholder_content
 from lib.agent.events import FileEvent
 from lib.files.filestore import FileStore
-from lib.mcp.tools import MCPTool, confirmation_tool
+from lib.mcp.toolloader import MCPTool, confirmation_tool, tool_description
 
 _MARKDOWN_DESC = (
     "Contenu du document en Markdown enrichi. "
@@ -82,10 +82,11 @@ class WordService(MCPTool):
     description = "Génération et modification de fichiers Word respectant le gabarit de l'entreprise"
 
     @confirmation_tool(
-        question="Je vais générer le fichier Word. Dois-je continuer ?",
-        options=["Oui", "Non"],
+        question="[word.generer_fichier_word.confirmation]",
+        options=["[mcp.std.oui]", "[mcp.std.non]"],
         validation_option=0,
     )
+    @tool_description(name="[word.generer_fichier_word]")
     def generer_fichier_word(
         self,
         titre: Annotated[str, Field(description="Titre du document, affiché sur la page de garde et dans l'en-tête de chaque page.")],
@@ -131,6 +132,7 @@ class WordService(MCPTool):
 
         return self._save(doc, filename)
 
+    @tool_description(name="[word.lire_document_word]")
     def lire_document_word(
         self,
         url_document: Annotated[str, Field(description="URL du fichier Word à lire (URL de téléchargement retournée par un outil Word précédent).")],
@@ -149,6 +151,7 @@ class WordService(MCPTool):
             nombre_tableaux=len(doc.tables),
         )
 
+    @tool_description(name="[word.extraire_tableaux_word]")
     def extraire_tableaux_word(
         self,
         url_document: Annotated[str, Field(description="URL du fichier Word contenant les tableaux à extraire.")],
@@ -162,10 +165,11 @@ class WordService(MCPTool):
         return [TableauWord(**t) for t in wc.extract_tables(doc)]
 
     @confirmation_tool(
-        question="Je vais remplacer ce texte dans le document. Dois-je continuer ?",
-        options=["Oui", "Non"],
+        question="[word.remplacer_texte_word.confirmation]",
+        options=["[mcp.std.oui]", "[mcp.std.non]"],
         validation_option=0,
     )
+    @tool_description(name="[word.remplacer_texte_word]")
     def remplacer_texte_word(
         self,
         url_document: Annotated[str, Field(description="URL du fichier Word à modifier.")],
@@ -190,10 +194,11 @@ class WordService(MCPTool):
         return DocumentWordModifie(url=result.url, occurrences_remplacees=count)
 
     @confirmation_tool(
-        question="Je vais ajouter ce contenu au document. Dois-je continuer ?",
-        options=["Oui", "Non"],
+        question="[word.ajouter_contenu_word.confirmation]",
+        options=["[mcp.std.oui]", "[mcp.std.non]"],
         validation_option=0,
     )
+    @tool_description(name="[word.ajouter_contenu_word]")
     def ajouter_contenu_word(
         self,
         url_document: Annotated[str, Field(description="URL du fichier Word à compléter.")],
@@ -240,10 +245,11 @@ class WordService(MCPTool):
         return self._save(doc, filename)
 
     @confirmation_tool(
-        question="Je vais mettre à jour ce tableau. Dois-je continuer ?",
-        options=["Oui", "Non"],
+        question="[word.mettre_a_jour_tableau_word.confirmation]",
+        options=["[mcp.std.oui]", "[mcp.std.non]"],
         validation_option=0,
     )
+    @tool_description(name="[word.mettre_a_jour_tableau_word]")
     def mettre_a_jour_tableau_word(
         self,
         url_document: Annotated[str, Field(description="URL du fichier Word contenant le tableau à mettre à jour.")],
@@ -273,10 +279,11 @@ class WordService(MCPTool):
         return self._save(doc, filename)
 
     @confirmation_tool(
-        question="Je vais fusionner ces documents Word. Dois-je continuer ?",
-        options=["Oui", "Non"],
+        question="[word.fusionner_documents_word.confirmation]",
+        options=["[mcp.std.oui]", "[mcp.std.non]"],
         validation_option=0,
     )
+    @tool_description(name="[word.fusionner_documents_word]")
     def fusionner_documents_word(
         self,
         urls_documents: Annotated[
@@ -313,10 +320,11 @@ class WordService(MCPTool):
         return self._save(composer.doc, filename)
 
     @confirmation_tool(
-        question="Je vais convertir ce fichier Word en PDF. Dois-je continuer ?",
-        options=["Oui", "Non"],
+        question="[word.convertir_word_en_pdf.confirmation]",
+        options=["[mcp.std.oui]", "[mcp.std.non]"],
         validation_option=0,
     )
+    @tool_description(name="[word.convertir_word_en_pdf]")
     def convertir_word_en_pdf(
         self,
         url_document: Annotated[str, Field(description="URL du fichier Word à convertir en PDF.")],
