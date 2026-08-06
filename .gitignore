@@ -1,6 +1,7 @@
 .venv
 .env
 .claude/
+.git
 storage/data/*
 !storage/data/.gitkeep
 storage/temp/*
@@ -12,9 +13,3 @@ storage/logs/*
 config/*
 !config/.gitkeep
 __pycache__
-Dockerfile
-.dockerignore
-docker-compose.yml
-docker/*
-Makefile
-source
