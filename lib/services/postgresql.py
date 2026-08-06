@@ -40,7 +40,7 @@ class PostgreSQL(Service):
             return False
 
 
-    def findRessourceId(self, entity:str, reference:str, attributes:list=["id:int","uid:str","name:str"]):
+    def findRessourceId(self, entity:str, reference:str, attributes:list=["id:int","uid:str","name:str"], conditions:dict={}):
         int_cols = []
         str_cols = []
         for attribute in attributes:
@@ -57,7 +57,13 @@ class PostgreSQL(Service):
         for col in int_cols:
             where_clauses.append(sql.SQL("{col} = %s").format(col=col))
             params.append(reference)
+
+        for col_name, value in conditions.items():
+            where_clauses.append(sql.SQL("{col} = %s").format(col=sql.Identifier(col_name)))
+            params.append(value)
+
         parts.append(sql.SQL(" WHERE ") + sql.SQL(" AND ").join(where_clauses))
+
 
         if str_cols:
             similarity_sum = sql.SQL(" + ").join(
