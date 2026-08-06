@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Gebruikslimiet voor aanvragen overschreden",
+    "agent.rate_limit_exceeded.request": "Te veel aanvragen, vertraag alstublieft",
+    "agent.response_in_progress": "Er is al een antwoord bezig, even geduld a.u.b."
+}

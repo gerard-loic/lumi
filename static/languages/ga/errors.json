@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Sáraíodh teorainn úsáide iarratas",
+    "agent.rate_limit_exceeded.request": "An iomarca iarratas, moilligh le do thoil",
+    "agent.response_in_progress": "Tá freagra ar siúl cheana féin, fan le do thoil"
+}

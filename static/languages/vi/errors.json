@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Đã vượt quá giới hạn sử dụng yêu cầu",
+    "agent.rate_limit_exceeded.request": "Quá nhiều yêu cầu, vui lòng chậm lại",
+    "agent.response_in_progress": "Một phản hồi đang được xử lý, vui lòng chờ"
+}

@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Перавышаны ліміт выкарыстання запытаў",
+    "agent.rate_limit_exceeded.request": "Занадта шмат запытаў, калі ласка, запаволіцеся",
+    "agent.response_in_progress": "Адказ ужо апрацоўваецца, калі ласка, пачакайце"
+}

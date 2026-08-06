@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Umkhawulo wokusetshenziswa kwesicelo udlulisiwe",
+    "agent.rate_limit_exceeded.request": "Izicelo eziningi kakhulu, sicela unciphise ijubane",
+    "agent.response_in_progress": "Impendulo isivele iqhubeka, sicela ulinde"
+}

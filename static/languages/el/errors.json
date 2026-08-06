@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Το όριο χρήσης αιτημάτων ξεπεράστηκε",
+    "agent.rate_limit_exceeded.request": "Πάρα πολλά αιτήματα, παρακαλώ επιβραδύνετε",
+    "agent.response_in_progress": "Μια απάντηση βρίσκεται ήδη σε εξέλιξη, παρακαλώ περιμένετε"
+}

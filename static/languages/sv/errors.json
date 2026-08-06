@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Användningsgränsen för förfrågningar överskriden",
+    "agent.rate_limit_exceeded.request": "För många förfrågningar, vänligen sakta ner",
+    "agent.response_in_progress": "Ett svar pågår redan, vänligen vänta"
+}

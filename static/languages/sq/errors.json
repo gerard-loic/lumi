@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Kufiri i përdorimit të kërkesave u tejkalua",
+    "agent.rate_limit_exceeded.request": "Shumë kërkesa, ju lutemi ngadalësoni",
+    "agent.response_in_progress": "Një përgjigje është tashmë në zhvillim, ju lutemi prisni"
+}

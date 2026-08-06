@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "请求使用限额已超出",
+    "agent.rate_limit_exceeded.request": "请求过多，请放慢速度",
+    "agent.response_in_progress": "已有一个响应正在处理中，请稍候"
+}

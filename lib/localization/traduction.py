@@ -1,6 +1,11 @@
 import re
 from lib.localization.language import Language
 
+
+"""
+Traduction : Helper pour la traduction de chaines (doivent etre de la forme [code])
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class Traduction:
     @staticmethod
     def translate(language:Language, text:str)->str:

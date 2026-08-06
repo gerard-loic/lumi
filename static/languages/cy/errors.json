@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Goryn defnydd ceisiadau wedi'i orgyrraedd",
+    "agent.rate_limit_exceeded.request": "Gormod o geisiadau, arafwch os gwelwch yn dda",
+    "agent.response_in_progress": "Mae ymateb eisoes ar y gweill, arhoswch os gwelwch yn dda"
+}

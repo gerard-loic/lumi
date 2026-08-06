@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "تم تجاوز حد استخدام الطلبات",
+    "agent.rate_limit_exceeded.request": "طلبات كثيرة جدًا، يرجى الإبطاء",
+    "agent.response_in_progress": "هناك رد قيد المعالجة بالفعل، يرجى الانتظار"
+}

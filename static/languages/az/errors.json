@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Sorğu istifadə limiti aşıldı",
+    "agent.rate_limit_exceeded.request": "Çox sayda sorğu, zəhmət olmasa yavaşlayın",
+    "agent.response_in_progress": "Artıq cavab hazırlanır, zəhmət olmasa gözləyin"
+}

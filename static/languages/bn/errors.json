@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "অনুরোধ ব্যবহারের সীমা অতিক্রম করেছে",
+    "agent.rate_limit_exceeded.request": "অত্যধিক অনুরোধ, দয়া করে ধীর করুন",
+    "agent.response_in_progress": "একটি প্রতিক্রিয়া ইতিমধ্যে চলছে, দয়া করে অপেক্ষা করুন"
+}

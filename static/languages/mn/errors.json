@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Хүсэлт ашиглалтын хязгаараас хэтэрлээ",
+    "agent.rate_limit_exceeded.request": "Хэт олон хүсэлт, удаашруулна уу",
+    "agent.response_in_progress": "Хариу аль хэдийн боловсруулагдаж байна, хүлээнэ үү"
+}

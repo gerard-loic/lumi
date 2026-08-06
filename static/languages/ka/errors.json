@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "მოთხოვნის გამოყენების ლიმიტი გადაჭარბებულია",
+    "agent.rate_limit_exceeded.request": "ძალიან ბევრი მოთხოვნა, გთხოვთ შეანელოთ",
+    "agent.response_in_progress": "პასუხი უკვე მიმდინარეობს, გთხოვთ დაელოდოთ"
+}

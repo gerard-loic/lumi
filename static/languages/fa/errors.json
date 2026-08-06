@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "محدودیت استفاده از درخواست‌ها به پایان رسیده است",
+    "agent.rate_limit_exceeded.request": "درخواست‌های بیش از حد، لطفاً سرعت را کاهش دهید",
+    "agent.response_in_progress": "پاسخی در حال حاضر در حال پردازش است، لطفاً صبر کنید"
+}

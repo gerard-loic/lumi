@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Kikomo cha matumizi ya maombi kimezidiwa",
+    "agent.rate_limit_exceeded.request": "Maombi mengi mno, tafadhali punguza kasi",
+    "agent.response_in_progress": "Jibu tayari linaendelea, tafadhali subiri"
+}

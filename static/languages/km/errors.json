@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "លើសពីដែនកំណត់នៃការប្រើប្រាស់សំណើ",
+    "agent.rate_limit_exceeded.request": "សំណើច្រើនពេក សូមថយល្បឿន",
+    "agent.response_in_progress": "ចម្លើយមួយកំពុងដំណើរការរួចហើយ សូមរង់ចាំ"
+}

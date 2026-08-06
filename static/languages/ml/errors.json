@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "അഭ്യർത്ഥന ഉപയോഗ പരിധി കവിഞ്ഞു",
+    "agent.rate_limit_exceeded.request": "വളരെയധികം അഭ്യർത്ഥനകൾ, ദയവായി വേഗത കുറയ്ക്കുക",
+    "agent.response_in_progress": "ഒരു പ്രതികരണം ഇതിനകം പുരോഗമിക്കുന്നു, ദയവായി കാത്തിരിക്കുക"
+}

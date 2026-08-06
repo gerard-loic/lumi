@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "S'ha superat el límit d'ús de sol·licituds",
+    "agent.rate_limit_exceeded.request": "Massa sol·licituds, si us plau, alenteixi",
+    "agent.response_in_progress": "Ja hi ha una resposta en curs, si us plau, esperi"
+}

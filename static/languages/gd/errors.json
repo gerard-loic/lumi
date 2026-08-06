@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Chaidh crìoch cleachdaidh iarrtais a dhol thairis",
+    "agent.rate_limit_exceeded.request": "Cus iarrtasan, cuir maill air do thoil",
+    "agent.response_in_progress": "Tha freagairt mu thràth a' dol air adhart, fuirich mas e do thoil e"
+}

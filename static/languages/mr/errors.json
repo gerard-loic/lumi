@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "विनंती वापर मर्यादा ओलांडली",
+    "agent.rate_limit_exceeded.request": "खूप जास्त विनंत्या, कृपया वेग कमी करा",
+    "agent.response_in_progress": "प्रतिसाद आधीच सुरू आहे, कृपया प्रतीक्षा करा"
+}

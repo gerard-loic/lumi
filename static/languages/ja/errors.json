@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "リクエストの使用制限を超えました",
+    "agent.rate_limit_exceeded.request": "リクエストが多すぎます。速度を落としてください",
+    "agent.response_in_progress": "応答が既に処理中です。お待ちください"
+}

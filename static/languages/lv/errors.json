@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Pieprasījumu izmantošanas limits pārsniegts",
+    "agent.rate_limit_exceeded.request": "Pārāk daudz pieprasījumu, lūdzu palēnināt",
+    "agent.response_in_progress": "Atbilde jau tiek apstrādāta, lūdzu uzgaidiet"
+}

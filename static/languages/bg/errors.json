@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Лимитът за използване на заявки е надвишен",
+    "agent.rate_limit_exceeded.request": "Твърде много заявки, моля забавете",
+    "agent.response_in_progress": "Вече се обработва отговор, моля изчакайте"
+}

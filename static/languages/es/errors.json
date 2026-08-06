@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Límite de uso de solicitudes excedido",
+    "agent.rate_limit_exceeded.request": "Demasiadas solicitudes, por favor reduzca la velocidad",
+    "agent.response_in_progress": "Ya hay una respuesta en curso, por favor espere"
+}

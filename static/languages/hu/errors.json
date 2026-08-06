@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "A kérések használati korlátja túllépve",
+    "agent.rate_limit_exceeded.request": "Túl sok kérés, kérjük lassítson",
+    "agent.response_in_progress": "Már folyamatban van egy válasz, kérjük várjon"
+}

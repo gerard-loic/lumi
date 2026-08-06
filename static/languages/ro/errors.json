@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Limita de utilizare a solicitărilor a fost depășită",
+    "agent.rate_limit_exceeded.request": "Prea multe solicitări, vă rugăm să încetiniți",
+    "agent.response_in_progress": "Un răspuns este deja în curs, vă rugăm așteptați"
+}

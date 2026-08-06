@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Ufro Notzungslimit iwwerschratt",
+    "agent.rate_limit_exceeded.request": "Ze vill Ufroe, w.e.g. verlangsamt",
+    "agent.response_in_progress": "Eng Äntwert leeft schonn, w.e.g. waart"
+}

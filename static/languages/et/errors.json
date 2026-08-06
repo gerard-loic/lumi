@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Päringute kasutuslimiit ületatud",
+    "agent.rate_limit_exceeded.request": "Liiga palju päringuid, palun aeglustage",
+    "agent.response_in_progress": "Vastus on juba pooleli, palun oodake"
+}

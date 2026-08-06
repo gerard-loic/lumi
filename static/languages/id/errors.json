@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Batas penggunaan permintaan terlampaui",
+    "agent.rate_limit_exceeded.request": "Terlalu banyak permintaan, mohon perlambat",
+    "agent.response_in_progress": "Sebuah tanggapan sedang berlangsung, mohon tunggu"
+}

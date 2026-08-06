@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Il-limitu tal-użu tat-talbiet inqabeż",
+    "agent.rate_limit_exceeded.request": "Wisq talbiet, jekk jogħġbok naqqas il-veloċità",
+    "agent.response_in_progress": "Tweġiba diġà għaddejja, jekk jogħġbok stenna"
+}

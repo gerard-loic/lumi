@@ -1,5 +1,5 @@
 {
-    "agent.rate_limit_exceeded.usage" : "Request usage limit exceeded",
-    "agent.rate_limit_exceeded.request" : "Too many requests, please slow down",
-    "agent.response_in_progress" : "A response is already in progress, please wait"
+    "agent.rate_limit_exceeded.usage": "Limite d'usage de requêtes dépassée",
+    "agent.rate_limit_exceeded.request": "Trop de requêtes, merci de ralentir",
+    "agent.response_in_progress": "Une réponse est déjà en cours, merci de patienter"
 }

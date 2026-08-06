@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "የጥያቄ አጠቃቀም ገደብ ተላልፏል",
+    "agent.rate_limit_exceeded.request": "በጣም ብዙ ጥያቄዎች፣ እባክዎ ፍጥነት ይቀንሱ",
+    "agent.response_in_progress": "ምላሽ አስቀድሞ በሂደት ላይ ነው፣ እባክዎ ይጠብቁ"
+}

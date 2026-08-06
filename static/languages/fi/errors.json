@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Pyyntöjen käyttöraja ylitetty",
+    "agent.rate_limit_exceeded.request": "Liian monta pyyntöä, hidasta",
+    "agent.response_in_progress": "Vastaus on jo käynnissä, odota hetki"
+}

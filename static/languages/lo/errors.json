@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "ເກີນຂອບເຂດການນຳໃຊ້ຄຳຮ້ອງຂໍ",
+    "agent.rate_limit_exceeded.request": "ມີຄຳຮ້ອງຂໍຫຼາຍເກີນໄປ ກະລຸນາຊ້າລົງ",
+    "agent.response_in_progress": "ມີການຕອບກັບກຳລັງດຳເນີນຢູ່ແລ້ວ ກະລຸນາລໍຖ້າ"
+}

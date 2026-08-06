@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "So'rov foydalanish chegarasi oshib ketdi",
+    "agent.rate_limit_exceeded.request": "Juda ko'p so'rovlar, iltimos sekinlashtiring",
+    "agent.response_in_progress": "Javob allaqachon jarayonda, iltimos kuting"
+}

@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "વિનંતી ઉપયોગ મર્યાદા ઓળંગાઈ",
+    "agent.rate_limit_exceeded.request": "ખૂબ વધારે વિનંતીઓ, કૃપા કરી ધીમું કરો",
+    "agent.response_in_progress": "એક પ્રતિભાવ પહેલેથી જ ચાલુ છે, કૃપા કરી રાહ જુઓ"
+}

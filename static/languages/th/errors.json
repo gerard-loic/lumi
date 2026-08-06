@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "เกินขีดจำกัดการใช้งานคำขอ",
+    "agent.rate_limit_exceeded.request": "มีคำขอมากเกินไป กรุณาชะลอความเร็ว",
+    "agent.response_in_progress": "มีการตอบสนองที่กำลังดำเนินการอยู่แล้ว กรุณารอสักครู่"
+}

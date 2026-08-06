@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Превышен лимит использования запросов",
+    "agent.rate_limit_exceeded.request": "Слишком много запросов, пожалуйста, снизьте скорость",
+    "agent.response_in_progress": "Ответ уже обрабатывается, пожалуйста, подождите"
+}

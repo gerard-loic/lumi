@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "חריגה ממכסת השימוש בבקשות",
+    "agent.rate_limit_exceeded.request": "יותר מדי בקשות, נא להאט",
+    "agent.response_in_progress": "תגובה כבר מתבצעת, נא להמתין"
+}

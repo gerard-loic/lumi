@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Сұрау салуды пайдалану шегі асып кетті",
+    "agent.rate_limit_exceeded.request": "Тым көп сұраулар, жылдамдықты азайтыңыз",
+    "agent.response_in_progress": "Жауап әлдеқашан өңделуде, күте тұрыңыз"
+}

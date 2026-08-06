@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "अनुरोध उपयोग सीमा पार हो गई",
+    "agent.rate_limit_exceeded.request": "बहुत अधिक अनुरोध, कृपया धीमा करें",
+    "agent.response_in_progress": "एक प्रतिक्रिया पहले से ही प्रगति पर है, कृपया प्रतीक्षा करें"
+}

@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Limit využitia požiadaviek bol prekročený",
+    "agent.rate_limit_exceeded.request": "Príliš veľa požiadaviek, spomaľte prosím",
+    "agent.response_in_progress": "Odpoveď už prebieha, čakajte prosím"
+}

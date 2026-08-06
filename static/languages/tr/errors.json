@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "İstek kullanım sınırı aşıldı",
+    "agent.rate_limit_exceeded.request": "Çok fazla istek, lütfen yavaşlayın",
+    "agent.response_in_progress": "Zaten bir yanıt işleniyor, lütfen bekleyin"
+}

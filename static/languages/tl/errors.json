@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Nalampasan ang limitasyon sa paggamit ng kahilingan",
+    "agent.rate_limit_exceeded.request": "Masyadong maraming kahilingan, mangyaring bagalan",
+    "agent.response_in_progress": "May isa nang tugon na isinasagawa, mangyaring maghintay"
+}

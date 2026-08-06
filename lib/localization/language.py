@@ -84,6 +84,10 @@ ENABLED_LANGUAGES = {
     'lb': 'luxembourgeois',
 }
 
+"""
+Language : Classe de gestion d'une langue
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class Language:
     def __init__(self, code:str):
         self._code = code
@@ -123,6 +127,10 @@ class Language:
         return f"[{code}]"
 
 
+"""
+LanguageManager : Gestion du chargement des langues et helpers pour accès aux langues
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class LanguageManager:
     @staticmethod
     def init():

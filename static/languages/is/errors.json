@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Notkunarmörk fyrirspurna hafa verið yfirstigin",
+    "agent.rate_limit_exceeded.request": "Of margar fyrirspurnir, vinsamlegast hægið á",
+    "agent.response_in_progress": "Svar er þegar í vinnslu, vinsamlegast bíðið"
+}

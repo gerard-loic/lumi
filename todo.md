@@ -5,10 +5,10 @@ WAVE
 - [x] Gestionnaire de traduction
 - [x] API pour avoir la configuration d'un profil
 - [x] Réorganiser les fichiers / dossiers
-- [ ] Refactor
-- [ ] Fichiers dans les autres langues
+- [x] Refactor
+- [x] Fichiers dans les autres langues
 - [x] Version
-- [ ] Readme
+- [x] Readme
 - [x] Optimisation pour déploiement Docker
 
 ----------------------------

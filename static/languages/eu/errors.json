@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Eskaeren erabilera-muga gainditu da",
+    "agent.rate_limit_exceeded.request": "Eskaera gehiegi, mesedez moteldu",
+    "agent.response_in_progress": "Erantzun bat lanean ari da jada, mesedez itxaron"
+}

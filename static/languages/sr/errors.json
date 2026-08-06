@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Ограничење коришћења захтева premašeno",
+    "agent.rate_limit_exceeded.request": "Превише захтева, молимо успорите",
+    "agent.response_in_progress": "Одговор је већ у току, молимо сачекајте"
+}

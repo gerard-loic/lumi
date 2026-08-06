@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "درخواستوں کے استعمال کی حد سے تجاوز ہو گیا",
+    "agent.rate_limit_exceeded.request": "بہت زیادہ درخواستیں، براہ کرم رفتار کم کریں",
+    "agent.response_in_progress": "ایک جواب پہلے سے جاری ہے، براہ کرم انتظار کریں"
+}

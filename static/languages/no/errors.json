@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Bruksgrensen for forespørsler er overskredet",
+    "agent.rate_limit_exceeded.request": "For mange forespørsler, vennligst senk farten",
+    "agent.response_in_progress": "Et svar pågår allerede, vennligst vent"
+}

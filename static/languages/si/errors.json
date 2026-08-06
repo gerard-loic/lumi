@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "ඉල්ලීම් භාවිත සීමාව ඉක්මවා ඇත",
+    "agent.rate_limit_exceeded.request": "ඉතා වැඩි ඉල්ලීම්, කරුණාකර වේගය අඩු කරන්න",
+    "agent.response_in_progress": "පිළිතුරක් දැනටමත් ක්‍රියාත්මක වේ, කරුණාකර රැඳී සිටින්න"
+}

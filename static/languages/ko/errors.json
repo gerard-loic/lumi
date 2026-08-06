@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "요청 사용 한도를 초과했습니다",
+    "agent.rate_limit_exceeded.request": "요청이 너무 많습니다. 속도를 줄여 주세요",
+    "agent.response_in_progress": "이미 응답이 진행 중입니다. 기다려 주세요"
+}

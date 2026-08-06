@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "ਬੇਨਤੀ ਵਰਤੋਂ ਸੀਮਾ ਪਾਰ ਹੋ ਗਈ",
+    "agent.rate_limit_exceeded.request": "ਬਹੁਤ ਜ਼ਿਆਦਾ ਬੇਨਤੀਆਂ, ਕਿਰਪਾ ਕਰਕੇ ਹੌਲੀ ਕਰੋ",
+    "agent.response_in_progress": "ਇੱਕ ਜਵਾਬ ਪਹਿਲਾਂ ਹੀ ਚੱਲ ਰਿਹਾ ਹੈ, ਕਿਰਪਾ ਕਰਕੇ ਉਡੀਕ ਕਰੋ"
+}

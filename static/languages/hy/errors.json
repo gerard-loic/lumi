@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "Հարցումների օգտագործման սահմանաչափը գերազանցվել է",
+    "agent.rate_limit_exceeded.request": "Չափազանց շատ հարցումներ, խնդրում ենք դանդաղեցնել",
+    "agent.response_in_progress": "Պատասխանն արդեն ընթացքի մեջ է, խնդրում ենք սպասել"
+}

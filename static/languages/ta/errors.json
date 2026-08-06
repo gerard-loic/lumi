@@ -1,0 +1,5 @@
+{
+    "agent.rate_limit_exceeded.usage": "கோரிக்கை பயன்பாட்டு வரம்பு மீறப்பட்டது",
+    "agent.rate_limit_exceeded.request": "அதிக கோரிக்கைகள், தயவுசெய்து மெதுவாக்குங்கள்",
+    "agent.response_in_progress": "ஒரு பதில் ஏற்கனவே செயலாக்கத்தில் உள்ளது, தயவுசெய்து காத்திருங்கள்"
+}
