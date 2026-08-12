@@ -335,7 +335,7 @@ class Router:
             Logger.write(f"[HTTP] [403] get_file — Clé {key} absente de la session {session_id}", type=ERROR)
             raise HTTPException(status_code=403, detail="Unauthorized")
 
-        temp_root = Path("temp").resolve()
+        temp_root = Path(Config.get("directories.temp_dir")).resolve()
         file_path = (temp_root / key).resolve()
         if not file_path.is_relative_to(temp_root):
             Logger.write(f"[HTTP] [400] get_file — File path not valid : {file_path}", type=ERROR)
