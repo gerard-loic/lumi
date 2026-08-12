@@ -1,15 +1,4 @@
-WAVE
-- [x] Implémentation des traductions LLM
-- [x] Traduction des codes d'erreur
-- [x] Gestion des noms d'outils MCP en multilingue
-- [x] Gestionnaire de traduction
-- [x] API pour avoir la configuration d'un profil
-- [x] Réorganiser les fichiers / dossiers
-- [x] Refactor
-- [x] Fichiers dans les autres langues
-- [x] Version
-- [x] Readme
-- [x] Optimisation pour déploiement Docker
+
 
 ----------------------------
 BACKLOG
@@ -40,6 +29,10 @@ BACKLOG
 - [ ] Simplification et refactor des classes pour le RAG
 - [ ] Refactor AuthSessionManager
 - [ ] Gestionnaire de codes d'erreur
+- [ ] Conservation d'historique de conversations / pouvoir les continuer
+- [ ] API info profil
+- [ ] API statistiques détaillées
+- [ ] Suivi des pipelines
 
 ------------
 Versions à venir : 
@@ -157,6 +150,19 @@ Version PHOSPHOR :
 - [x] Garder les fichiers sources du RAG
 - [x] Evenement Rag, intégrer une Url pour accéder au fichier
 - [x] Dans route auth, profile par défaut
+
+Version WAVE :
+- [x] Implémentation des traductions LLM
+- [x] Traduction des codes d'erreur
+- [x] Gestion des noms d'outils MCP en multilingue
+- [x] Gestionnaire de traduction
+- [x] API pour avoir la configuration d'un profil
+- [x] Réorganiser les fichiers / dossiers
+- [x] Refactor
+- [x] Fichiers dans les autres langues
+- [x] Version
+- [x] Readme
+- [x] Optimisation pour déploiement Docker
 ------------
 
 Installer cloudflared
