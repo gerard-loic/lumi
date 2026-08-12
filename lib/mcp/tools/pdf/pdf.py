@@ -16,13 +16,22 @@ from lib.mcp.toolloader import MCPTool, confirmation_tool, tool_description
 _LINE_H = 6
 _FONT = "DejaVuSans"
 _FONT_MONO = "DejaVuSansMono"
+_FONT_JP = "IPAexGothic"
 
 
-def _find_font(filename: str) -> str:
+def _find_font(filename: str, extra_dirs: list[str] | None = None) -> str:
+    path = _find_font_optional(filename, extra_dirs)
+    if path is None:
+        raise FileNotFoundError(f"Police introuvable : {filename}")
+    return path
+
+
+def _find_font_optional(filename: str, extra_dirs: list[str] | None = None) -> str | None:
     candidates = [
         f"/usr/share/fonts/truetype/dejavu/{filename}",
         f"/usr/share/fonts/dejavu/{filename}",
         f"/usr/share/fonts/TTF/{filename}",
+        *(f"{d}/{filename}" for d in extra_dirs or []),
     ]
     try:
         import matplotlib
@@ -32,12 +41,16 @@ def _find_font(filename: str) -> str:
     for path in candidates:
         if os.path.exists(path):
             return path
-    raise FileNotFoundError(f"Police introuvable : {filename}. Chemins testés : {candidates}")
+    return None
 
 
 _FONT_REGULAR = _find_font("DejaVuSans.ttf")
 _FONT_BOLD = _find_font("DejaVuSans-Bold.ttf")
 _FONT_MONO_REGULAR = _find_font("DejaVuSansMono.ttf")
+# Police de secours pour les glyphes absents de DejaVu Sans (hiragana, katakana, kanji).
+# Optionnelle : si absente (ex. environnement de dev sans fonts-ipaexfont-gothic),
+# le PDF reste généré mais sans le rendu japonais.
+_FONT_JP_REGULAR = _find_font_optional("ipaexg.ttf", ["/usr/share/fonts/opentype/ipaexfont-gothic"])
 
 _MUTED_RGB = (90, 90, 90)
 
@@ -124,6 +137,11 @@ def _make_pdf(titre: str | None = None, sous_titre: str | None = None) -> _Templ
     pdf.add_font(_FONT, style="", fname=_FONT_REGULAR)
     pdf.add_font(_FONT, style="B", fname=_FONT_BOLD)
     pdf.add_font(_FONT_MONO, style="", fname=_FONT_MONO_REGULAR)
+    if _FONT_JP_REGULAR:
+        pdf.add_font(_FONT_JP, style="", fname=_FONT_JP_REGULAR)
+        # exact_match=False : la police de secours ne propose pas de graisse gras dédiée,
+        # on l'utilise quand même pour le texte japonais mis en gras plutôt que de l'omettre.
+        pdf.set_fallback_fonts([_FONT_JP], exact_match=False)
     pdf.set_auto_page_break(auto=True, margin=20)
     pdf.set_margins(20, 30 if pdf.chrome else 20, 20)
     pdf.alias_nb_pages()
