@@ -39,7 +39,7 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 class StaticConfig:
     @staticmethod
     def version():
-        return "1.5.4"
+        return "1.5.5"
     
     @staticmethod
     def versionName():
