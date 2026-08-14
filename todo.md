@@ -1,4 +1,9 @@
-
+Version ABYSS : 
+- [ ] Gestion d'un fallback de font pour les PDF [EN COURS]
+- [ ] Création de pipelines [EN COURS]
+- [ ] API statistiques détaillées
+- [ ] Suivi des pipelines
+- [ ] API info profil
 
 ----------------------------
 BACKLOG
@@ -10,7 +15,6 @@ BACKLOG
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
 - [ ] Critique de la réponse par un modèle
 - [ ] Possibilité d'arreter une conversation proprement
-- [ ] Création de pipelines
 - [ ] Loop
 - [ ] MCP externes
 - [ ] MCP contextuel ?
@@ -30,9 +34,8 @@ BACKLOG
 - [ ] Refactor AuthSessionManager
 - [ ] Gestionnaire de codes d'erreur
 - [ ] Conservation d'historique de conversations / pouvoir les continuer
-- [ ] API info profil
-- [ ] API statistiques détaillées
-- [ ] Suivi des pipelines
+
+
 
 ------------
 Versions à venir : 

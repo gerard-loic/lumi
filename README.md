@@ -470,6 +470,18 @@ The RAG layer indexes documents into a **PostgreSQL / pgvector** vector store. T
 
 Documents can be indexed manually via the [document management API](#document-management-api), or automatically from folders on disk via the [`Ragindexer` CRON task](#cron).
 
+### PostgreSQL / pgvector setup
+
+Lumi automatically creates the pgvector table and its indexes on first use (`CREATE TABLE IF NOT EXISTS ...`), and also issues `CREATE EXTENSION IF NOT EXISTS vector` — but the **pgvector extension binaries must already be installed on the PostgreSQL server**, since Lumi can enable the extension but not install it.
+
+- Use a PostgreSQL image/package that ships pgvector, e.g. the [`pgvector/pgvector`](https://github.com/pgvector/pgvector) Docker image (`pgvector/pgvector:pg16` or similar) instead of the plain `postgres` image, or install the `postgresql-<version>-pgvector` package on a self-managed server.
+- The `services.bdd` user configured in `config.json` (see [`services`](#services)) needs privileges to run `CREATE EXTENSION` on the target database (superuser, or a role granted rights to create pre-authorized extensions).
+- If the extension isn't installed or hasn't been created yet, RAG operations (indexing, search) fail with `vector type not found in the database`. Fix it by connecting to the target database and running:
+  ```sql
+  CREATE EXTENSION IF NOT EXISTS vector;
+  ```
+  If that command itself fails (e.g. `could not open extension control file`), the server is missing the pgvector binaries — switch to a PostgreSQL image/package that includes them.
+
 ### Supported document formats
 
 PDF, Word (`.docx`/`.doc`), PowerPoint (`.pptx`/`.ppt`), Excel (`.xlsx`/`.xls`), Markdown, HTML, plain text, CSV, and source code files (`.py`, `.js`, `.ts`).
