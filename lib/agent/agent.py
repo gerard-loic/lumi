@@ -372,6 +372,104 @@ class Agent:
             yield DoneEvent.get()
 
     """
+    Appel LLM ponctuel hors session de chat (ex: bloc "Agent" d'un pipeline) : pas d'historique de
+    conversation, pas de streaming, pas de pièces jointes/RAG pré-recherche. La boucle de tool calls
+    est la même que dans chatStream, mais les outils nécessitant une confirmation sont refusés
+    d'office (aucun client pour y répondre). L'authentification utilisée pour les appels d'outils MCP
+    est celle du contexte d'exécution courant (Auth.getSessionId()) : c'est à l'appelant de l'avoir
+    positionnée au préalable (ex: session dédiée créée pour l'exécution du pipeline).
+    """
+    async def reflect(self, prompt: str, exclude_restricted: bool = True) -> str:
+        now = datetime.datetime.now()
+        system = self._system + f"\n\nDate et heure actuelles : {now.strftime('%A %d %B %Y, %H:%M')} (heure locale)"
+
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": prompt},
+        ]
+
+        Logger.write(f"[AGENT {self.profile.getName()}] Call LLM (reflect)...", type=WARNING)
+        assistant_msg = await self._callReflectLLM(messages=messages, exclude_restricted=exclude_restricted)
+
+        iteration = 0
+        while assistant_msg.tool_calls:
+            iteration += 1
+            if iteration > self._MAX_TOOL_ITERATIONS:
+                Logger.write(f"[AGENT {self.profile.getName()}] Too many consecutive tool calls (reflect)", type=ERROR)
+                raise Exception(f"Too many consecutive tool calls (limit: {self._MAX_TOOL_ITERATIONS})")
+
+            messages.append({
+                "role": "assistant",
+                "content": assistant_msg.content or "",
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in assistant_msg.tool_calls
+                ],
+            })
+
+            for tc in assistant_msg.tool_calls:
+                meta = MCPTool.get_meta(tc.function.name)
+
+                if meta.get("confirmation", False):
+                    Logger.write(f"[AGENT {self.profile.getName()}] Tool {tc.function.name} requires a confirmation, unavailable in reflect()", type=WARNING)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": "Tool call failed: this tool requires a user confirmation, unavailable in this context",
+                    })
+                    continue
+
+                Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name}...", type=WARNING)
+                try:
+                    args = json.loads(tc.function.arguments)
+                    result_text, _ = await mcp_manager.call_tool(
+                        tc.function.name, args,
+                        tools_enabled=self.profile.getConfigValue(key="mcp.tools_enabled", default=[]),
+                    )
+                except Exception as e:
+                    error_detail = str(e)
+                    Logger.write(f"[AGENT {self.profile.getName()}] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": f"Tool call failed: {error_detail}",
+                    })
+                    continue
+
+                Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name} OK !", type=OK)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result_text,
+                })
+
+            assistant_msg = await self._callReflectLLM(messages=messages, exclude_restricted=exclude_restricted)
+
+        Logger.write(f"[AGENT {self.profile.getName()}] Call LLM (reflect) OK !", type=OK)
+        LocalData.logLLMUsage(session_uid=Auth.getSessionId(), token_used=0)
+        return assistant_msg.content or ""
+
+    """
+    Appel LLM non streamé avec retry sur réponse vide, utilisé par reflect().
+    """
+    async def _callReflectLLM(self, messages: list, exclude_restricted: bool):
+        for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
+            response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
+            if response.choices:
+                return response.choices[0].message
+            if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
+                Logger.write(f"[AGENT {self.profile.getName()}] LLM returned empty response (reflect), retrying...", type=WARNING)
+        Logger.write(f"[AGENT {self.profile.getName()}] LLM returned empty response after retries (reflect)", type=ERROR)
+        raise Exception("Empty LLM answer")
+
+    """
     Génère une liste de questions de suivi suggérées à partir de l'échange complet.
     Réutilise le prompt système et l'historique de l'appel principal (donc le périmètre/les règles de l'agent)
     et y ajoute un résumé des outils réellement disponibles, pour éviter que le modèle propose des questions

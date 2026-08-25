@@ -1,11 +1,19 @@
 Version ABYSS : 
-- [ ] Gestion d'un fallback de font pour les PDF [EN COURS]
+- [x] Gestion d'un fallback de font pour les PDF
 - [ ] Création de pipelines [EN COURS]
 - [ ] API statistiques détaillées
 - [ ] Suivi des pipelines
 - [ ] API info profil
+- [x] Support connecteur LLM DigitalOcean 
+- [x] Support connecteur LLM Cerebras
+- [ ] Dans Embedder liaison dynamique / gestion différentiée des prividers
+- [ ] Documentation spécifique sur l'écriture des fichiers de configuration avec options
+- [ ] Vérifier le service d'auth Webex nécessaire ?
+- [ ] Revue des logs
+- [ ] File format checker
+- [ ] Vérificateur de format des fichiers de configuration
+- [ ] Gestionnaire de droits d'API Basic
 
-----------------------------
 BACKLOG
 - [ ] Gérer d'autres sources de données ?
 - [ ] Limiter la sortie ?
@@ -34,6 +42,18 @@ BACKLOG
 - [ ] Refactor AuthSessionManager
 - [ ] Gestionnaire de codes d'erreur
 - [ ] Conservation d'historique de conversations / pouvoir les continuer
+- [ ] Gestion téléchargement fichiers CSV
+- [ ] Pb des logs non enregistrés ?? (le démarrage)
+- [ ] Outils MCP recherche WEB : préciser la recherche effectuée
+- [ ] sourcer la réponse
+- [ ] Event de redirection
+- [ ] Supprimer un fichier du micro RAG
+- [ ] Suppression des messages du context : résumer dabord
+- [ ] modifier l'evenement rag en source plus globale
+- [ ] Avoir les affichages de sources dans les contenus
+- [ ] Sur les appels MCP avec un UID d'appel d'outil
+
+
 
 
 

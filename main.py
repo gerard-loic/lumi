@@ -31,11 +31,8 @@ from lib.connectors.connector import ConnectorManager
 from lib.cron.cronmanager import CronManager
 from lib.agent.profile import ProfileManager
 from lib.localization.language import LanguageManager
+from lib.pipelines.pipelinemanager import PipelineManager
 
-print("###############################################################################")
-print('# LUMI - IA agent with MCP toolkit')
-print(f"# Version {StaticConfig.version()} ({StaticConfig.versionName()})")
-print("###############################################################################")
 
 # ----------------------------------------------------------------
 # Initialisation configuration
@@ -46,6 +43,12 @@ Config.init()
 # Initialisation logger
 # ----------------------------------------------------------------
 Logger.init(configuration=Config.get(key="logger"))
+
+print("###############################################################################")
+print('# LUMI - IA agent with MCP toolkit')
+print(f"# Version {StaticConfig.version()} ({StaticConfig.versionName()})")
+print("###############################################################################")
+
 
 # ----------------------------------------------------------------
 # Initialisation profils
@@ -74,6 +77,11 @@ print(l._translations)
 # Initialisation gestionnaire de services (pour authentification)
 # ----------------------------------------------------------------
 ServiceManager.init()
+
+# ----------------------------------------------------------------
+# Initialisation gestionnaire de pipelines
+# ----------------------------------------------------------------
+PipelineManager.init()
 
 # ----------------------------------------------------------------
 # démarre/arrête le MCP Server avec FastAPI

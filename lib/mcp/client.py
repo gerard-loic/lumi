@@ -5,6 +5,7 @@ et partagée entre toutes les requêtes — le serveur MCP tourne dans le
 même processus via transport in-memory (pas de subprocess).
 """
 
+import asyncio
 import json
 import anyio
 from contextlib import asynccontextmanager
@@ -26,12 +27,14 @@ class MCPClientManager:
     def __init__(self):
         self._session: ClientSession | None = None
         self._tools: list = []
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     #Context manager à utiliser dans le lifespan FastAPI.
     @asynccontextmanager
     async def run(self):
         from lib.mcp.server import create_app
         mcp_app = create_app()
+        self._loop = asyncio.get_running_loop()
 
         async with create_client_server_memory_streams() as (client_streams, server_streams):
             client_read, client_write = client_streams
@@ -66,6 +69,16 @@ class MCPClientManager:
             Logger.write("MCPClientManager not started", type=ERROR)
             raise RuntimeError("MCPClientManager not started")
         return self._session
+
+    #Boucle événementielle FastAPI (celle qui porte la session/le task group MCP), à utiliser pour
+    #exécuter du code appelant call_tool() depuis un autre thread (cf. lib/pipelines/blocks/agent.py) :
+    #la session MCP est liée à cette boucle, l'appeler depuis une autre (ex: asyncio.run() dans un thread) bloque indéfiniment.
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        if not self._loop:
+            Logger.write("MCPClientManager not started", type=ERROR)
+            raise RuntimeError("MCPClientManager not started")
+        return self._loop
 
     @property
     def tools(self) -> list:

@@ -1,4 +1,5 @@
 from lib.agent.llmconnector.litellm import LiteLLMEmbedder
+from lib.agent.llmconnector.digitalocean import DigitalOceanEmbedder
 from lib.log.logger import Logger, ERROR
 
 """
@@ -12,6 +13,8 @@ class Embedder:
         model_connector = ProfileManager.getProfile("default").getConfigValue("llm.connector")
         if model_connector == "LiteLLM":
             self.embedder = LiteLLMEmbedder()
+        elif model_connector == "DigitalOcean":
+            self.embedder = DigitalOceanEmbedder()
         else:
             Logger.write(text=f"LLM connector {model_connector} not supported", type=ERROR)
             raise Exception(f"LLM connector {model_connector} not supported")

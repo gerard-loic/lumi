@@ -409,6 +409,37 @@
       line-height: 1.6;
     }
 
+    .modal-server-row {
+      display: flex;
+      gap: 10px;
+    }
+    .modal-field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .modal-field.host { flex: 2; }
+    .modal-field label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .modal-field input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .modal-field input:focus { border-color: #00e5a050; }
+
     .modal textarea {
       background: var(--bg);
       border: 1px solid var(--border);
@@ -586,7 +617,17 @@
       <div class="dot"></div>
       <h2>Authentification</h2>
     </div>
-    <p class="modal-desc">Renseignez le body de connexion en JSON :</p>
+    <p class="modal-desc">Renseignez l'adresse du serveur puis le body de connexion en JSON :</p>
+    <div class="modal-server-row">
+      <div class="modal-field host">
+        <label for="serverHost">Hôte</label>
+        <input type="text" id="serverHost" value="127.0.0.1" spellcheck="false" placeholder="127.0.0.1" />
+      </div>
+      <div class="modal-field">
+        <label for="serverPort">Port</label>
+        <input type="text" id="serverPort" value="8001" spellcheck="false" placeholder="8001" />
+      </div>
+    </div>
     <textarea id="authBody" spellcheck="false">{
   "authorization": {
     "token": ""
@@ -656,10 +697,28 @@
 
 <script>
   // ── Config ──────────────────────────────────────────────────────
-  const BASE_URL   = "http://127.0.0.1:8001";
-  const WS_URL     = "ws://127.0.0.1:8001/ws";
-  const AUTH_URL   = BASE_URL + "/auth";
-  const UPLOAD_URL = BASE_URL + "/files/upload";
+  // Construites à partir des champs hôte/port de la modale (valeurs par défaut : 127.0.0.1:8001)
+  let BASE_URL, WS_URL, AUTH_URL, UPLOAD_URL;
+
+  function buildUrls() {
+    let host = (document.getElementById("serverHost").value || "127.0.0.1").trim();
+    const port = (document.getElementById("serverPort").value || "8001").trim();
+
+    let scheme = "http";
+    if (host.includes("://")) {
+      const idx = host.indexOf("://");
+      scheme = host.slice(0, idx);
+      host = host.slice(idx + 3);
+    }
+    host = host.replace(/\/+$/, "");
+    const wsScheme = scheme === "https" ? "wss" : "ws";
+
+    BASE_URL   = `${scheme}://${host}:${port}`;
+    WS_URL     = `${wsScheme}://${host}:${port}/ws`;
+    AUTH_URL   = BASE_URL + "/auth";
+    UPLOAD_URL = BASE_URL + "/files/upload";
+  }
+  buildUrls();
 
   let authToken  = null;
   let ws         = null;
@@ -695,6 +754,7 @@
   async function authenticate() {
     authErrorEl.textContent = "";
     authBtn.disabled = true;
+    buildUrls();
 
     let body;
     try {

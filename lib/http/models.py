@@ -49,6 +49,15 @@ class RagDeleteCollectionRequest:
         self.collection = collection
 
 
+"""
+PipelineStartRequest — Format requête HTTP démarrage d'un pipeline via API
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class PipelineStartRequest:
+    def __init__(self, pipeline: str):
+        self.pipeline = pipeline
+
+
 #-------------------------------------------------------------------
 #Format retour endpoints
 
@@ -138,3 +147,12 @@ class FileUploadResponse(BaseModel):
     key: str
     filename: str
     tokens: int
+
+
+"""
+PipelineStartResponse — Format retour HTTP PipelineStart
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class PipelineStartResponse(BaseModel):
+    pipeline_uid: str
+    process_uid: str

@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
 from typing import Optional
-from lib.http.models import ToolInfo, AuthRequest, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse, AuthSessionResponse
+from lib.http.models import ToolInfo, AuthRequest, PipelineStartResponse, PipelineStartRequest, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse, AuthSessionResponse
 from lib.http.auth import Auth, AdminAuth
 from lib.session.session import AuthSessionManager
 from lib.mcp.client import mcp_manager
@@ -21,6 +21,10 @@ from lib.agent.profile import ProfileManager
 from lib.agent.agent import AgentManager
 from lib.localization.language import LanguageManager, Language
 from lib.localization.traduction import Traduction
+from lib.pipelines.pipelinemanager import PipelineManager
+from lib.pipelines.pipelinerunner import PipelineRunner
+from lib.pipelines.pipeline import Pipeline
+from lib.pipelines.trigger import triggerEvent, TRIGGER_API_CALL
 
 _rag_basic_auth = HTTPBasic()
 _rag_basic_auth_optional = HTTPBasic(auto_error=False)
@@ -63,6 +67,7 @@ class Router:
         self.router.add_api_route("/rag/stats", self.rag_stats, methods=["GET"])
         self.router.add_api_route("/rag/collections/{collection}", self.rag_delete_collection, methods=["DELETE"])
         self.router.add_api_route("/rag/collections/{collection}/documents/{source:path}", self.rag_delete_document, methods=["DELETE"])
+        self.router.add_api_route("/pipeline/{pipeline}/start", self.pipeline_start, methods=["POST"])
 
     """
     Route [GET] /health : renvoie l'état de santé du service
@@ -588,3 +593,19 @@ class Router:
         except Exception as e:
             Logger.write(f"[HTTP] [500] rag_delete_collection — {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=str(e))
+
+    async def pipeline_start(self, req: PipelineStartRequest = Depends(), credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> PipelineStartResponse:
+        self._check_admin_auth(credentials)
+
+        if not PipelineManager.pipelineExists(pipeline_uid=req.pipeline):
+            Logger.write(f"[HTTP] [400] pipeline_start : pipeline {req.pipeline} does not exist", type=ERROR)
+            raise HTTPException(status_code=400, detail=str(f"[HTTP] [400] pipeline_start : pipeline {req.pipeline} does not exist"))
+        
+        PipelineManager.trigger(event=triggerEvent(type=TRIGGER_API_CALL), target_pipelines=[req.pipeline])
+
+        out = {
+            "pipeline_uid" : req.pipeline,
+            "process_uid" : ""
+        }
+
+        return out

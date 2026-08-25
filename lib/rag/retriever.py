@@ -4,6 +4,7 @@ from lib.rag.vectorstore import VectorStore
 from lib.config.config import Config
 from lib.log.logger import Logger, ERROR
 from lib.agent.llmconnector.litellm import LiteLLMEmbedder
+from lib.agent.llmconnector.digitalocean import DigitalOceanEmbedder
 
 """
 Retriever — Recherche sémantique dans le VectorStore
@@ -20,6 +21,8 @@ class Retriever:
         model_connector = default_profile.getConfigValue("llm.connector")
         if model_connector == "LiteLLM":
             self._embedder = LiteLLMEmbedder()
+        elif model_connector == "DigitalOcean":
+            self._embedder = DigitalOceanEmbedder()
         else:
             Logger.write(text=f"LLM connector {model_connector} not supported", type=ERROR)
             raise Exception(f"LLM connector {model_connector} not supported")
