@@ -2,7 +2,7 @@ import json
 from typing import AsyncGenerator, Optional
 from lib.mcp.client import mcp_manager, MCPToolError
 from lib.mcp.toolloader import MCPTool
-from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent, FollowUpEvent, RagEvent
+from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ThinkingEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent, FollowUpEvent, RagEvent
 from lib.rag.attachmentretriever import AttachmentRetriever
 from lib.session.session import AuthSessionManager as _SessionManager
 from lib.log.logger import Logger, ERROR, OK, WARNING
@@ -14,6 +14,7 @@ import datetime
 from lib.utils.dynamicimport import DynamicImport
 from lib.agent.profile import ProfileManager, Profile
 from lib.localization.traduction import Traduction
+from lib.utils.uuid import Uuid
 
 #Accumule un événement RAG (source dédoublonnée, pages fusionnées) plutôt que de l'émettre immédiatement :
 #le LLM peut appeler l'outil de recherche RAG plusieurs fois (ou combiner pré-recherche sur pièces jointes et
@@ -129,9 +130,16 @@ class Agent:
                     filenames = ", ".join(a["filename"] for a in attachments)
                     system += f"\n\nFichiers joints par l'utilisateur à cette conversation : {filenames}. Les extraits les plus pertinents sont déjà fournis ci-dessous dans le message ; utilise l'outil search_attached_files si tu as besoin de chercher autre chose dans ces fichiers."
 
+                    current_call_uid = Uuid.get()
+                    current_tool_uid = "agent_micro_rag"
+                    current_tool_name = t.trad("[files.search_attached_files]")
+                    yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="PENDING", long_call=True, message="")
+                                        
                     try:
                         results = await AttachmentRetriever().search(session_id, message)
+                        yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="OK")
                     except Exception as e:
+                        yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="ERROR", long_call=False, message=str(e))     
                         Logger.write(f"[AGENT] Attachment search failed : {str(e)}", type=ERROR)
                         results = []
 
@@ -158,11 +166,16 @@ class Agent:
             # ----------------------------------------------------------------
             # ÉTAPE 1 — Appel non streamé pour détecter les tool calls
             # ----------------------------------------------------------------
+            llm_call_uid = Uuid.get()
+            llm_call_type = "INITIAL"
+            yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="PENDING")
+
             for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
                 try:
                     response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
                 except Exception as e:
                     Logger.write(f"[AGENT {self.profile.getName()}] LLM call failure : {str(e)}", type=ERROR)
+                    yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="LLM_CALL_FAIL", message=str(e))
                     yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
                     yield DoneEvent.get()
                     return
@@ -172,10 +185,12 @@ class Agent:
                     Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response, retrying...", type=WARNING)
             else:
                 Logger.write("[AGENT] LLM returned empty response after retries", type=ERROR)
+                yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="EMPTY_RESPONSE", message="Empty LLM answer")
                 yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty LLM answer")
                 yield DoneEvent.get()
                 return
             assistant_msg = response.choices[0].message
+            yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="OK")
             Logger.write("[AGENT {self.profile.getName()}] Call LLM OK !", type=OK)
 
             # ----------------------------------------------------------------
@@ -238,8 +253,11 @@ class Agent:
                             yield DoneEvent.get()
                             return
 
-                    #Avertit le client que l'appel risque d'être long
-                    yield ToolEvent.get(tool_name=tc.function.name, status="PENDING", long_call=meta.get("slow", False), message=description)
+                    #Avertit le client
+                    current_call_uid = Uuid.get()
+                    current_tool_uid = tc.function.name
+                    current_tool_name = description
+                    yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="PENDING", long_call=meta.get("slow", False), message="")
                     
                     #On essaie d'executer l'outil, si erreur on transmet l'erreur au LLM pour qu'il puisse en déduire la suite
                     try:
@@ -251,7 +269,7 @@ class Agent:
                     except MCPToolError as e:
                         error_detail = str(e)
                         Logger.write(f"[AGENT {self.profile.getName()}] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
-                        yield ToolEvent.get(tool_name=tc.function.name, status="ERROR", message=error_detail)
+                        yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="ERROR", message=error_detail)
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tc.id,
@@ -261,7 +279,7 @@ class Agent:
                     except Exception as e:
                         error_detail = str(e)
                         Logger.write(f"[AGENT {self.profile.getName()}] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
-                        yield ToolEvent.get(tool_name=tc.function.name, status="ERROR", message=error_detail)
+                        yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="ERROR", message=error_detail)
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tc.id,
@@ -270,7 +288,7 @@ class Agent:
                         continue
 
                     Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name} OK !", type=OK)
-                    yield ToolEvent.get(tool_name=tc.function.name, status="OK")
+                    yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="OK")
 
                     for event in tool_events:
                         if not _accumulate_rag_event(rag_sources, event):
@@ -287,12 +305,17 @@ class Agent:
                     })
 
 
+                llm_call_uid = Uuid.get()
+                llm_call_type = "TOOL"
+                yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="PENDING")
+
                 Logger.write("[AGENT {self.profile.getName()}] Call LLM...", type=WARNING)
                 for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
                     try:
                         response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
                     except Exception as e:
                         Logger.write(f"[AGENT {self.profile.getName()}] LLM call failure (iteration {str(iteration)}) : {str(e)}", type=ERROR)
+                        yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="LLM_CALL_FAIL", message=str(e))
                         yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
                         yield DoneEvent.get()
                         return
@@ -302,15 +325,22 @@ class Agent:
                         Logger.write("[AGENT] LLM returned empty response, retrying...", type=WARNING)
                 else:
                     Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response after retries", type=ERROR)
+                    yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="EMPTY_RESPONSE", message="Empty LLM answer")
                     yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty LLM answer")
                     yield DoneEvent.get()
                     return
                 assistant_msg = response.choices[0].message
+                yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="OK")
                 Logger.write("[AGENT {self.profile.getName()}] Call LLM OK !", type=OK)
 
             # ----------------------------------------------------------------
             # ÉTAPE 3 — Réponse finale streamée token par token (1 retry si vide)
             # ----------------------------------------------------------------
+
+            llm_call_uid = Uuid.get()
+            llm_call_type = "FINAL"
+            yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="PENDING")
+
             assistant_reply_tokens = []
             for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
                 Logger.write(f"[AGENT {self.profile.getName()}] Call LLM for final answer (attempt {attempt + 1}/{self._EMPTY_LLM_RESPONSE_MAX_RETRY})...", type=WARNING)
@@ -322,6 +352,7 @@ class Agent:
                             yield TokenEvent.get(token=token)
                 except Exception as e:
                     Logger.write(f"[AGENT {self.profile.getName()}] LLM streaming error : {str(e)}", type=ERROR)
+                    yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="LLM_CALL_FAIL", message=str(e))
                     yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM streaming error", details=str(e))
                     yield DoneEvent.get()
                     return
@@ -333,10 +364,13 @@ class Agent:
 
             if not assistant_reply_tokens:
                 Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response after retry", type=ERROR)
+                yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="EMPTY_RESPONSE", message="Empty response from LLM")
                 yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty response from LLM")
                 yield DoneEvent.get()
                 return
 
+
+            yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="OK")
             Logger.write("[AGENT {self.profile.getName()}] Call LLM for final answer OK !", type=OK)
 
             #Emission groupée des citations RAG accumulées pendant tout le tour (dédoublonnées par source),
