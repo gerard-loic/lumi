@@ -820,13 +820,13 @@
 
     } else if (data.type === "tool_call") {
       if (data.status === "PENDING") {
-        const el = addToolIndicator(msg, bubble, data.message || data.tools);
-        toolIndicators.set(data.tools, el);
+        const el = addToolIndicator(msg, bubble, data.message || data.tool_name);
+        toolIndicators.set(data.call_uid, el);
       } else if (data.status === "OK") {
-        const el = toolIndicators.get(data.tools);
+        const el = toolIndicators.get(data.call_uid);
         if (el) el.classList.add("done");
       } else if (data.status === "ERROR") {
-        const el = toolIndicators.get(data.tools);
+        const el = toolIndicators.get(data.call_uid);
         if (el) el.classList.add("error");
       }
       scrollBottom();

@@ -52,8 +52,8 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class ToolEvent:
     @staticmethod
-    def get(tool_name:str, status:str = "PENDING", long_call:bool = False, message:str = ""):
-        return Event.get(eventType="tool_call", payload={"tools" : tool_name, "status" : status, "long_call" : long_call, "message": message})
+    def get(tool_uid:str, tool_name:str, call_uid:str, status:str = "PENDING", long_call:bool = False, message:str = ""):
+        return Event.get(eventType="tool_call", payload={"tool_uid" : tool_uid, "tool_name" : tool_name, "call_uid" : call_uid, "status" : status, "long_call" : long_call, "message": message})
 
 """
 FileEvent : envoyé lorsqu'un fichier est généré et mis à disposition
@@ -109,3 +109,15 @@ class FollowUpEvent:
     @staticmethod
     def get(questions: list):
         return Event.get(eventType="followup", payload={"questions": questions})
+
+
+"""
+ThinkingEvent : envoyé lorsque le modèle réfléchit
+call_type : INITIAL, TOOL, FINAL
+status : PENDING, ERROR, OK
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class ThinkingEvent:
+    @staticmethod
+    def get(call_uid:str, call_type:str, status:str = "PENDING", error_code:str = "", message:str = ""):
+        return Event.get(eventType="thinking", payload={"call_uid": call_uid, "call_type" : call_type, "status" : status, "error_code" : error_code, "message" : message})
