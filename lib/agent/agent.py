@@ -14,6 +14,7 @@ import datetime
 from lib.utils.dynamicimport import DynamicImport
 from lib.agent.profile import ProfileManager, Profile
 from lib.localization.traduction import Traduction
+from lib.utils.uuid import Uuid
 
 #Accumule un événement RAG (source dédoublonnée, pages fusionnées) plutôt que de l'émettre immédiatement :
 #le LLM peut appeler l'outil de recherche RAG plusieurs fois (ou combiner pré-recherche sur pièces jointes et
@@ -238,8 +239,11 @@ class Agent:
                             yield DoneEvent.get()
                             return
 
-                    #Avertit le client que l'appel risque d'être long
-                    yield ToolEvent.get(tool_name=tc.function.name, status="PENDING", long_call=meta.get("slow", False), message=description)
+                    #Avertit le client
+                    current_call_uid = Uuid.get()
+                    current_tool_uid = tc.function.name
+                    current_tool_name = description
+                    yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="PENDING", long_call=meta.get("slow", False), message="")
                     
                     #On essaie d'executer l'outil, si erreur on transmet l'erreur au LLM pour qu'il puisse en déduire la suite
                     try:
@@ -251,7 +255,7 @@ class Agent:
                     except MCPToolError as e:
                         error_detail = str(e)
                         Logger.write(f"[AGENT {self.profile.getName()}] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
-                        yield ToolEvent.get(tool_name=tc.function.name, status="ERROR", message=error_detail)
+                        yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="ERROR", message=error_detail)
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tc.id,
@@ -261,7 +265,7 @@ class Agent:
                     except Exception as e:
                         error_detail = str(e)
                         Logger.write(f"[AGENT {self.profile.getName()}] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
-                        yield ToolEvent.get(tool_name=tc.function.name, status="ERROR", message=error_detail)
+                        yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="ERROR", message=error_detail)
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tc.id,
@@ -270,7 +274,7 @@ class Agent:
                         continue
 
                     Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name} OK !", type=OK)
-                    yield ToolEvent.get(tool_name=tc.function.name, status="OK")
+                    yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="OK")
 
                     for event in tool_events:
                         if not _accumulate_rag_event(rag_sources, event):
