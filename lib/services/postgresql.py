@@ -20,20 +20,29 @@ class PostgreSQL(Service):
         super().__init__(data=data, serviceDataFormat=service_format)
         self._connect()
 
+    #Ouvre une connexion neuve à la BDD (jamais partagée/conservée sur l'instance : ce service est un
+    #singleton commun à toutes les sessions, une connexion/curseur unique serait utilisé de façon
+    #concurrente par des appels d'outils MCP de sessions différentes, avec un risque de mélange des
+    #résultats entre utilisateurs — cf. lib/rag/ragconnector/pgvector.py pour le même principe).
+    def _connect_raw(self):
+        return psycopg2.connect(
+            user=self.getConfValue(key="username"),
+            password=self.getConfValue(key="password"),
+            host=self.getConfValue(key="host"),
+            port=self.getConfValue(key="port"),
+            database=self.getConfValue(key="database")
+        )
+
+    #Vérifie la connectivité à la BDD au démarrage
     def _connect(self):
         try:
-            self.cnx = psycopg2.connect(
-                user=self.getConfValue(key="username"),
-                password=self.getConfValue(key="password"),
-                host=self.getConfValue(key="host"),
-                port=self.getConfValue(key="port"),
-                database=self.getConfValue(key="database")
-            )
-
-            self.db_cursor = self.cnx.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-
-            self.db_cursor.execute("SELECT version();")
-            record = self.db_cursor.fetchone()
+            cnx = self._connect_raw()
+            try:
+                with cnx.cursor() as cur:
+                    cur.execute("SELECT version();")
+                    cur.fetchone()
+            finally:
+                cnx.close()
             self.authenticated = True
             return True
         except Exception as e:
@@ -74,8 +83,12 @@ class PostgreSQL(Service):
 
         parts.append(sql.SQL(" LIMIT 1"))
 
-
-        self.db_cursor.execute(sql.Composed(parts), params)
-        record = self.db_cursor.fetchone()
+        cnx = self._connect_raw()
+        try:
+            with cnx.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql.Composed(parts), params)
+                record = cur.fetchone()
+        finally:
+            cnx.close()
 
         return record["id"] if record else None
