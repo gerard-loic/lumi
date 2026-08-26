@@ -1,6 +1,7 @@
 import importlib
 import importlib.util
 import os
+import contextvars
 from lib.config.config import Config
 from lib.log.logger import Logger, ERROR, OK, WARNING
 
@@ -21,11 +22,34 @@ class Service:
 
         #Vérifie le format
         self._checkData(data=data, serviceDataFormat=serviceDataFormat)
-        self.authenticated = False
-        self.authData = {}
+
+        #Chaque service est une instance unique partagée par toutes les sessions
+        #(cf. ServiceManager.services). L'auth courante est donc isolée par tâche
+        #asyncio via ContextVar (même principe que Auth._session_id_var) plutôt que
+        #stockée comme simple attribut d'instance : sans ça, un appel d'outil MCP
+        #concurrent d'une autre session pourrait écraser le token en cours d'utilisation
+        #avant qu'il ne soit lu (race condition, cf. lib/mcp/toolloader.py:_inject_session_auth).
+        self._authenticated_var: contextvars.ContextVar[bool] = contextvars.ContextVar(f"{name}_authenticated", default=False)
+        self._authData_var: contextvars.ContextVar[dict] = contextvars.ContextVar(f"{name}_authData", default={})
 
     def getName(self)->str:
         return self.name
+
+    @property
+    def authenticated(self) -> bool:
+        return self._authenticated_var.get()
+
+    @authenticated.setter
+    def authenticated(self, value: bool):
+        self._authenticated_var.set(value)
+
+    @property
+    def authData(self) -> dict:
+        return self._authData_var.get()
+
+    @authData.setter
+    def authData(self, value: dict):
+        self._authData_var.set(value)
 
     #Retourne donnée de configuration du service
     def getConfValue(self, key:str):
@@ -33,20 +57,20 @@ class Service:
             return self.data[key]
         else:
             raise Exception(f"Config value {key} not found")
-        
+
     #Réalise l'authentification au service
     def authenticate(self, data:dict={}):
         self.authenticated = True
         return True
-    
+
     #Vérifie l'authentification
     def checkAuthentication(self, authorization:dict):
         return self.authenticated
-    
+
     #Retourne les données d'authentification
     def getAuthentication(self):
         return self.authData
-    
+
     #Définit les données d'authentification
     def setAuthentication(self, authorization:dict):
         self.authData = authorization
