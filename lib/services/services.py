@@ -27,8 +27,28 @@ class Service:
         #stockée comme simple attribut d'instance : sans ça, un appel d'outil MCP
         #concurrent d'une autre session pourrait écraser le token en cours d'utilisation
         #avant qu'il ne soit lu (race condition, cf. lib/mcp/toolloader.py:_inject_session_auth).
-        self._authenticated_var: contextvars.ContextVar[bool] = contextvars.ContextVar(f"{name}_authenticated", default=False)
-        self._authData_var: contextvars.ContextVar[dict] = contextvars.ContextVar(f"{name}_authData", default={})
+        #Le libellé passé à ContextVar() est juste un nom de debug (repr) : ce qui isole vraiment les
+        #valeurs entre instances, c'est l'objet ContextVar lui-même (un par instance de Service), pas
+        #ce libellé — inutile qu'il soit unique, donc pas besoin d'un paramètre `name` sur __init__.
+        label = self.__class__.__name__
+        self._authenticated_var: contextvars.ContextVar[bool] = contextvars.ContextVar(f"{label}_authenticated", default=False)
+        self._authData_var: contextvars.ContextVar[dict] = contextvars.ContextVar(f"{label}_authData", default={})
+
+    @property
+    def authenticated(self) -> bool:
+        return self._authenticated_var.get()
+
+    @authenticated.setter
+    def authenticated(self, value: bool):
+        self._authenticated_var.set(value)
+
+    @property
+    def authData(self) -> dict:
+        return self._authData_var.get()
+
+    @authData.setter
+    def authData(self, value: dict):
+        self._authData_var.set(value)
 
     #Retourne donnée de configuration du service
     def getConfValue(self, key:str):
