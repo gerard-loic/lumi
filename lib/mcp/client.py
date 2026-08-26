@@ -8,7 +8,7 @@ même processus via transport in-memory (pas de subprocess).
 import asyncio
 import json
 import anyio
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, AsyncExitStack
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 from lib.mcp.toolloader import MCPTool, ToolLoader
@@ -28,6 +28,9 @@ class MCPClientManager:
         self._session: ClientSession | None = None
         self._tools: list = []
         self._loop: asyncio.AbstractEventLoop | None = None
+        #Outils MCP servis par des serveurs externes (distants) plutôt que par le serveur
+        #in-process : nom exposé au LLM (préfixé "ext__<service>__") -> (session, nom réel côté serveur).
+        self._external_sessions: dict[str, tuple[ClientSession, str]] = {}
 
     #Context manager à utiliser dans le lifespan FastAPI.
     @asynccontextmanager
@@ -52,16 +55,60 @@ class MCPClientManager:
                     self._session = session
                     await session.initialize()
                     tools_response = await session.list_tools()
-                    self._tools = tools_response.tools
-                    print(f"[MCP] Session started — {len(self._tools)} tools : "
+                    self._tools = list(tools_response.tools)
+                    print(f"[MCP] Session started — {len(self._tools)} internal tools : "
                           f"{[t.name for t in self._tools]}")
-                    yield
+
+                    #Connexion aux serveurs MCP externes déclarés comme services (cf. MCPExternalService) :
+                    #ouverte pour toute la durée de vie de l'application, via un AsyncExitStack dédié.
+                    async with AsyncExitStack() as external_stack:
+                        await self._connect_external_servers(external_stack)
+                        yield
 
                 tg.cancel_scope.cancel()
 
         self._session = None
         self._tools = []
+        self._external_sessions = {}
         print("[MCP] Session closed")
+
+    #Se connecte à chaque service MCP externe configuré (handler MCPExternalService), récupère ses
+    #outils et les fusionne dans self._tools avec un nom préfixé "ext__<service>__<outil>" pour éviter
+    #toute collision avec les outils internes ou entre serveurs externes. Un serveur injoignable au
+    #démarrage est loggé et ignoré plutôt que de bloquer le démarrage de l'application.
+    #
+    #Le repérage se fait sur le `handler` déclaré en config plutôt que via isinstance() : ServiceManager
+    #charge chaque handler par importlib.spec_from_file_location sous le nom de module `services.<handler>`,
+    #distinct du module `lib.services.mcpexternalservice` importé ici — isinstance() contre la classe
+    #importée normalement échouerait donc toujours (deux objets classe différents pour le même code).
+    async def _connect_external_servers(self, stack: AsyncExitStack) -> None:
+        from lib.config.config import Config
+        from lib.services.services import ServiceManager
+
+        external_names = [
+            name for name, conf in Config.get("services", default={}).items()
+            if conf.get("handler") == "MCPExternalService"
+        ]
+
+        for name in external_names:
+            service = ServiceManager.get(name=name)
+            try:
+                session = await service.connect(stack)
+                tools_response = await session.list_tools()
+            except Exception as e:
+                Logger.write(f"[MCP] External server '{name}' unreachable, skipped : {e}", type=ERROR)
+                continue
+
+            for tool in tools_response.tools:
+                exposed_name = f"ext__{name}__{tool.name}"
+                self._external_sessions[exposed_name] = (session, tool.name)
+                #Namespace "ext.<service>" : réutilise la convention de motifs "namespace.*" déjà
+                #supportée par ToolLoader.is_enabled, pour activer ces outils via mcp.tools_enabled.
+                MCPTool._registry.setdefault(exposed_name, {})["namespace"] = f"ext.{name}"
+                self._tools.append(tool.model_copy(update={"name": exposed_name}))
+
+            print(f"[MCP] External server '{name}' connected — {len(tools_response.tools)} tools : "
+                  f"{[t.name for t in tools_response.tools]}")
 
     @property
     def session(self) -> ClientSession:
@@ -125,10 +172,16 @@ class MCPClientManager:
             Logger.write(f"MCP tool {name} is not enabled for this profile", type=ERROR)
             raise MCPToolError(f"Tool '{name}' is not available")
 
-        # lumi_session_id est injecté ici pour que le wrapper de l'outil puisse
-        # configurer l'auth de la bonne session sans passer par un état global.
-        arguments = {**arguments, "lumi_session_id": Auth.getSessionId() or ""}
-        result = await self.session.call_tool(name, arguments)
+        if name in self._external_sessions:
+            # Outil d'un serveur MCP externe : l'authentification est statique (portée par le
+            # service, cf. MCPExternalService), pas d'injection de lumi_session_id.
+            external_session, real_name = self._external_sessions[name]
+            result = await external_session.call_tool(real_name, arguments)
+        else:
+            # lumi_session_id est injecté ici pour que le wrapper de l'outil puisse
+            # configurer l'auth de la bonne session sans passer par un état global.
+            arguments = {**arguments, "lumi_session_id": Auth.getSessionId() or ""}
+            result = await self.session.call_tool(name, arguments)
 
         if result.isError:
             error_text = result.content[0].text if result.content else "unknown error"

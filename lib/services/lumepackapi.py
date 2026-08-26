@@ -103,16 +103,20 @@ class LumePackAPIHelper:
 
 class LumePackAPI(Service):
 
-    def __init__(self, data:dict):
+    def __init__(self, name:str, data:dict):
         service_format = {
             "url" : "str",
             "timeout" : "int"
         }
-        super().__init__(data=data, serviceDataFormat=service_format)
+        super().__init__(name=name, data=data, serviceDataFormat=service_format)
         self.timeout = data.get("timeout", 10)
         
 
     def checkAuthentication(self, authorization:dict):
+        if self.getName() not in authorization:
+            raise Exception(f"service {self.getName()} auth must be submitted in auth request")
+
+        authorization = authorization[self.getName()]
         if "token" not in authorization:
             raise Exception("token must be submitted in auth request")
         

@@ -13,6 +13,9 @@ Version ABYSS :
 - [ ] File format checker
 - [ ] Vérificateur de format des fichiers de configuration
 - [ ] Gestionnaire de droits d'API Basic
+- [ ] Gestionnaire de RAG externe [EN COURS]
+- [ ] Modification de la gestion de l'authentification => conteneur d'authentifications [EN COURS]
+- [ ] Correctif sécurité service d'auth ?
 
 BACKLOG
 - [ ] Gérer d'autres sources de données ?

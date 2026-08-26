@@ -9,7 +9,7 @@ from lib.services.services import Service
 #CREATE EXTENSION IF NOT EXISTS vector
 
 class PostgreSQL(Service):
-    def __init__(self, data:dict):
+    def __init__(self, name:str, data:dict):
         service_format = {
             "host" : "str",
             "port" : "int",
@@ -17,7 +17,7 @@ class PostgreSQL(Service):
             "username" : "str",
             "password" : "str"
         }
-        super().__init__(data=data, serviceDataFormat=service_format)
+        super().__init__(name=name, data=data, serviceDataFormat=service_format)
         self._connect()
 
     def _connect(self):

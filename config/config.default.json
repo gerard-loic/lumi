@@ -37,6 +37,12 @@
             "database" : "dbname",
             "username" : "",
             "password" : ""
+        },
+        "external_mcp_example" : {
+            "handler" : "MCPExternalService",
+            "transport" : "http",
+            "url" : "https://mcp.exemple.local/mcp",
+            "headers" : { "Authorization" : "Bearer <token>" }
         }
     },
 

@@ -164,6 +164,14 @@ l'union des `tools_enabled` de tous les profils). Le filtrage effectif par
 profil — quels outils un profil donné voit et peut appeler — se fait ensuite
 côté `MCPClientManager` (`lib/mcp/client.py`), à partir du même motif.
 
+Les outils servis par un serveur MCP externe (cf. `MCPExternalService`,
+`lib/services/mcpexternalservice.py`) ne passent pas par ce loader : ils sont
+récupérés à l'exécution via `list_tools()` sur la session distante, par
+`MCPClientManager._connect_external_servers`. Ils suivent néanmoins la même
+convention de motifs, sous le namespace réservé "ext.<nom_du_service>" (le nom
+d'outil exposé au LLM est préfixé "ext__<nom_du_service>__<outil>") : ex.
+"ext.mon_serveur.*" active tous les outils de ce serveur externe.
+
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class ToolLoader:

@@ -12,15 +12,20 @@ Service — Classe parente de tout service
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Service:
+    #name               str     Nom du service
     #data               dict    Données de configuration du service
     #serviceDataFormat  dict    Format attendu des données de configuration
-    def __init__(self, data: dict, serviceDataFormat:dict):
+    def __init__(self, name:str, data: dict, serviceDataFormat:dict):
         self.data = data
+        self.name = name
 
         #Vérifie le format
         self._checkData(data=data, serviceDataFormat=serviceDataFormat)
         self.authenticated = False
         self.authData = {}
+
+    def getName(self)->str:
+        return self.name
 
     #Retourne donnée de configuration du service
     def getConfValue(self, key:str):
@@ -93,7 +98,7 @@ class ServiceManager:
                 module = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(module)
                 cls = getattr(module, handler)
-                ServiceManager.services[name] = cls(data)
+                ServiceManager.services[name] = cls(name, data)
                 print(f"[ServiceManager] Service {name} initialized")
             except Exception as e:
                 filepath = os.path.join(Config.get("directories.custom_services_dir"), f"{handler.lower()}.py")
@@ -104,7 +109,7 @@ class ServiceManager:
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
                     cls = getattr(module, handler)
-                    ServiceManager.services[name] = cls(data)
+                    ServiceManager.services[name] = cls(name, data)
                     print(f"[ServiceManager] Service {name} initialized")
                 except Exception as e:
                                     
