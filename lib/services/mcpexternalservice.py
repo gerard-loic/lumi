@@ -22,6 +22,45 @@ class MCPExternalService(Service):
         }
         super().__init__(name=name, data=data, serviceDataFormat=service_format)
 
+
+    def checkAuthentication(self, authorization:dict):
+        if self.name not in authorization:
+            return False
+    
+        authorization = authorization[self.name]
+        if "token" not in authorization:
+            return False
+
+        
+            #On vérifie que le token est valide
+            #Préparation des paramètres
+            url = f"{self.getConfValue(key="url")}/api/auth"
+            token = authorization["token"]
+    
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    r = client.get(
+                        url,
+                        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+                    )
+                    r.raise_for_status()
+    
+                    if r.status_code == 200:
+                        self.authenticated = True
+                        self.authData = authorization
+                        return True
+            except httpx.HTTPStatusError as e:
+                print(f"ERREUR auth {e.response.status_code} : {e.response.text}")
+                return False
+            except httpx.TimeoutException:
+                print(f"ERREUR auth : timeout après {self.timeout}s")
+                return False
+            except httpx.RequestError as e:
+                print(f"ERREUR auth réseau : {e}")
+                return False
+    
+            return False
+
     #Ouvre la connexion au serveur MCP distant et l'enregistre dans `stack` (AsyncExitStack
     #possédé par MCPClientManager) pour qu'elle reste ouverte pour toute la durée de vie de
     #l'application et soit proprement fermée à l'arrêt.
@@ -40,3 +79,4 @@ class MCPExternalService(Service):
         session = await stack.enter_async_context(ClientSession(read, write))
         await session.initialize()
         return session
+    

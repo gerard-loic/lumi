@@ -32,7 +32,7 @@ class Agent(Block):
         if not token:
             Logger.write(f"[Block Agent] Authentification failed for profile {profile_name}", type=ERROR)
             return False
-        session_id = Auth.getSessionId()
+        session_id = AuthSessionManager.get_current_id()
 
         try:
             #Le bloc s'exécute dans un thread dédié au pipeline (cf. PipelineRunner), sans boucle événementielle

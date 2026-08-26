@@ -7,7 +7,6 @@ from lib.connectors.webex.webexbot import WebexBot
 from lib.session.session import AuthSessionManager
 from lib.services.services import ServiceManager
 from lib.config.config import Config
-from lib.http.auth import Auth
 from lib.log.logger import Logger, ERROR, WARNING, OK
 
 """
@@ -101,7 +100,7 @@ class WebexWebhookHandler:
                 auth_fingerprint=f"webex_{person_id}",
             )
 
-        Auth._session_id_var.set(session_id)
+        AuthSessionManager.set_current(session_id)
 
         Logger.write(f"[Connector webex] Message from {person_id} ({room_type}) : {text[:80]}", type=OK)
 

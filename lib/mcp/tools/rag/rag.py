@@ -3,7 +3,6 @@ from typing import Annotated, Optional
 from pydantic import Field
 from lib.agent.events import RagEvent
 from lib.rag.retriever import Retriever
-from lib.http.auth import Auth
 from lib.session.session import AuthSessionManager
 from lib.files.ragstore import RagStore
 from lib.mcp.toolloader import MCPTool, tool_description
@@ -26,7 +25,7 @@ class RAGTool(MCPTool):
         """
         #À défaut de collection explicitement demandée par le LLM, utilise celle du profil de la session en cours
         if collection is None:
-            profile = AuthSessionManager.get_profile(Auth.getSessionId())
+            profile = AuthSessionManager.get_profile(AuthSessionManager.get_current_id())
             if profile:
                 collection = profile.getConfigValue("rag.collection")
 

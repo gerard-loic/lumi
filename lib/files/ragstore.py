@@ -4,7 +4,6 @@ import secrets
 import os
 import re
 import shutil
-from lib.http.auth import Auth
 from lib.session.session import AuthSessionManager
 
 _KEY_URL_RE = re.compile(r"/files/rag/([^/]+)/([0-9a-f]{32})/([^?]+)")
@@ -39,7 +38,7 @@ class RagStore:
         #Compatibilité avec les URLs absolues indexées avant l'introduction des URLs relatives
         if not url.startswith("http://") and not url.startswith("https://"):
             url = f"{Config.get(key='app.url')}{url}"
-        session = AuthSessionManager.get(Auth.getSessionId())
+        session = AuthSessionManager.get_current()
         if not session or not session.token_hash:
             return url
         sep = "&" if "?" in url else "?"

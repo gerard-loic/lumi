@@ -46,11 +46,10 @@ def _inject_session_auth(session_id: str) -> None:
         return
     from lib.session.session import AuthSessionManager
     from lib.services.services import ServiceManager
-    from lib.http.auth import Auth
     session = AuthSessionManager.get(session_id)
     if session:
         ServiceManager.setAuthorization(authorization=session.authentication)
-        Auth._session_id_var.set(session_id)
+        AuthSessionManager.set_current(session_id)
 
 
 """

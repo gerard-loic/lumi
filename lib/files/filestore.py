@@ -4,7 +4,6 @@ from pathlib import Path
 from urllib.parse import unquote
 from lib.config.config import Config
 import os
-from lib.http.auth import Auth
 from lib.session.session import AuthSessionManager
 
 _KEY_URL_RE = re.compile(r"/files/([0-9a-f]{32})/([^?]+)")
@@ -28,7 +27,7 @@ class FileStore:
         base_url = Config.get(key="app.url")
 
         #Enregistrement dans la session
-        session = AuthSessionManager.get(Auth.getSessionId())
+        session = AuthSessionManager.get_current()
         if session:
             session.addFile(key)
 
@@ -45,7 +44,7 @@ class FileStore:
         key = secrets.token_hex(16)
         (tmpdir / key).write_bytes(content)
 
-        session = AuthSessionManager.get(Auth.getSessionId())
+        session = AuthSessionManager.get_current()
         if session:
             session.addFile(key)
 
@@ -67,7 +66,7 @@ class FileStore:
     def load(source: str) -> bytes:
         key = FileStore.key_from_url(source) if "/files/" in source else source
 
-        session = AuthSessionManager.get(Auth.getSessionId())
+        session = AuthSessionManager.get_current()
         if not session or key not in session.files:
             raise ValueError("Fichier introuvable ou inaccessible pour cette session.")
 

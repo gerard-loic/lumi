@@ -1,5 +1,6 @@
 import asyncio
 import secrets
+import contextvars
 from datetime import datetime, timezone
 from lib.localization.language import Language
 
@@ -51,6 +52,23 @@ Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 class AuthSessionManager:
     _sessions: list['AuthSession'] = []
     _confirmation_queues: dict[str, asyncio.Queue] = {}
+    #ID de la session courante, isolé par contexte d'exécution (tâche asyncio)
+    _current_session_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar('current_session_id', default=None)
+
+    #Définit la session courante pour le contexte d'exécution (tâche asyncio) en cours
+    @staticmethod
+    def set_current(session_id: str | None) -> None:
+        AuthSessionManager._current_session_id_var.set(session_id)
+
+    #Récupère l'ID de la session courante du contexte d'exécution en cours
+    @staticmethod
+    def get_current_id() -> str | None:
+        return AuthSessionManager._current_session_id_var.get()
+
+    #Récupère la session courante du contexte d'exécution en cours
+    @staticmethod
+    def get_current() -> 'AuthSession | None':
+        return AuthSessionManager.get(AuthSessionManager.get_current_id())
 
     #Ajout d'une session
     @staticmethod

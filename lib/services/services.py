@@ -25,15 +25,12 @@ class Service:
 
         #Chaque service est une instance unique partagée par toutes les sessions
         #(cf. ServiceManager.services). L'auth courante est donc isolée par tâche
-        #asyncio via ContextVar (même principe que Auth._session_id_var) plutôt que
+        #asyncio via ContextVar (même principe que AuthSessionManager._current_session_id_var) plutôt que
         #stockée comme simple attribut d'instance : sans ça, un appel d'outil MCP
         #concurrent d'une autre session pourrait écraser le token en cours d'utilisation
         #avant qu'il ne soit lu (race condition, cf. lib/mcp/toolloader.py:_inject_session_auth).
         self._authenticated_var: contextvars.ContextVar[bool] = contextvars.ContextVar(f"{name}_authenticated", default=False)
         self._authData_var: contextvars.ContextVar[dict] = contextvars.ContextVar(f"{name}_authData", default={})
-
-    def getName(self)->str:
-        return self.name
 
     @property
     def authenticated(self) -> bool:
@@ -58,22 +55,22 @@ class Service:
         else:
             raise Exception(f"Config value {key} not found")
 
-    #Réalise l'authentification au service
-    def authenticate(self, data:dict={}):
+    #Fallback pour les services sans authentification par requête (ex. identifiants
+    #statiques issus de la config, cf. PostgreSQL._connect) : authentifie
+    #inconditionnellement, sans validation. À surcharger si le service a un besoin
+    #d'authentification réel qui ne dépend pas des données de la requête entrante.
+    def authenticate(self):
         self.authenticated = True
         return True
 
-    #Vérifie l'authentification
+    #Tente d'authentifier le service à partir des données de la requête entrante.
+    #Contrairement à son nom, une surcharge peut avoir un effet de bord (ex.
+    #LumePackAPI.checkAuthentication effectue l'appel d'authentification et met
+    #à jour self.authenticated/self.authData si la validation réussit) : le
+    #"check" et l'authentification effective ne font qu'un pour ces services.
+    #L'implémentation par défaut se contente de relire l'état courant.
     def checkAuthentication(self, authorization:dict):
         return self.authenticated
-
-    #Retourne les données d'authentification
-    def getAuthentication(self):
-        return self.authData
-
-    #Définit les données d'authentification
-    def setAuthentication(self, authorization:dict):
-        self.authData = authorization
 
     def _checkData(self, data: dict, serviceDataFormat: dict, path: str = ""):
         data_keys = set(data.keys())
@@ -143,7 +140,7 @@ class ServiceManager:
         if authorization:
             for name in authorization:
                 if name in ServiceManager.services:
-                    ServiceManager.services[name].setAuthentication(authorization=authorization[name])
+                    ServiceManager.services[name].authData = authorization[name]
 
         Logger.write("[ServiceManager] All services initialized !", type=OK)
 
@@ -151,7 +148,7 @@ class ServiceManager:
     def setAuthorization(authorization: dict):
         for name, auth_data in authorization["services"].items():
             if name in ServiceManager.services and isinstance(auth_data, dict):
-                ServiceManager.services[name].setAuthentication(authorization=auth_data)
+                ServiceManager.services[name].authData = auth_data
 
     @staticmethod
     def get(name:str) -> Service:

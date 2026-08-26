@@ -7,7 +7,6 @@ from lib.rag.attachmentretriever import AttachmentRetriever
 from lib.session.session import AuthSessionManager as _SessionManager
 from lib.log.logger import Logger, ERROR, OK, WARNING
 from lib.session.session import AuthSessionManager
-from lib.http.auth import Auth
 from lib.files.localdata import LocalData
 from lib.agent.filters.llmfilter import LLMFilterManager
 import datetime
@@ -388,7 +387,7 @@ class Agent:
             AuthSessionManager.save_history(session_id, new_history)
 
             #Log de l'appel pour comptabilisation (1 requete effectuée avec succès)
-            LocalData.logLLMUsage(session_uid=Auth.getSessionId(), token_used=0)
+            LocalData.logLLMUsage(session_uid=AuthSessionManager.get_current_id(), token_used=0)
 
             #Génération des questions de suivi suggérées (best-effort, ne doit jamais casser le tour de conversation)
             if self._FOLLOWUP_ENABLED:
@@ -410,7 +409,7 @@ class Agent:
     conversation, pas de streaming, pas de pièces jointes/RAG pré-recherche. La boucle de tool calls
     est la même que dans chatStream, mais les outils nécessitant une confirmation sont refusés
     d'office (aucun client pour y répondre). L'authentification utilisée pour les appels d'outils MCP
-    est celle du contexte d'exécution courant (Auth.getSessionId()) : c'est à l'appelant de l'avoir
+    est celle du contexte d'exécution courant (AuthSessionManager.get_current_id()) : c'est à l'appelant de l'avoir
     positionnée au préalable (ex: session dédiée créée pour l'exécution du pipeline).
     """
     async def reflect(self, prompt: str, exclude_restricted: bool = True) -> str:
@@ -487,7 +486,7 @@ class Agent:
             assistant_msg = await self._callReflectLLM(messages=messages, exclude_restricted=exclude_restricted)
 
         Logger.write(f"[AGENT {self.profile.getName()}] Call LLM (reflect) OK !", type=OK)
-        LocalData.logLLMUsage(session_uid=Auth.getSessionId(), token_used=0)
+        LocalData.logLLMUsage(session_uid=AuthSessionManager.get_current_id(), token_used=0)
         return assistant_msg.content or ""
 
     """

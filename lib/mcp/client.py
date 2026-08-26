@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager, AsyncExitStack
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 from lib.mcp.toolloader import MCPTool, ToolLoader
-from lib.http.auth import Auth
+from lib.session.session import AuthSessionManager
 from lib.log.logger import Logger, ERROR
 
 class MCPToolError(Exception):
@@ -180,7 +180,7 @@ class MCPClientManager:
         else:
             # lumi_session_id est injecté ici pour que le wrapper de l'outil puisse
             # configurer l'auth de la bonne session sans passer par un état global.
-            arguments = {**arguments, "lumi_session_id": Auth.getSessionId() or ""}
+            arguments = {**arguments, "lumi_session_id": AuthSessionManager.get_current_id() or ""}
             result = await self.session.call_tool(name, arguments)
 
         if result.isError:

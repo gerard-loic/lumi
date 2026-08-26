@@ -1,7 +1,7 @@
 import litellm
 from lib.mcp.client import mcp_manager
 from lib.files.localdata import LocalData
-from lib.http.auth import Auth
+from lib.session.session import AuthSessionManager
 
 """
 LiteLLMTrackingCallback — Gestion des callBack LiteLLM
@@ -17,7 +17,7 @@ class LiteLLMTrackingCallback(litellm.integrations.custom_logger.CustomLogger):
         if usage:
             if getattr(usage, "total_tokens", 0) > 0:
                 #On log les tokens utilisés
-                LocalData.logLLMUsage(session_uid=Auth.getSessionId(), token_used=getattr(usage, "total_tokens", 0))
+                LocalData.logLLMUsage(session_uid=AuthSessionManager.get_current_id(), token_used=getattr(usage, "total_tokens", 0))
 
     #Callback après une requête passée avec succès
     async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):

@@ -92,10 +92,10 @@ class _LogStream:
                 self._log_file.write(_strip_ansi(plain))
 
     def _stamp(self, line, type:str=INFO):
-        from lib.http.auth import Auth
+        from lib.session.session import AuthSessionManager
         ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         label = _TYPE_LABELS.get(type, "INFO")
-        session_id = Auth.getSessionId()
+        session_id = AuthSessionManager.get_current_id()
         if session_id:
             return f"[{ts}] [{label}] [#{session_id}] {line}"
         else:
@@ -178,8 +178,8 @@ class Logger:
 
     @staticmethod
     def sessionWrite(text, type:str=INFO):
-        from lib.http.auth import Auth
-        sys.stderr.write(f"#{Auth.getSessionId()} : {text}\n", type=type)
+        from lib.session.session import AuthSessionManager
+        sys.stderr.write(f"#{AuthSessionManager.get_current_id()} : {text}\n", type=type)
 
     @staticmethod
     def close():

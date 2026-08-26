@@ -113,10 +113,10 @@ class LumePackAPI(Service):
         
 
     def checkAuthentication(self, authorization:dict):
-        if self.getName() not in authorization:
-            raise Exception(f"service {self.getName()} auth must be submitted in auth request")
+        if self.name not in authorization:
+            raise Exception(f"service {self.name} auth must be submitted in auth request")
 
-        authorization = authorization[self.getName()]
+        authorization = authorization[self.name]
         if "token" not in authorization:
             raise Exception("token must be submitted in auth request")
         
