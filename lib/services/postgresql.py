@@ -76,17 +76,21 @@ class PostgreSQL(Service):
 
         if str_cols:
             similarity_sum = sql.SQL(" + ").join(
-                sql.SQL("similarity({col}, %s)").format(col=col) for col in str_cols
+                sql.SQL("COALESCE(similarity({col}, %s), 0)").format(col=col) for col in str_cols
             )
             parts.append(sql.SQL(" ORDER BY ") + similarity_sum + sql.SQL(" DESC"))
             params.extend([reference] * len(str_cols))
 
         parts.append(sql.SQL(" LIMIT 1"))
 
+        
+
         cnx = self._connect_raw()
         try:
             with cnx.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(sql.Composed(parts), params)
+                query = sql.Composed(parts)
+                print(cur.mogrify(query, params).decode())
+                cur.execute(query, params)
                 record = cur.fetchone()
         finally:
             cnx.close()
