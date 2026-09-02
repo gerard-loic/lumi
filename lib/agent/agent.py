@@ -1,4 +1,5 @@
 import json
+from contextlib import AsyncExitStack
 from typing import AsyncGenerator, Optional
 from lib.mcp.client import mcp_manager, MCPToolError
 from lib.mcp.toolloader import MCPTool
@@ -106,7 +107,14 @@ class Agent:
         #tool calls, sur toutes les itérations) : émis groupés une fois la réponse finale prête (voir plus bas)
         rag_sources: dict = {}
 
+        #Connexions aux serveurs MCP externes en auth "session" pour ce tour (cf.
+        #MCPClientManager.open_session_external_tools) — tenues dans `turn_stack` et refermées dans le
+        #`finally` ci-dessous, dans la même tâche asyncio que celle qui les a ouvertes (contrainte des
+        #transports MCP, cf. docstring de open_session_external_tools).
+        turn_stack = AsyncExitStack()
         try:
+            session_tools, session_external_sessions = await mcp_manager.open_session_external_tools(session_id, turn_stack)
+
             #On récupère l'historique de conversation pour l'intégrer au prompt
             #TODO : passer sur authSession
             history = AuthSessionManager.get_history(session_id)[-self._MEMORY_MESSAGES:]
@@ -171,7 +179,7 @@ class Agent:
 
             for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
                 try:
-                    response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
+                    response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted, extra_tools=session_tools)
                 except Exception as e:
                     Logger.write(f"[AGENT {self.profile.getName()}] LLM call failure : {str(e)}", type=ERROR)
                     yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="LLM_CALL_FAIL", message=str(e))
@@ -264,6 +272,7 @@ class Agent:
                         result_text, tool_events = await mcp_manager.call_tool(
                             tc.function.name, args,
                             tools_enabled=self.profile.getConfigValue(key="mcp.tools_enabled", default=[]),
+                            external_sessions=session_external_sessions,
                         )
                     except MCPToolError as e:
                         error_detail = str(e)
@@ -311,7 +320,7 @@ class Agent:
                 Logger.write("[AGENT {self.profile.getName()}] Call LLM...", type=WARNING)
                 for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
                     try:
-                        response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
+                        response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted, extra_tools=session_tools)
                     except Exception as e:
                         Logger.write(f"[AGENT {self.profile.getName()}] LLM call failure (iteration {str(iteration)}) : {str(e)}", type=ERROR)
                         yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="LLM_CALL_FAIL", message=str(e))
@@ -344,7 +353,7 @@ class Agent:
             for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
                 Logger.write(f"[AGENT {self.profile.getName()}] Call LLM for final answer (attempt {attempt + 1}/{self._EMPTY_LLM_RESPONSE_MAX_RETRY})...", type=WARNING)
                 try:
-                    async for chunk in await self._connector.callLLM(messages=messages, stream=True, exclude_restricted=exclude_restricted):
+                    async for chunk in await self._connector.callLLM(messages=messages, stream=True, exclude_restricted=exclude_restricted, extra_tools=session_tools):
                         token = chunk.choices[0].delta.content
                         if token:
                             assistant_reply_tokens.append(token)
@@ -403,6 +412,8 @@ class Agent:
             Logger.write(f"[AGENT {self.profile.getName()}] Unexpected error : {str(e)}", type=ERROR)
             yield ErrorEvent.get(error_code="UNEXPECTED", message="Unexpected error", details=str(e))
             yield DoneEvent.get()
+        finally:
+            await turn_stack.aclose()
 
     """
     Appel LLM ponctuel hors session de chat (ex: bloc "Agent" d'un pipeline) : pas d'historique de
@@ -413,88 +424,101 @@ class Agent:
     positionnée au préalable (ex: session dédiée créée pour l'exécution du pipeline).
     """
     async def reflect(self, prompt: str, exclude_restricted: bool = True) -> str:
-        now = datetime.datetime.now()
-        system = self._system + f"\n\nDate et heure actuelles : {now.strftime('%A %d %B %Y, %H:%M')} (heure locale)"
+        session_id = AuthSessionManager.get_current_id()
 
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user",   "content": prompt},
-        ]
+        #Connexions aux serveurs MCP externes en auth "session" pour cet appel (cf.
+        #MCPClientManager.open_session_external_tools) — tenues dans `turn_stack` et refermées dans le
+        #`finally` ci-dessous, dans la même tâche asyncio que celle qui les a ouvertes (contrainte des
+        #transports MCP, cf. docstring de open_session_external_tools).
+        turn_stack = AsyncExitStack()
+        try:
+            session_tools, session_external_sessions = await mcp_manager.open_session_external_tools(session_id, turn_stack)
 
-        Logger.write(f"[AGENT {self.profile.getName()}] Call LLM (reflect)...", type=WARNING)
-        assistant_msg = await self._callReflectLLM(messages=messages, exclude_restricted=exclude_restricted)
+            now = datetime.datetime.now()
+            system = self._system + f"\n\nDate et heure actuelles : {now.strftime('%A %d %B %Y, %H:%M')} (heure locale)"
 
-        iteration = 0
-        while assistant_msg.tool_calls:
-            iteration += 1
-            if iteration > self._MAX_TOOL_ITERATIONS:
-                Logger.write(f"[AGENT {self.profile.getName()}] Too many consecutive tool calls (reflect)", type=ERROR)
-                raise Exception(f"Too many consecutive tool calls (limit: {self._MAX_TOOL_ITERATIONS})")
+            messages = [
+                {"role": "system", "content": system},
+                {"role": "user",   "content": prompt},
+            ]
 
-            messages.append({
-                "role": "assistant",
-                "content": assistant_msg.content or "",
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in assistant_msg.tool_calls
-                ],
-            })
+            Logger.write(f"[AGENT {self.profile.getName()}] Call LLM (reflect)...", type=WARNING)
+            assistant_msg = await self._callReflectLLM(messages=messages, exclude_restricted=exclude_restricted, extra_tools=session_tools)
 
-            for tc in assistant_msg.tool_calls:
-                meta = MCPTool.get_meta(tc.function.name)
+            iteration = 0
+            while assistant_msg.tool_calls:
+                iteration += 1
+                if iteration > self._MAX_TOOL_ITERATIONS:
+                    Logger.write(f"[AGENT {self.profile.getName()}] Too many consecutive tool calls (reflect)", type=ERROR)
+                    raise Exception(f"Too many consecutive tool calls (limit: {self._MAX_TOOL_ITERATIONS})")
 
-                if meta.get("confirmation", False):
-                    Logger.write(f"[AGENT {self.profile.getName()}] Tool {tc.function.name} requires a confirmation, unavailable in reflect()", type=WARNING)
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": "Tool call failed: this tool requires a user confirmation, unavailable in this context",
-                    })
-                    continue
-
-                Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name}...", type=WARNING)
-                try:
-                    args = json.loads(tc.function.arguments)
-                    result_text, _ = await mcp_manager.call_tool(
-                        tc.function.name, args,
-                        tools_enabled=self.profile.getConfigValue(key="mcp.tools_enabled", default=[]),
-                    )
-                except Exception as e:
-                    error_detail = str(e)
-                    Logger.write(f"[AGENT {self.profile.getName()}] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": f"Tool call failed: {error_detail}",
-                    })
-                    continue
-
-                Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name} OK !", type=OK)
                 messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result_text,
+                    "role": "assistant",
+                    "content": assistant_msg.content or "",
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            },
+                        }
+                        for tc in assistant_msg.tool_calls
+                    ],
                 })
 
-            assistant_msg = await self._callReflectLLM(messages=messages, exclude_restricted=exclude_restricted)
+                for tc in assistant_msg.tool_calls:
+                    meta = MCPTool.get_meta(tc.function.name)
 
-        Logger.write(f"[AGENT {self.profile.getName()}] Call LLM (reflect) OK !", type=OK)
-        LocalData.logLLMUsage(session_uid=AuthSessionManager.get_current_id(), token_used=0)
-        return assistant_msg.content or ""
+                    if meta.get("confirmation", False):
+                        Logger.write(f"[AGENT {self.profile.getName()}] Tool {tc.function.name} requires a confirmation, unavailable in reflect()", type=WARNING)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": "Tool call failed: this tool requires a user confirmation, unavailable in this context",
+                        })
+                        continue
+
+                    Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name}...", type=WARNING)
+                    try:
+                        args = json.loads(tc.function.arguments)
+                        result_text, _ = await mcp_manager.call_tool(
+                            tc.function.name, args,
+                            tools_enabled=self.profile.getConfigValue(key="mcp.tools_enabled", default=[]),
+                            external_sessions=session_external_sessions,
+                        )
+                    except Exception as e:
+                        error_detail = str(e)
+                        Logger.write(f"[AGENT {self.profile.getName()}] MCP tool {tc.function.name} error : {error_detail}", type=ERROR)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": f"Tool call failed: {error_detail}",
+                        })
+                        continue
+
+                    Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name} OK !", type=OK)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result_text,
+                    })
+
+                assistant_msg = await self._callReflectLLM(messages=messages, exclude_restricted=exclude_restricted, extra_tools=session_tools)
+
+            Logger.write(f"[AGENT {self.profile.getName()}] Call LLM (reflect) OK !", type=OK)
+            LocalData.logLLMUsage(session_uid=AuthSessionManager.get_current_id(), token_used=0)
+            return assistant_msg.content or ""
+        finally:
+            await turn_stack.aclose()
 
     """
     Appel LLM non streamé avec retry sur réponse vide, utilisé par reflect().
     """
-    async def _callReflectLLM(self, messages: list, exclude_restricted: bool):
+    async def _callReflectLLM(self, messages: list, exclude_restricted: bool, extra_tools: list | None = None):
         for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
-            response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted)
+            response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted, extra_tools=extra_tools)
             if response.choices:
                 return response.choices[0].message
             if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:

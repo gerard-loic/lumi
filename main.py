@@ -32,7 +32,7 @@ from lib.cron.cronmanager import CronManager
 from lib.agent.profile import ProfileManager
 from lib.localization.language import LanguageManager
 from lib.pipelines.pipelinemanager import PipelineManager
-
+from lib.pipelines.pipelinelog import PipelineLog
 
 # ----------------------------------------------------------------
 # Initialisation configuration
@@ -59,6 +59,7 @@ ProfileManager.init()
 # Initialisation localdata
 # ----------------------------------------------------------------
 LocalData.init()
+PipelineLog.init()
 
 # ----------------------------------------------------------------
 # Initialisation des tâches CRON

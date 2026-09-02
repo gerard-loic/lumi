@@ -6,18 +6,23 @@ from lib.utils.dynamicimport import DynamicImport
 from lib.pipelines.trigger import triggerEvent
 from lib.pipelines.block import Block
 
+
 class Pipeline:
     def __init__(self, pipeline_uid:str):
         self._triggers = []
         self._blocks = {}
         
         self._pipeline_uid = pipeline_uid
+
         self._log(text=f"Loading the pipeline...", type=WARNING)
         self._loadConfigFile()
         self._loadTriggers()  
         self._loadBlocks()
 
         self._log(text=f"Pipeline loaded !", type=OK) 
+
+    def getUid(self)->str:
+        return self._pipeline_uid
 
     def trigger(self, event:triggerEvent)->bool:
         for trigger in self._triggers:
@@ -65,21 +70,24 @@ class Pipeline:
 
         for block_uid in self._conf["blocks"]:
             block = self._conf["blocks"][block_uid]
-            next_block = None
-            if "next_block" in block:
-                next_block = block["next_block"]
+            on_success_block = None
+            on_error_block = None
+            if "on_success" in block:
+                on_success_block = block["on_success"]
+            if "on_error" in block:
+                on_error_block = block["on_error"]
             self._blocks[block_uid] = DynamicImport.getInstance(
                 className=block["class"],
+                block_uid=block_uid,
                 moduleName=str(block["class"]).lower(),
                 classPath="lib.pipelines.blocks",
                 config=block["config"],
-                next_block=next_block
+                on_success_block=on_success_block,
+                on_error_block=on_error_block
             )
         self._log(text="Blocks loaded !")
 
     
-        
-
 
     def _exception(self, text:str):
         text = f"[Pipeline {self._pipeline_uid}] {text}"

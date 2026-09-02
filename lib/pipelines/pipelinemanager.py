@@ -23,14 +23,20 @@ class PipelineManager:
                 PipelineManager._pipelines[pipeline_uid] = Pipeline(pipeline_uid=pipeline_uid)
 
     @staticmethod
-    def trigger(event:triggerEvent, target_pipelines:list=[]):
-        for pipeline in PipelineManager._pipelines:
-            if len(target_pipelines) == 0 or pipeline in target_pipelines:
-                pipeline = PipelineManager._pipelines[pipeline]
+    def trigger(event:triggerEvent, target_pipelines:list=[])->list:
+        pipelines = []
+        for pipeline_uid in PipelineManager._pipelines:
+            if len(target_pipelines) == 0 or pipeline_uid in target_pipelines:
+                pipeline = PipelineManager._pipelines[pipeline_uid]
                 if pipeline.trigger(event=event):
-                    pipeline_run = PipelineRunner(pipeline=pipeline)
+                    pipeline_run = PipelineRunner(pipeline=pipeline, event=event)
                     PipelineManager._pipelines_run[pipeline_run.getProcess()] = pipeline_run
                     pipeline_run.launch()
+                    pipelines.append({
+                        "pipeline_uid" : pipeline_uid,
+                        "process_uid" : pipeline_run.getProcess()
+                    })
+        return pipelines
     
 
     @staticmethod

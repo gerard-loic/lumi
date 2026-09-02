@@ -2,10 +2,13 @@ Version ABYSS :
 - [x] Gestion d'un fallback de font pour les PDF
 - [ ] Création de pipelines [EN COURS]
 - [ ] API statistiques détaillées
-- [ ] Suivi des pipelines
+- [ ] Suivi des pipelines [EN COURS]
 - [ ] API info profil
+- [ ] Revue de l'API d'info session / profil
 - [x] Support connecteur LLM DigitalOcean 
 - [x] Support connecteur LLM Cerebras
+- [ ] Support connecteur Llama
+- [ ] Support autres connecteurs ?
 - [ ] Dans Embedder liaison dynamique / gestion différentiée des prividers
 - [ ] Documentation spécifique sur l'écriture des fichiers de configuration avec options
 - [ ] Vérifier le service d'auth Webex nécessaire ?
@@ -16,6 +19,46 @@ Version ABYSS :
 - [ ] Gestionnaire de RAG externe [EN COURS]
 - [ ] Modification de la gestion de l'authentification => conteneur d'authentifications [EN COURS]
 - [ ] Correctif sécurité service d'auth ?
+- [ ] Bloc : conditionnelle - switch
+- [ ] Bloc : sleep
+- [ ] Bloc : transformMapping
+- [ ] Bloc : render (produire un documentd depuis le contexte)
+- [ ] Bloc : boucle
+- [ ] Bloc : DataView
+- [ ] Bloc : csvformat
+- [ ] Bloc : xmlformat
+- [ ] Bloc : filereader
+- [ ] Bloc : filedelete
+- [ ] Bloc : zip
+- [ ] Bloc : unzip
+- [ ] Bloc : filemove
+- [ ] Bloc : webexNotification
+- [ ] Bloc : Rag ( interroger / indexer la base RAG interne depuis un pipeline)
+- [ ] Bloc : MicroRag
+- [ ] Bloc : ImageToText (for Nova)
+- [ ] Bloc : apiGet
+- [ ] Bloc : apiPost
+- [ ] Bloc : apiPut
+- [ ] Bloc : apiDelete
+- [ ] Bloc : webhookCall
+- [ ] Bloc : filewriter
+- [ ] Bloc : serviceMethod
+- [ ] Bloc : subpipeline
+- [ ] Bloc : agent : revoir authentification
+- [ ] Trigger : cron
+- [ ] Trigger : callback
+- [ ] Trigger : urlWatch
+- [ ] Trigger : apiWatch
+- [ ] Trigger : fileWatch
+- [ ] Trigger : mailWatch
+- [ ] Trigger : dbWatch
+- [ ] Trigger : serviceWatch
+- [ ] Trigger : agentWatch
+- [ ] Trigger : webHook (secret + vérif signature)
+- [ ] Trigger : CLI
+- [ ] Trigger : pipelineEvent
+- [ ] Revoir le readme -> prévoir une documentation sur l'écriture d'un pipeline + une documentation sur la configuration
+- [ ] Prévoir la configuration des profiles dans des fichiers de configuration à part
 
 BACKLOG
 - [ ] Gérer d'autres sources de données ?

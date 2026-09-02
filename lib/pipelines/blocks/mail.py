@@ -11,9 +11,33 @@ from lib.pipelines.block import Block
 from lib.pipelines.pipelinecontext import PipelineContext
 from lib.log.logger import Logger, ERROR, OK
 
+#Bloc Mail : envoie un email (SMTP) ou lit une boite de réception (IMAP). Le résultat est écrit dans le contexte sous la clé "result".
+#
+#Paramètres de configuration communs (clé "config" du bloc) :
+#  - action        (str,  défaut "send")   : "send" (envoi), "list" (liste des emails d'un dossier) ou "read" (contenu d'un email).
+#  - username      (str)                   : identifiant du compte, sert aussi d'adresse d'expéditeur.
+#  - password      (str)                   : mot de passe / mot de passe d'application du compte.
+#
+#Paramètres SMTP (action "send") :
+#  - smtp_host     (str)                   : serveur SMTP.
+#  - smtp_port     (int,  défaut 587)      : port SMTP.
+#  - smtp_use_ssl  (bool, défaut False)    : connexion SSL directe (SMTP_SSL).
+#  - smtp_use_tls  (bool, défaut True)     : STARTTLS après connexion (ignoré si smtp_use_ssl).
+#  - to            (str | list[str])       : destinataire(s) ; transformé via le contexte.
+#  - subject       (str,  défaut "")       : sujet ; transformé via le contexte.
+#  - body          (str,  défaut "")       : corps texte brut ; transformé via le contexte.
+#  - attachments   (list[str], défaut [])  : chemins de fichiers locaux à joindre (ceux introuvables sont ignorés).
+#
+#Paramètres IMAP (actions "list" et "read") :
+#  - imap_host     (str,  défaut smtp_host): serveur IMAP.
+#  - imap_port     (int,  défaut 993)      : port IMAP.
+#  - imap_use_ssl  (bool, défaut True)     : connexion SSL (IMAP4_SSL).
+#  - folder        (str,  défaut "INBOX")  : dossier ciblé.
+#  - limit         (int,  défaut 20)       : nombre max d'emails retournés (action "list").
+#  - email_id      (str)                   : identifiant IMAP de l'email à lire (action "read").
 class Mail(Block):
-    def __init__(self, config:dict, next_block:str=None):
-        super().__init__("Mail", config, next_block)
+    def __init__(self, block_uid:str, config:dict, on_success_block:str=None, on_error_block:str=None):
+        super().__init__("Mail", block_uid, config, on_success_block=on_success_block, on_error_block=on_error_block)
 
     def execute(self, context:PipelineContext):
         action = self._config.get("action", "send")

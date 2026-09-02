@@ -1,7 +1,10 @@
 import os
 import re
+import io
 import sys
 import logging
+import contextvars
+from contextlib import contextmanager
 from datetime import datetime
 from lib.utils.dict import Dict
 
@@ -61,6 +64,19 @@ _LogStream — Gestion du flux de logs
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class _LogStream:
+    #Pile de capture propre au contexte d'exécution courant (contextvars) : chaque entrée est un
+    #buffer texte qui reçoit une copie (sans ANSI) de tout ce qui est écrit depuis ce contexte.
+    #On utilise un ContextVar plutôt qu'un threading.local car la capture doit suivre l'exécution
+    #même lorsqu'elle saute de thread : le bloc Agent planifie reflect() sur la boucle MCP via
+    #asyncio.run_coroutine_threadsafe, qui recopie (copy_context()) le contexte courant vers la
+    #coroutine. Un threading.local perdrait alors tous les logs émis depuis le thread de la boucle.
+    _capture_sinks_var = contextvars.ContextVar("log_capture_sinks", default=None)
+
+    @classmethod
+    def capture_sinks(cls):
+        #Pile de sinks du contexte courant, ou None si aucune capture n'est active.
+        return cls._capture_sinks_var.get()
+
     def __init__(self, original, terminal_enabled=True, log_dir=None):
         self._original = original
         self._terminal_enabled = terminal_enabled
@@ -84,6 +100,11 @@ class _LogStream:
         while "\n" in self._pending:
             line, self._pending = self._pending.split("\n", 1)
             plain = (self._stamp(line, type) if line else "") + "\n"
+            sinks = self.capture_sinks()
+            if sinks:
+                clean = _strip_ansi(plain)
+                for sink in sinks:
+                    sink.write(clean)
             if self._terminal_enabled:
                 colored = (f"{type}{plain.rstrip()}{RESET}\n" if line else "\n")
                 self._original.write(colored)
@@ -180,6 +201,28 @@ class Logger:
     def sessionWrite(text, type:str=INFO):
         from lib.session.session import AuthSessionManager
         sys.stderr.write(f"#{AuthSessionManager.get_current_id()} : {text}\n", type=type)
+
+    #Capture temporaire des logs émis depuis le contexte d'exécution courant, ainsi que
+    #depuis les coroutines / threads qui en héritent le contexte via contextvars.
+    #Renvoie un buffer (io.StringIO) qui accumule une copie sans ANSI de tout ce qui
+    #est loggué pendant le bloc `with`. Les logs continuent d'aller normalement vers
+    #le terminal / le fichier. Réentrant : plusieurs captures imbriquées reçoivent chacune leur copie.
+    @staticmethod
+    @contextmanager
+    def capture():
+        buffer = io.StringIO()
+        sinks = _LogStream.capture_sinks()
+        if sinks is None:
+            sinks = []
+            _LogStream._capture_sinks_var.set(sinks)
+        sinks.append(buffer)
+        try:
+            yield buffer
+        finally:
+            try:
+                sinks.remove(buffer)
+            except ValueError:
+                pass
 
     @staticmethod
     def close():

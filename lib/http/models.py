@@ -58,6 +58,34 @@ class PipelineStartRequest:
         self.pipeline = pipeline
 
 
+"""
+PipelineStartBody — Corps JSON optionnel du démarrage d'un pipeline via API
+Le contenu de "payload" est transmis tel quel au contexte du pipeline (clé "trigger.data").
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class PipelineStartBody(BaseModel):
+    payload: Optional[dict] = None
+
+
+"""
+PipelineInfoRequest — Format requête HTTP info d'un pipeline via API
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class PipelineInfoRequest:
+    def __init__(self, process_uid: str):
+        self.process_uid = process_uid
+
+
+"""
+PipelineStepInfoRequest — Format requête HTTP détail d'une étape d'un process via API
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class PipelineStepInfoRequest:
+    def __init__(self, process_uid: str, id: int):
+        self.process_uid = process_uid
+        self.id = id
+
+
 #-------------------------------------------------------------------
 #Format retour endpoints
 
@@ -154,5 +182,31 @@ PipelineStartResponse — Format retour HTTP PipelineStart
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class PipelineStartResponse(BaseModel):
+    pipelines:list
+
+"""
+PipelineInfoResponse — Format retour HTTP PipelineInfo
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class PipelineInfoResponse(BaseModel):
     pipeline_uid: str
     process_uid: str
+    created_at: str
+    started_at: str
+    ended_at: str
+    is_ended:bool
+    is_success:bool
+    steps:list
+
+"""
+PipelineStepInfoResponse — Format retour HTTP détail d'une étape d'un process
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class PipelineStepInfoResponse(BaseModel):
+    id: int
+    process_uid: str
+    pipeline_uid: str
+    name: str
+    created_at: str
+    is_success: bool
+    logs: str

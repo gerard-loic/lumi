@@ -1,9 +1,9 @@
 TRIGGER_API_CALL = 1
 
 class triggerEvent:
-    def __init__(self, type:int, data:dict={}):
+    def __init__(self, type:int, data:dict=None):
         self._type = type
-        self._data = data
+        self._data = data if data is not None else {}
 
     def getType(self)->int:
         return self._type

@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
 from typing import Optional
-from lib.http.models import ToolInfo, AuthRequest, PipelineStartResponse, PipelineStartRequest, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse, AuthSessionResponse
+from lib.http.models import ToolInfo, AuthRequest, PipelineStartResponse, PipelineInfoRequest, PipelineInfoResponse, PipelineStepInfoRequest, PipelineStepInfoResponse, PipelineStartRequest, PipelineStartBody, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse, AuthSessionResponse
 from lib.http.auth import Auth, AdminAuth
 from lib.session.session import AuthSessionManager
 from lib.mcp.client import mcp_manager
@@ -24,6 +24,7 @@ from lib.localization.traduction import Traduction
 from lib.pipelines.pipelinemanager import PipelineManager
 from lib.pipelines.pipelinerunner import PipelineRunner
 from lib.pipelines.pipeline import Pipeline
+from lib.pipelines.pipelineinfo import PipelineInfo
 from lib.pipelines.trigger import triggerEvent, TRIGGER_API_CALL
 
 _rag_basic_auth = HTTPBasic()
@@ -68,6 +69,8 @@ class Router:
         self.router.add_api_route("/rag/collections/{collection}", self.rag_delete_collection, methods=["DELETE"])
         self.router.add_api_route("/rag/collections/{collection}/documents/{source:path}", self.rag_delete_document, methods=["DELETE"])
         self.router.add_api_route("/pipeline/{pipeline}/start", self.pipeline_start, methods=["POST"])
+        self.router.add_api_route("/pipeline/process/{process_uid}", self.pipeline_info, methods=["GET"])
+        self.router.add_api_route("/pipeline/process/{process_uid}/{id}", self.pipeline_step_info, methods=["GET"])
 
     """
     Route [GET] /health : renvoie l'état de santé du service
@@ -594,18 +597,47 @@ class Router:
             Logger.write(f"[HTTP] [500] rag_delete_collection — {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=str(e))
 
-    async def pipeline_start(self, req: PipelineStartRequest = Depends(), credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> PipelineStartResponse:
+    async def pipeline_start(self, req: PipelineStartRequest = Depends(), body: Optional[PipelineStartBody] = None, credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> PipelineStartResponse:
         self._check_admin_auth(credentials)
 
         if not PipelineManager.pipelineExists(pipeline_uid=req.pipeline):
             Logger.write(f"[HTTP] [400] pipeline_start : pipeline {req.pipeline} does not exist", type=ERROR)
             raise HTTPException(status_code=400, detail=str(f"[HTTP] [400] pipeline_start : pipeline {req.pipeline} does not exist"))
-        
-        PipelineManager.trigger(event=triggerEvent(type=TRIGGER_API_CALL), target_pipelines=[req.pipeline])
+
+        #Le payload JSON éventuel est transmis au pipeline via l'event : il atterrit dans le
+        #contexte sous "trigger.data" (cf. PipelineRunner._run).
+        payload = body.payload if body is not None and body.payload is not None else {}
+        out = PipelineManager.trigger(event=triggerEvent(type=TRIGGER_API_CALL, data=payload), target_pipelines=[req.pipeline])
 
         out = {
-            "pipeline_uid" : req.pipeline,
-            "process_uid" : ""
+            "pipelines" : out
         }
+
+        return out
+
+    async def pipeline_info(self, req: PipelineInfoRequest = Depends(), credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> PipelineInfoResponse:
+        self._check_admin_auth(credentials)
+
+        out = PipelineInfo.get(process_uid=req.process_uid)
+        if out is None:
+            Logger.write(f"[HTTP] [404] pipeline_info : process {req.process_uid} does not exist", type=ERROR)
+            raise HTTPException(status_code=404, detail=str(f"[HTTP] [404] pipeline_info : process {req.process_uid} does not exist"))
+
+        return out
+
+    """
+    Route [GET] /pipeline/process/{process_uid}/{id} : renvoie le détail d'une étape d'un process
+    Auth    : Basic admin
+    Entrée  : process_uid (path) — identifiant du process
+              id          (path) — identifiant de l'étape (pipeline_block)
+    Sortie  : PipelineStepInfoResponse { id, process_uid, pipeline_uid, name, created_at, is_success, logs }
+    """
+    async def pipeline_step_info(self, req: PipelineStepInfoRequest = Depends(), credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> PipelineStepInfoResponse:
+        self._check_admin_auth(credentials)
+
+        out = PipelineInfo.getStep(process_uid=req.process_uid, step_id=req.id)
+        if out is None:
+            Logger.write(f"[HTTP] [404] pipeline_step_info : step {req.id} of process {req.process_uid} does not exist", type=ERROR)
+            raise HTTPException(status_code=404, detail=str(f"[HTTP] [404] pipeline_step_info : step {req.id} of process {req.process_uid} does not exist"))
 
         return out

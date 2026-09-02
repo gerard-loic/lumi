@@ -34,6 +34,7 @@ class LiteLLM:
         self._model    = config["model"]
         self._api_base = config["api_base"]
         self._api_key  = config["api_key"]
+        self._tools_enabled        = tools_enabled
         self._tools               = mcp_manager.tools_as_openai_format(exclude_restricted=False, tools_enabled=tools_enabled)
         self._tools_no_restricted = mcp_manager.tools_as_openai_format(exclude_restricted=True, tools_enabled=tools_enabled)
 
@@ -52,8 +53,16 @@ class LiteLLM:
         return "\n".join(f"- {t['function']['name']} : {t['function'].get('description', '')}" for t in tools)
 
     #Appel du LLM
-    async def callLLM(self, messages: str, stream: bool, exclude_restricted: bool = False, use_tools: bool = True):
-        tools = (self._tools_no_restricted if exclude_restricted else self._tools) if use_tools else None
+    #extra_tools : outils des serveurs MCP externes en auth "session" connectés pour ce tour (cf.
+    #MCPClientManager.open_session_external_tools) — recalcule la liste envoyée au LLM pour les inclure,
+    #plutôt que d'utiliser self._tools/_tools_no_restricted, figés à la construction.
+    async def callLLM(self, messages: str, stream: bool, exclude_restricted: bool = False, use_tools: bool = True, extra_tools: list | None = None):
+        if not use_tools:
+            tools = None
+        elif extra_tools:
+            tools = mcp_manager.tools_as_openai_format(exclude_restricted=exclude_restricted, tools_enabled=self._tools_enabled, extra_tools=extra_tools)
+        else:
+            tools = self._tools_no_restricted if exclude_restricted else self._tools
         tools = tools or None
         response = await litellm.acompletion(
             model=self._model,
