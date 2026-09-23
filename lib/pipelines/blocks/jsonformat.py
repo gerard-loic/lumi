@@ -17,10 +17,11 @@ class JsonFormat(Block):
         super().__init__("JsonFormat", block_uid, config, on_success_block=on_success_block, on_error_block=on_error_block)
 
     def execute(self, context:PipelineContext):
-        format = self.getConfig(key="format", default=False)
-        input  = self.getConfig(key="input", default="")
-        output = self.getConfig(key="output", default="")
-
+        #Récupération de la configuration
+        format = context.getConfig(key="format", default=False)
+        input = context.getConfig(key="input", default="")
+        output = context.getConfig(key="output", default="")
+       
         input_val = context.get(key=input)
 
         #Une chaine est interprétée comme du JSON sérialisé : on la parse pour obtenir la structure.

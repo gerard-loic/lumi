@@ -14,12 +14,6 @@ class Block:
     def execute(self, context:PipelineContext)->bool:
         return False
 
-    def getConfig(self, key:str, default=None):
-        if key in self._config:
-            return self._config[key]
-        else:
-            return default
-
     def hasOnSuccessBlock(self)->bool:
         if self._on_success_block is None:
             return False

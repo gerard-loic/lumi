@@ -4,6 +4,7 @@ import inspect
 import importlib.util
 from mcp.server.fastmcp import FastMCP
 from lib.config.config import Config
+from lib.files.filestore import FileStore
 
 def slow_tool(func=None):
     """Décorateur signalant qu'un outil peut être lent à s'exécuter."""
@@ -86,31 +87,45 @@ class MCPTool:
         sig = inspect.signature(method)
         params_no_self = [p for p in sig.parameters.values() if p.name != "self"]
 
-        # lumi_session_id est injecté par call_tool à chaque appel ; il est filtré
-        # du schéma exposé au LLM dans tools_as_openai_format.
+        # lumi_session_id / lumi_file_scope sont injectés par call_tool à chaque appel ; ils sont
+        # filtrés du schéma exposé au LLM (cf. MCPClientManager._tool_schema).
         _session_param = inspect.Parameter(
             "lumi_session_id",
             kind=inspect.Parameter.KEYWORD_ONLY,
             default="",
             annotation=str,
         )
+        _scope_param = inspect.Parameter(
+            "lumi_file_scope",
+            kind=inspect.Parameter.KEYWORD_ONLY,
+            default="",
+            annotation=str,
+        )
         new_sig = sig.replace(
-            parameters=params_no_self + [_session_param],
+            parameters=params_no_self + [_session_param, _scope_param],
             return_annotation=inspect.Parameter.empty,
         )
 
         if inspect.iscoroutinefunction(method):
             async def wrapper(*args, **kwargs):
                 _inject_session_auth(kwargs.pop("lumi_session_id", ""))
-                instance = cls()
-                result = await method(instance, *args, **kwargs)
-                return {"result": result, "events": instance._events}
+                _scope_token = FileStore.enter_scope(kwargs.pop("lumi_file_scope", ""))
+                try:
+                    instance = cls()
+                    result = await method(instance, *args, **kwargs)
+                    return {"result": result, "events": instance._events}
+                finally:
+                    FileStore.exit_scope(_scope_token)
         else:
             def wrapper(*args, **kwargs):
                 _inject_session_auth(kwargs.pop("lumi_session_id", ""))
-                instance = cls()
-                result = method(instance, *args, **kwargs)
-                return {"result": result, "events": instance._events}
+                _scope_token = FileStore.enter_scope(kwargs.pop("lumi_file_scope", ""))
+                try:
+                    instance = cls()
+                    result = method(instance, *args, **kwargs)
+                    return {"result": result, "events": instance._events}
+                finally:
+                    FileStore.exit_scope(_scope_token)
 
         wrapper.__name__ = method.__name__
         wrapper.__qualname__ = method.__qualname__
@@ -118,6 +133,7 @@ class MCPTool:
         wrapper.__module__ = method.__module__
         wrapper.__annotations__ = {k: v for k, v in method.__annotations__.items() if k not in ("self", "return")}
         wrapper.__annotations__["lumi_session_id"] = str
+        wrapper.__annotations__["lumi_file_scope"] = str
         wrapper.__signature__ = new_sig
 
         MCPTool._registry[method.__name__] = {

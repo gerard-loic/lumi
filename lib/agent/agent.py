@@ -419,11 +419,14 @@ class Agent:
     Appel LLM ponctuel hors session de chat (ex: bloc "Agent" d'un pipeline) : pas d'historique de
     conversation, pas de streaming, pas de pièces jointes/RAG pré-recherche. La boucle de tool calls
     est la même que dans chatStream, mais les outils nécessitant une confirmation sont refusés
-    d'office (aucun client pour y répondre). L'authentification utilisée pour les appels d'outils MCP
+    d'office (aucun client pour y répondre), sauf si auto_confirm=True : dans ce cas la confirmation
+    est considérée comme accordée et l'outil est exécuté normalement. À n'activer que pour des
+    pipelines de confiance : ces outils portent des effets de bord non triviaux (envoi de mail,
+    suppression, écritures externes...). L'authentification utilisée pour les appels d'outils MCP
     est celle du contexte d'exécution courant (AuthSessionManager.get_current_id()) : c'est à l'appelant de l'avoir
     positionnée au préalable (ex: session dédiée créée pour l'exécution du pipeline).
     """
-    async def reflect(self, prompt: str, exclude_restricted: bool = True) -> str:
+    async def reflect(self, prompt: str, exclude_restricted: bool = True, auto_confirm: bool = False) -> str:
         session_id = AuthSessionManager.get_current_id()
 
         #Connexions aux serveurs MCP externes en auth "session" pour cet appel (cf.
@@ -471,7 +474,7 @@ class Agent:
                 for tc in assistant_msg.tool_calls:
                     meta = MCPTool.get_meta(tc.function.name)
 
-                    if meta.get("confirmation", False):
+                    if meta.get("confirmation", False) and not auto_confirm:
                         Logger.write(f"[AGENT {self.profile.getName()}] Tool {tc.function.name} requires a confirmation, unavailable in reflect()", type=WARNING)
                         messages.append({
                             "role": "tool",
@@ -479,6 +482,8 @@ class Agent:
                             "content": "Tool call failed: this tool requires a user confirmation, unavailable in this context",
                         })
                         continue
+                    if meta.get("confirmation", False) and auto_confirm:
+                        Logger.write(f"[AGENT {self.profile.getName()}] Tool {tc.function.name} requires a confirmation, auto-confirmed (reflect auto_confirm=True)", type=WARNING)
 
                     Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name}...", type=WARNING)
                     try:

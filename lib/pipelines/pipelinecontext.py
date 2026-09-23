@@ -22,6 +22,19 @@ class PipelineContext:
 
     def __init__(self):
         self._data = {}
+        self._config = {}
+
+    def setConfig(self, config:dict):
+        self._config = config
+
+    #getConfig / getFullConfig délèguent à _transformValue qui parcourt récursivement la valeur
+    #(chaine, dict, list, sous-dicts...) et transforme au passage toutes les chaines. La
+    #transformation reste paresseuse : elle a lieu à la lecture, quand le contexte est peuplé.
+    def getConfig(self, key:str, default=None):
+        return self._transformValue(self._config.get(key, default))
+
+    def getFullConfig(self)->dict:
+        return self._transformValue(self._config)
 
     def set(self, key:str, value):
         self._data[key] = value
@@ -31,6 +44,25 @@ class PipelineContext:
         if isinstance(data, (str)):
             data = self.transform(text=data)
         return data
+
+    #Résout un chemin ("a.b[0].c") vers sa valeur typée dans le contexte, sans la convertir en
+    #chaine (contrairement à transform). Lève KeyError / IndexError / ValueError si le chemin est
+    #invalide ou absent. Utilisé par le bloc Condition pour comparer des valeurs typées.
+    def resolve(self, path:str):
+        return self._resolvePath(path, self._data)
+
+    #Décrit récursivement la structure du contexte (clés, types, imbrication) sans exposer les
+    #valeurs elles-mêmes. Utile pour du logging/debug sans divulguer de données sensibles.
+    def getStructure(self)->dict:
+        return self._describeStructure(self._data)
+
+    @classmethod
+    def _describeStructure(cls, value):
+        if isinstance(value, dict):
+            return {k: cls._describeStructure(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [cls._describeStructure(v) for v in value]
+        return type(value).__name__
 
     #Fusionne un dict de valeurs dans le contexte, en transformant au passage les chaines
     #(et les chaines imbriquées dans des dict/list) pour permettre de référencer des valeurs

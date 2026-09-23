@@ -11,5 +11,5 @@ class Context(Block):
         super().__init__("Context", block_uid, config, on_success_block=on_success_block, on_error_block=on_error_block)
 
     def execute(self, context:PipelineContext):
-        context.merge(self._config)
+        context.merge(context.getFullConfig())
         return True

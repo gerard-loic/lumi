@@ -13,6 +13,7 @@ from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 from lib.mcp.toolloader import MCPTool, ToolLoader
 from lib.session.session import AuthSessionManager
+from lib.files.filestore import FileStore
 from lib.log.logger import Logger, ERROR
 
 class MCPToolError(Exception):
@@ -215,9 +216,10 @@ class MCPClientManager:
     #Construit l'entrée de schéma attendue par le LLM pour un outil MCP donné.
     def _tool_schema(self, t) -> dict:
         schema = dict(t.inputSchema)
-        # lumi_session_id est un paramètre interne — on le masque au LLM
-        properties = {k: v for k, v in schema.get("properties", {}).items() if k != "lumi_session_id"}
-        required = [r for r in schema.get("required", []) if r != "lumi_session_id"]
+        # lumi_session_id / lumi_file_scope sont des paramètres internes — on les masque au LLM
+        _internal = {"lumi_session_id", "lumi_file_scope"}
+        properties = {k: v for k, v in schema.get("properties", {}).items() if k not in _internal}
+        required = [r for r in schema.get("required", []) if r not in _internal]
         return {
             "type": "function",
             "function": {
@@ -273,7 +275,14 @@ class MCPClientManager:
         else:
             # lumi_session_id est injecté ici pour que le wrapper de l'outil puisse
             # configurer l'auth de la bonne session sans passer par un état global.
-            arguments = {**arguments, "lumi_session_id": AuthSessionManager.get_current_id() or ""}
+            # lumi_file_scope propage le scope de fichiers courant (ex. "pipeline:<id>") jusqu'à
+            # l'outil, pour que les fichiers qu'il produit via FileStore soient rattachés au run
+            # et non à la sous-session éphémère de l'agent.
+            arguments = {
+                **arguments,
+                "lumi_session_id": AuthSessionManager.get_current_id() or "",
+                "lumi_file_scope": FileStore.current_scope() or "",
+            }
             result = await self.session.call_tool(name, arguments)
 
         if result.isError:

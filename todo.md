@@ -1,50 +1,40 @@
 Version ABYSS : 
 - [x] Gestion d'un fallback de font pour les PDF
 - [ ] Création de pipelines [EN COURS]
-- [ ] API statistiques détaillées
 - [ ] Suivi des pipelines [EN COURS]
-- [ ] API info profil
-- [ ] Revue de l'API d'info session / profil
 - [x] Support connecteur LLM DigitalOcean 
 - [x] Support connecteur LLM Cerebras
 - [ ] Support connecteur Llama
 - [ ] Support autres connecteurs ?
-- [ ] Dans Embedder liaison dynamique / gestion différentiée des prividers
+- [ ] Dans Embedder liaison dynamique / gestion différentiée des providers
 - [ ] Documentation spécifique sur l'écriture des fichiers de configuration avec options
 - [ ] Vérifier le service d'auth Webex nécessaire ?
 - [ ] Revue des logs
-- [ ] File format checker
 - [ ] Vérificateur de format des fichiers de configuration
-- [ ] Gestionnaire de droits d'API Basic
-- [ ] Gestionnaire de RAG externe [EN COURS]
-- [ ] Modification de la gestion de l'authentification => conteneur d'authentifications [EN COURS]
+- [x] Modification de la gestion de l'authentification => conteneur d'authentifications
 - [ ] Correctif sécurité service d'auth ?
-- [ ] Bloc : conditionnelle - switch
+- [x] Bloc : conditionnelle (Condition) - [ ] switch
 - [ ] Bloc : sleep
-- [ ] Bloc : transformMapping
-- [ ] Bloc : render (produire un documentd depuis le contexte)
-- [ ] Bloc : boucle
-- [ ] Bloc : DataView
-- [ ] Bloc : csvformat
+- [ ] Bloc : transformMapping (?)
+- [ ] Bloc : render (produire un documentd depuis le contexte) (à vérifier : dataFileView)
+- [x] Bloc : Loop
+- [x] Bloc : DataView
+- [x] Bloc : csvformat (CsvReader)
 - [ ] Bloc : xmlformat
-- [ ] Bloc : filereader
-- [ ] Bloc : filedelete
-- [ ] Bloc : zip
-- [ ] Bloc : unzip
-- [ ] Bloc : filemove
+- [x] Bloc : filereader (TxtReader)
+- [x] Bloc : ExcelReader
+- [x] Bloc : filedelete
+- [x] Bloc : filemove
+- [x] Bloc : FileExists
 - [ ] Bloc : webexNotification
-- [ ] Bloc : Rag ( interroger / indexer la base RAG interne depuis un pipeline)
 - [ ] Bloc : MicroRag
-- [ ] Bloc : ImageToText (for Nova)
-- [ ] Bloc : apiGet
-- [ ] Bloc : apiPost
-- [ ] Bloc : apiPut
-- [ ] Bloc : apiDelete
+- [x] Bloc : apiGet
+- [x] Bloc : apiPost
+- [x] Bloc : apiPut
+- [x] Bloc : apiDelete
 - [ ] Bloc : webhookCall
 - [ ] Bloc : filewriter
 - [ ] Bloc : serviceMethod
-- [ ] Bloc : subpipeline
-- [ ] Bloc : agent : revoir authentification
 - [ ] Trigger : cron
 - [ ] Trigger : callback
 - [ ] Trigger : urlWatch
@@ -59,8 +49,20 @@ Version ABYSS :
 - [ ] Trigger : pipelineEvent
 - [ ] Revoir le readme -> prévoir une documentation sur l'écriture d'un pipeline + une documentation sur la configuration
 - [ ] Prévoir la configuration des profiles dans des fichiers de configuration à part
+- [x] Log in out de chaque bloc
+- [ ] Delestage à revoir
+- [ ] Système de trousseau d'authentification
+- [ ] Modification des pipelines à la volée
 
 BACKLOG
+- [ ] API statistiques détaillées (usage / pipeline)
+- [ ] API info profil
+- [ ] Gestionnaire de droits d'API Basic
+- [ ] Bloc : zip 
+- [ ] Bloc : unzip
+- [ ] Bloc : ImageToText (for Nova)
+- [ ] Bloc : subpipeline
+- [ ] Revue de l'API d'info session / profil
 - [ ] Gérer d'autres sources de données ?
 - [ ] Limiter la sortie ?
 - [ ] Support OCR / modèle de compréhension d'image
@@ -98,6 +100,12 @@ BACKLOG
 - [ ] modifier l'evenement rag en source plus globale
 - [ ] Avoir les affichages de sources dans les contenus
 - [ ] Sur les appels MCP avec un UID d'appel d'outil
+- [ ] Problématique du RAG avec source sur documents non adéquats (score minimal ?)
+- [ ] Liaison de documents à un message en particulier
+- [ ] Gestion de la suppression du contexte et du récapitulatif du contexte
+- [ ] Suppression d'un fichier du raisonnement
+- [ ] Annuler une demande en cours
+- [ ] Meilleure gestion de la réponse vide (implémenter un sleep)
 
 
 

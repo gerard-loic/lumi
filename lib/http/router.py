@@ -7,6 +7,7 @@ from typing import Optional
 from lib.http.models import ToolInfo, AuthRequest, PipelineStartResponse, PipelineInfoRequest, PipelineInfoResponse, PipelineStepInfoRequest, PipelineStepInfoResponse, PipelineStartRequest, PipelineStartBody, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse, AuthSessionResponse
 from lib.http.auth import Auth, AdminAuth
 from lib.session.session import AuthSessionManager
+from lib.files.filestore import FileStore
 from lib.mcp.client import mcp_manager
 from lib.mcp.toolloader import ToolLoader, MCPTool
 from lib.services.services import ServiceManager
@@ -315,16 +316,17 @@ class Router:
                 active_stream.cancel()
 
     """
-    Route [GET] /files/{key}/{filename} : renvoie un fichier lié à la session
+    Route [GET] /files/{key}/{filename} : renvoie un fichier lié à une session ou à un run de pipeline
     Auth    : Bearer token via header Authorization  OU  hash du token via query param ?t=
-    Entrée  : key      (path)  — identifiant du fichier dans la session
+              (?t= accepte le token_hash d'une session OU le token d'un run de pipeline en cours)
+    Entrée  : key      (path)  — identifiant du fichier
               filename (path)  — nom du fichier à retourner dans la réponse
               Authorization    (header, optionnel) — "Bearer <token>"
-              t                (query,  optionnel) — sha256 du token
+              t                (query,  optionnel) — sha256 du token de session, ou token de run
     Sortie  : FileResponse (contenu binaire du fichier)
     """
     async def get_file(self, key: str, filename: str, authorization: str | None = Header(default=None), t: str | None = Query(default=None)) -> FileResponse:
-        session = None
+        authorized = False
 
         if authorization and authorization.startswith("Bearer "):
             token = authorization[7:]
@@ -333,14 +335,20 @@ class Router:
                 Logger.write(f"[HTTP] [403] get_file — Token invalide ou session expirée", type=ERROR)
                 raise HTTPException(status_code=403, detail="Unauthorized")
             session = AuthSessionManager.get(decoded.get("session_id"))
+            authorized = bool(session and key in session.files)
         elif t:
             session = AuthSessionManager.get_by_token_hash(t)
+            if session:
+                authorized = key in session.files
+            else:
+                #Fichier rattaché à un run de pipeline : le token identifie le run, le fichier doit lui appartenir.
+                process_id = FileStore.pipeline_from_token(t)
+                authorized = bool(process_id and FileStore.pipeline_has_file(process_id, key))
         else:
             raise HTTPException(status_code=401, detail="Authentication required")
 
-        if not session or key not in session.files:
-            session_id = session.session_id if session else "?"
-            Logger.write(f"[HTTP] [403] get_file — Clé {key} absente de la session {session_id}", type=ERROR)
+        if not authorized:
+            Logger.write(f"[HTTP] [403] get_file — Clé {key} non autorisée", type=ERROR)
             raise HTTPException(status_code=403, detail="Unauthorized")
 
         temp_root = Path(Config.get("directories.temp_dir")).resolve()
