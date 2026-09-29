@@ -1,10 +1,12 @@
 import asyncio
 import json
 import re
-from datetime import datetime, timezone
 
 from lib.connectors.webex.webexbot import WebexBot
-from lib.session.session import AuthSessionManager
+from lib.process.processmanager import ProcessManager
+from lib.process.process import KIND_WEBEX
+from lib.process.agentcontext import AgentContext
+from lib.localization.language import LanguageManager
 from lib.services.services import ServiceManager
 from lib.config.config import Config
 from lib.log.logger import Logger, ERROR, WARNING, OK
@@ -38,6 +40,11 @@ class WebexWebhookHandler:
         if person_id == self._connector.bot_id:
             return
 
+        # En espace de groupe, ignorer si la configuration du connecteur (propre au profil) l'interdit.
+        # Avant l'interception des confirmations : un message de groupe ne doit pas valider une confirmation
+        if room_type != "direct" and not self._connector.allow_group_messages:
+            return
+
         session_id = f"webex_{person_id}"
 
         # Intercepter les réponses à une confirmation en attente,
@@ -51,10 +58,6 @@ class WebexWebhookHandler:
 
         # En espace de groupe, ignorer si le bot n'est pas mentionné
         if room_type != "direct" and self._connector.bot_id not in mentioned_people:
-            return
-
-        # En espace de groupe, ignorer si la configuration l'interdit
-        if room_type != "direct" and not Config.get(key="connectors.webex.allow_group_messages", default=True):
             return
 
         # Récupérer le texte complet du message via l'API
@@ -73,7 +76,8 @@ class WebexWebhookHandler:
                 text = text[len(prefix):].strip()
 
         # Obtenir ou créer la session Lumi pour cet utilisateur Webex
-        if not AuthSessionManager.get(session_id):
+        session = ProcessManager.get(session_id)
+        if not session:
             #Récupère l'utilisateur Webex
             person_data = await self._connector.get_person(person_id)
             email = (person_data.get("emails") or [None])[0] if person_data else None
@@ -85,22 +89,19 @@ class WebexWebhookHandler:
             #Authentification auprès du service principal d'authentification utilisé par Lumi
             auth_service_name = Config.get(key="authentication.service")
             auth_service = ServiceManager.get(name=auth_service_name)
-            auth_data = auth_service.webexAuthenticate(username=email, api_key=self._connector.api_key)
+            #Appel réseau synchrone : exécuté hors de la boucle événementielle pour ne pas bloquer le serveur
+            auth_data = await asyncio.to_thread(auth_service.webexAuthenticate, username=email, api_key=self._connector.api_key)
             if not auth_data:
                 Logger.write(f"[Connector webex] Authentication failed for {email}", type=ERROR)
                 await self._connector.send_message(room_id, f"❌ Votre compte **{email}** n'est pas autorisé à utiliser ce service.")
                 return
 
-            #Création de l'authentification
-            future_ts = datetime.now(tz=timezone.utc).timestamp() + Config.get("authentication.session_duration")
-            AuthSessionManager.add(
-                session_id=session_id,
-                expires_at=future_ts,
-                authentication={"session_id": session_id, "services": {auth_service_name: auth_data}},
-                auth_fingerprint=f"webex_{person_id}",
-            )
+            #Création de la session
+            session = ProcessManager.create(process_id=session_id, expires_in=Config.get("authentication.session_duration"), fingerprint=f"webex_{person_id}", kind=KIND_WEBEX)
+            session.setAgentContext(AgentContext(profile=self._agent.profile.getName(), language=LanguageManager.getLanguage(code=Config.get("app.default_language"))))
+            session.getWallet().store(key=auth_service_name, secret=auth_data)
 
-        AuthSessionManager.set_current(session_id)
+        ProcessManager.setCurrent(session.getUid())
 
         Logger.write(f"[Connector webex] Message from {person_id} ({room_type}) : {text[:80]}", type=OK)
 
@@ -112,7 +113,7 @@ class WebexWebhookHandler:
 
         #Consomme le flux de réponse de l'agent en streaming
         try:
-            async for raw in self._agent.chatStream(text, session_id, exclude_restricted=True):
+            async for raw in self._agent.chatStream(text, session, exclude_restricted=True):
                 try:
                     ev = json.loads(raw)
                 except Exception:
@@ -150,7 +151,7 @@ class WebexWebhookHandler:
 
                     # Résolution différée : wait_confirmation() n'a pas encore créé sa queue
                     # car le générateur est suspendu au yield — on attend qu'elle apparaisse
-                    asyncio.create_task(_delayed_resolve(session_id, option_idx))
+                    asyncio.create_task(_delayed_resolve(session.getAgentContext(), option_idx))
 
                     if option_idx != -1:
                         placeholder_id = await self._connector.send_message(room_id, "⏳ *En cours de rédaction...*")
@@ -211,13 +212,13 @@ def _parse_option(reply: str, options: list[str]) -> int | None:
             return i
     return None
 
-#Attend que wait_confirmation() ait enregistré sa queue avant de résoudre.
-async def _delayed_resolve(session_id: str, option_idx: int) -> None:
+#Attend que waitConfirmation() ait enregistré sa file d'attente avant de résoudre.
+async def _delayed_resolve(agent_ctx: AgentContext, option_idx: int) -> None:
     for _ in range(50):
-        if AuthSessionManager._confirmation_queues.get(session_id):
+        if agent_ctx.hasPendingConfirmation():
             break
         await asyncio.sleep(0.1)
-    AuthSessionManager.resolve_confirmation(session_id, option_idx)
+    agent_ctx.resolveConfirmation(option_idx)
 
 #Envoie la réponse ou met à jour la dernière réponse
 async def _reply(connector: WebexBot, room_id: str, placeholder_id: str | None, text: str) -> None:

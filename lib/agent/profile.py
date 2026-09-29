@@ -34,6 +34,11 @@ class ProfileManager:
         ProfileManager.profiles = {}
         for p in Config.get("profiles"):
             ProfileManager.profiles[p] = Profile(name=p)
+            #La collection RAG du profil doit être déclarée dans rag.collections (lève une exception sinon)
+            collection = ProfileManager.profiles[p].getConfigValue("rag.collection")
+            if collection is not None:
+                from lib.rag.collection import RagCollection
+                RagCollection.get(collection)
 
     @staticmethod
     def getProfile(name:str):

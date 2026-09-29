@@ -1,13 +1,6 @@
 """
-Lumi chatbot service
+Lumi server
 ----------------------------------------------------------------
-Routes :
-  WS   /ws          : conversation streamée WebSocket (usage production)
-  GET  /tools       : liste les outils MCP disponibles (debug)
-  GET  /health      : healthcheck
-  GET  /files/{key}/{filename} : télécharge un fichier mis à disposition par l'agent
-  POST /auth        : authentification au service
-
 Lancer le service :
  python -m uvicorn main:app --host 0.0.0.0 --port 8001 --reload 
 """
@@ -24,7 +17,8 @@ from lib.config.config import Config, StaticConfig
 from lib.log.logger import Logger
 from lib.agent.agent import AgentManager
 from lib.services.services import ServiceManager
-from lib.session.session import AuthSessionManager
+from lib.process.processmanager import ProcessManager
+from lib.http.auth import Auth
 from lib.files.filestore import FileStore
 from lib.files.localdata import LocalData
 from lib.connectors.connector import ConnectorManager
@@ -33,11 +27,19 @@ from lib.agent.profile import ProfileManager
 from lib.localization.language import LanguageManager
 from lib.pipelines.pipelinemanager import PipelineManager
 from lib.pipelines.pipelinelog import PipelineLog
+from lib.http.bodylimit import BodySizeLimitMiddleware
+from lib.utils.sandbox import Sandbox
 
 # ----------------------------------------------------------------
 # Initialisation configuration
 # ----------------------------------------------------------------
 Config.init()
+Auth.init()
+
+# ----------------------------------------------------------------
+# Extraction isolée des fichiers (cf. lib/rag/textextractor.py) : à initialiser avant toute extraction
+# ----------------------------------------------------------------
+Sandbox.init(modules=["lib.rag.extractworkers"], max_concurrent=Config.get("extraction.max_concurrent", 4))
 
 # ----------------------------------------------------------------
 # Initialisation logger
@@ -73,7 +75,6 @@ LanguageManager.init()
 l = LanguageManager.getLanguage(code="en")
 print(l._translations)
 
-
 # ----------------------------------------------------------------
 # Initialisation gestionnaire de services (pour authentification)
 # ----------------------------------------------------------------
@@ -93,7 +94,7 @@ lumi_router = Router()
 async def _session_cleaner():
     while True:
         await asyncio.sleep(60)
-        AuthSessionManager.clear()
+        ProcessManager.clear()
         await CronManager.execute()
 
 
@@ -142,5 +143,8 @@ app.add_middleware(
     allow_methods=Config.get(key="app.allowed_cors_methods"),
     allow_headers=Config.get(key="app.allowed_cors_headers"),
 )
+
+# Taille maximale des requêtes (uploads)
+app.add_middleware(BodySizeLimitMiddleware)
 
 app.include_router(lumi_router.router)

@@ -5,9 +5,10 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pathlib import Path
 from typing import Optional
 from lib.http.models import ToolInfo, AuthRequest, PipelineStartResponse, PipelineInfoRequest, PipelineInfoResponse, PipelineStepInfoRequest, PipelineStepInfoResponse, PipelineStartRequest, PipelineStartBody, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse, AuthSessionResponse
-from lib.http.auth import Auth, AdminAuth
-from lib.session.session import AuthSessionManager
+from lib.http.auth import Auth, AdminAuth, AuthRateLimiter
+from lib.process.processmanager import ProcessManager
 from lib.files.filestore import FileStore
+from lib.files.ragstore import RagStore
 from lib.mcp.client import mcp_manager
 from lib.mcp.toolloader import ToolLoader, MCPTool
 from lib.services.services import ServiceManager
@@ -109,21 +110,17 @@ class Router:
             raise HTTPException(status_code=401, detail="Authentication required")
         token = authorization[7:]
 
-        #Vérifie le token
-        decoded = Auth.checkAuthentification(token=token)
-        if not decoded:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-        #Récupère la session
-        session = AuthSessionManager.get(decoded.get("session_id"))
-        if not session:
+        #Vérifie le token et récupère le contexte agent de la session
+        session = Auth.checkAuthentification(token=token)
+        agent_ctx = session.getAgentContext() if session else None
+        if not agent_ctx:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
 
         #récupère le profil
-        profil = ProfileManager.getProfile(session.getProfile())
+        profil = agent_ctx.getProfileConfig()
 
         #récupère le language
-        language = session.getLanguage()
+        language = agent_ctx.getLanguage()
 
         out = {
             'followup_questions' : profil.getConfigValue(key="llm.followup_questions.enabled", default=False),
@@ -214,32 +211,23 @@ class Router:
             await websocket.close(code=4001, reason="Authentication token is required")
             return
 
-        try:
-            decodedToken = Auth.checkAuthentification(token=token)
-        except Exception as e:
-            Logger.write(f"[HTTP] [WS] ws_chat — Erreur during token verification : {e}", type=ERROR)
-            await websocket.close(code=4001, reason="Authentication error")
-            return
-
-        if not decodedToken:
+        session = Auth.checkAuthentification(token=token)
+        if not session:
             Logger.write("[HTTP] [WS] ws_chat — Invalid token or session expired", type=ERROR)
             await websocket.close(code=4003, reason="Unauthorized")
             return
 
-
-        session_id: str | None = decodedToken.get("session_id")
-        session = AuthSessionManager.get(session_id)
-        language = session.getLanguage()
-        t = Traduction(language=language)
-
-        agent = AgentManager.getAgent(name=session.getProfile()) if session else None
+        agent_ctx = session.getAgentContext()
+        agent = AgentManager.getAgent(name=agent_ctx.getProfile()) if agent_ctx else None
         if agent is None:
             Logger.write("[HTTP] [WS] ws_chat — Agent non available", type=ERROR)
             await websocket.close(code=4503, reason="Agent non available")
             return
 
-        if not AuthSessionManager.claim_ws(session_id):
-            Logger.write(f"[HTTP] [WS] ws_chat — Session {session_id} already connected", type=WARNING)
+        t = Traduction(language=agent_ctx.getLanguage())
+
+        if not session.claimCnx():
+            Logger.write(f"[HTTP] [WS] ws_chat — Session {session.getUid()} already connected", type=WARNING)
             await websocket.close(code=4409, reason="Session already connected")
             return
         
@@ -260,7 +248,7 @@ class Router:
                     #Attente de réception d'un message du client
                     data = await asyncio.wait_for(websocket.receive_json(), timeout=inactivity_timeout)
                 except asyncio.TimeoutError:
-                    Logger.write(f"[HTTP] [WS] ws_chat — Intactivity timeout ({inactivity_timeout}s) for session {session_id}", type=WARNING)
+                    Logger.write(f"[HTTP] [WS] ws_chat — Intactivity timeout ({inactivity_timeout}s) for session {session.getUid()}", type=WARNING)
                     await websocket.close(code=1001, reason="Inactivity timeout")
                     break
                 except Exception:
@@ -271,7 +259,7 @@ class Router:
 
                 #Type confirmation
                 if msg_type == "confirmation":
-                    AuthSessionManager.resolve_confirmation(session_id, data.get("option", -1))
+                    agent_ctx.resolveConfirmation(data.get("option", -1))
 
                 #Type message
                 elif msg_type == "message":
@@ -280,7 +268,7 @@ class Router:
                         await websocket.send_text(ErrorEvent.get(error_code="RATE_LIMIT_EXCEEDED", message=t.trad("[agent.rate_limit_exceeded.usage]")))
                         continue
 
-                    if LLMLimiter.isFloodDetected(session_id):
+                    if LLMLimiter.isFloodDetected(agent_ctx):
                         await websocket.send_text(ErrorEvent.get(error_code="RATE_LIMIT_EXCEEDED", message="[agent.rate_limit_exceeded.request]"))
                         continue
 
@@ -293,9 +281,9 @@ class Router:
                     if not message:
                         continue
 
-                    async def _stream(msg=message, sid=session_id, agent=agent):
+                    async def _stream(msg=message):
                         try:
-                            async for event in agent.chatStream(msg, sid):
+                            async for event in agent.chatStream(msg, session):
                                 await websocket.send_text(event)
                         except asyncio.CancelledError:
                             #Cas de déconnexion client. On termine silencieusement
@@ -311,18 +299,18 @@ class Router:
             Logger.write(f"[HTTP] [WS] ws_chat — Unexpected error : {e}", type=ERROR)
         finally:
             self._active_ws -= 1
-            AuthSessionManager.release_ws(session_id)
+            session.releaseCnx()
             if active_stream:
                 active_stream.cancel()
 
     """
     Route [GET] /files/{key}/{filename} : renvoie un fichier lié à une session ou à un run de pipeline
-    Auth    : Bearer token via header Authorization  OU  hash du token via query param ?t=
-              (?t= accepte le token_hash d'une session OU le token d'un run de pipeline en cours)
+    Auth    : Bearer token via header Authorization  OU  token de signature via query param ?t=
+              (?t= : token du process — session ou run de pipeline en cours — auquel le fichier est rattaché)
     Entrée  : key      (path)  — identifiant du fichier
               filename (path)  — nom du fichier à retourner dans la réponse
               Authorization    (header, optionnel) — "Bearer <token>"
-              t                (query,  optionnel) — sha256 du token de session, ou token de run
+              t                (query,  optionnel) — token de signature des URLs du process
     Sortie  : FileResponse (contenu binaire du fichier)
     """
     async def get_file(self, key: str, filename: str, authorization: str | None = Header(default=None), t: str | None = Query(default=None)) -> FileResponse:
@@ -330,20 +318,14 @@ class Router:
 
         if authorization and authorization.startswith("Bearer "):
             token = authorization[7:]
-            decoded = Auth.checkAuthentification(token=token)
-            if not decoded:
+            session = Auth.checkAuthentification(token=token)
+            if not session:
                 Logger.write(f"[HTTP] [403] get_file — Token invalide ou session expirée", type=ERROR)
                 raise HTTPException(status_code=403, detail="Unauthorized")
-            session = AuthSessionManager.get(decoded.get("session_id"))
-            authorized = bool(session and key in session.files)
+            authorized = session.hasFile(key)
         elif t:
-            session = AuthSessionManager.get_by_token_hash(t)
-            if session:
-                authorized = key in session.files
-            else:
-                #Fichier rattaché à un run de pipeline : le token identifie le run, le fichier doit lui appartenir.
-                process_id = FileStore.pipeline_from_token(t)
-                authorized = bool(process_id and FileStore.pipeline_has_file(process_id, key))
+            process = ProcessManager.getByToken(token=t)
+            authorized = bool(process and process.hasFile(key))
         else:
             raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -363,12 +345,13 @@ class Router:
 
     """
     Route [GET] /files/rag/{collection}/{key}/{filename} : renvoie un fichier source conservé dans l'espace de stockage RAG
-    Auth    : Bearer token (session active) OU hash du token via query param ?t= OU Basic admin
+    Auth    : Bearer token (session active, dont le profil a cette collection pour rag.collection)
+              OU signature du fichier via query param ?t= OU Basic admin
     Entrée  : collection (path)  — collection RAG concernée
               key        (path)  — identifiant du fichier dans RagStore
               filename   (path)  — nom du fichier à retourner dans la réponse
               Authorization      (header, optionnel) — "Bearer <token>"
-              t                  (query,  optionnel)  — sha256 du token d'une session active
+              t                  (query,  optionnel)  — signature "<expiration>.<hmac>" propre à ce fichier (cf. RagStore.signUrl)
     Sortie  : FileResponse (contenu binaire du fichier)
     """
     async def get_rag_file(
@@ -383,10 +366,14 @@ class Router:
         authorized = False
 
         if authorization and authorization.startswith("Bearer "):
-            decoded = Auth.checkAuthentification(token=authorization[7:])
-            authorized = bool(decoded and AuthSessionManager.get(decoded.get("session_id")))
+            #Une session n'accède qu'à la collection RAG de son profil
+            session = Auth.checkAuthentification(token=authorization[7:])
+            agent_ctx = session.getAgentContext() if session else None
+            profile_collection = agent_ctx.getProfileConfig().getConfigValue("rag.collection") if agent_ctx else None
+            authorized = bool(profile_collection) and profile_collection == collection
         elif t:
-            authorized = AuthSessionManager.get_by_token_hash(t) is not None
+            #URL signée pour ce seul fichier, lors de sa citation par search_knowledge_base (cf. RagStore.signUrl)
+            authorized = RagStore.checkSignature(collection=collection, key=key, t=t)
         elif credentials and AdminAuth.checkAdminCredentials(credentials.username, credentials.password):
             authorized = True
 
@@ -417,14 +404,9 @@ class Router:
             raise HTTPException(status_code=401, detail="Authentication required")
         token = authorization[7:]
 
-        #Vérifie le token
-        decoded = Auth.checkAuthentification(token=token)
-        if not decoded:
-            raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-        #Récupère la session
-        session = AuthSessionManager.get(decoded.get("session_id"))
-        if not session:
+        #Vérifie le token et récupère la session
+        session = Auth.checkAuthentification(token=token)
+        if not session or not session.getAgentContext():
             raise HTTPException(status_code=401, detail="Invalid or expired token")
 
         try:
@@ -435,11 +417,17 @@ class Router:
 
     """
     Route [POST] /auth : Authentification au service, ouvre une session
-    Auth    : (aucune — endpoint public)
+    Auth    : (aucune — endpoint public), limité par IP cliente (authentication.max_auth_requests_minute)
     Entrée  : AuthRequest { authorization: dict, profile: str }
     Sortie  : AuthResponse { token: str }
     """
-    async def auth(self, request: AuthRequest) -> AuthResponse:
+    async def auth(self, request: AuthRequest, http_request: Request) -> AuthResponse:
+        #Limitation du nombre de tentatives par IP (force brute de tokens, saturation des services d'authentification)
+        client_ip = http_request.client.host if http_request.client else "unknown"
+        if not AuthRateLimiter.allow(client_ip):
+            Logger.write(f"[HTTP] [429] auth — Too many authentication requests from {client_ip}", type=WARNING)
+            raise HTTPException(status_code=429, detail="Too many authentication requests", headers={"Retry-After": "60"})
+
         #Vérification profil
         profile = "default"
         if ProfileManager.profileExists(request.profile):
@@ -457,7 +445,7 @@ class Router:
         language = LanguageManager.getLanguage(code=language)
             
         try:
-            token = Auth.authenticate(authorization=request.authorization, profile=profile, language=language)
+            token = await Auth.authenticate(authorization=request.authorization, profile=profile, language=language)
         except Exception as e:
             Logger.write(f"[HTTP] [500] auth — Internal authentification error: {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=f"Internal authentification error")
@@ -479,11 +467,10 @@ class Router:
         if not authorization or not authorization.startswith("Bearer "):
             raise HTTPException(status_code=401, detail="Authentication required")
         token = authorization[7:]
-        decoded = Auth.checkAuthentification(token=token)
-        if not decoded:
+        session = Auth.checkAuthentification(token=token)
+        if not session:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
-        session_id = decoded.get("session_id")
-        AuthSessionManager.remove(session_id)
+        ProcessManager.remove(session.getUid())
         return {"detail": "Session closed"}
 
     def _check_admin_auth(self, credentials: HTTPBasicCredentials) -> None:

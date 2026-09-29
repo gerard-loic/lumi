@@ -8,6 +8,7 @@
        "allowed_cors_headers" : ["*"],
        "url" : "https://service.fr",
        "ws_inactivity_timeout" : 300,
+       "max_request_body_mb" : 100,
        "default_language" : "fr",
        "admin_users" : [
             {
@@ -21,7 +22,8 @@
         "service" : "apiservice",
         "jwt_secret" : "",
         "jwt_algorithm": "HS256",
-        "session_duration" : 3600
+        "session_duration" : 3600,
+        "max_auth_requests_minute" : 10
     },
 
     "services" : {
@@ -72,7 +74,6 @@
                 },
                 "LiteLLM": {
                     "model": "openai/openai/gpt-oss-120b",
-                    "embedding_model": "openai/Qwen/Qwen3-Embedding-0.6B",
                     "api_base": "https://provider.fr/v1",
                     "api_key": ""
                 }
@@ -102,11 +103,14 @@
                 "enabled" : true,
                 "max_file_size_mb" : 20,
                 "file_context_top_k": 8,
+                "mode": "auto",
+                "full_text_max_tokens": 20000,
                 "max_files" : 5,
                 "allowed_extensions" : [".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls", ".md", ".html", ".htm", ".py", ".js", ".ts", ".txt", ".csv"]
             },
             "rag" : {
-                "collection" : "demo"
+                "collection" : "demo",
+                "top_k" : 5
             },
             "connectors" : {
                 "webex" : {
@@ -127,6 +131,14 @@
         "max_requests_minute" : 5
     },
 
+    "extraction" : {
+        "timeout" : 120,
+        "max_memory_mb" : 2048,
+        "max_concurrent" : 4,
+        "max_uncompressed_mb" : 500,
+        "max_archive_entries" : 10000
+    },
+
     "directories" : {
         "temp_dir" : "storage/temp",
         "local_storage_dir" : "storage/data",
@@ -134,7 +146,8 @@
         "rag_storage_dir" : "storage/rag",
         "custom_languages_dir" : "config/languages",
         "custom_services_dir" : "config/services",
-        "custom_mcp_tools_dir" : "config/tools"
+        "custom_mcp_tools_dir" : "config/tools",
+        "custom_pipelines" : "config/pipelines"
     },
 
     "word" : {
@@ -157,13 +170,22 @@
     },
 
     "rag" : {
-        "embedding_dim" : 1024,
-        "top_k" : 5,
-        "chunk_size" : 500,
-        "chunk_overlap" : 50,
-        "connector" : "PgVector",
-        "pgvector" : {
-            "table" : "rag_documents"
+        "collections" : {
+            "demo" : {
+                "embedding_dim" : 1024,
+                "chunk_size" : 500,
+                "chunk_overlap" : 50,
+                "connector" : "PgVector",
+                "pgvector" : {
+                    "table" : "rag_documents"
+                },
+                "embedder" : {
+                    "class" : "LiteLLMEmbedder",
+                    "model" : "openai/Qwen/Qwen3-Embedding-0.6B",
+                    "api_base" : "https://provider.fr/v1",
+                    "api_key" : ""
+                }
+            }
         }
     },
 

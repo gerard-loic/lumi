@@ -34,7 +34,7 @@ class CronTask():
     #Test si la tâche doit être executée
     def testExecution(self, timestamp:int) -> bool:
         dt = datetime.fromtimestamp(timestamp)
-        return self._matchField(field="minute", value=dt.minute) and self._matchField(field="heure", value=dt.hour)
+        return self._matchField(field="minute", value=dt.minute) and self._matchField(field="hour", value=dt.hour)
 
     def _matchField(self, field:str, value:int) -> bool:
         if field not in self.time:

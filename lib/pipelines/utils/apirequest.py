@@ -134,9 +134,6 @@ class ApiRequest(Block):
                 data_body = body
 
         try:
-            Logger.write(method)
-            Logger.write(url)
-            Logger.write(params)
             response = requests.request(
                 method,
                 url,
@@ -150,8 +147,6 @@ class ApiRequest(Block):
                 verify=verify_ssl,
                 allow_redirects=allow_redirects,
             )
-            Logger.write("////////////////////////////////////")
-            Logger.write(response)
         except requests.RequestException as e:
             Logger.write(f"[Block {self._class_name}] {method} {url} failed : {e}", type=ERROR)
             return False

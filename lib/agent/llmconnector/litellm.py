@@ -1,7 +1,8 @@
 import litellm
 from lib.mcp.client import mcp_manager
 from lib.files.localdata import LocalData
-from lib.session.session import AuthSessionManager
+#from lib.session.session import AuthSessionManager
+from lib.process.processmanager import ProcessManager
 
 """
 LiteLLMTrackingCallback — Gestion des callBack LiteLLM
@@ -17,7 +18,7 @@ class LiteLLMTrackingCallback(litellm.integrations.custom_logger.CustomLogger):
         if usage:
             if getattr(usage, "total_tokens", 0) > 0:
                 #On log les tokens utilisés
-                LocalData.logLLMUsage(session_uid=AuthSessionManager.get_current_id(), token_used=getattr(usage, "total_tokens", 0))
+                LocalData.logLLMUsage(session_uid=ProcessManager.getCurrentRootId(), token_used=getattr(usage, "total_tokens", 0))
 
     #Callback après une requête passée avec succès
     async def async_log_success_event(self, kwargs, response_obj, start_time, end_time):
@@ -73,28 +74,3 @@ class LiteLLM:
             api_key=self._api_key,
         )
         return response
-
-
-"""
-Embedder — Génération de vecteurs d'embedding via LiteLLM (pour rag)
-Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
-"""
-class LiteLLMEmbedder:
-    def __init__(self):
-        #Configuration issue du profil "default" (utilisé hors contexte de session, ex: RAG/indexation)
-        from lib.agent.profile import ProfileManager
-        config = ProfileManager.getProfile("default").getConfigValue("llm.LiteLLM")
-        self._model    = config["embedding_model"]
-        self._api_base = config["api_base"]
-        self._api_key  = config["api_key"]
-
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        response = await litellm.aembedding(
-            model=self._model,
-            input=texts,
-            api_base=self._api_base,
-            api_key=self._api_key,
-        )
-        return [item["embedding"] for item in response.data]
-
-

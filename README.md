@@ -95,6 +95,7 @@ General application settings.
 | `allowed_cors_methods` | array | Allowed CORS methods. |
 | `allowed_cors_headers` | array | Allowed CORS headers. |
 | `ws_inactivity_timeout` | int | WebSocket inactivity timeout in seconds (default: 300). |
+| `max_request_body_mb` | number | Maximum HTTP request body size in MB (default: 100), answered with `413` beyond. `POST /files/upload` is instead capped at the largest `attachments.max_file_size_mb` of the profiles. |
 | `admin_users` | array | List of `{ username, password }` objects for HTTP Basic Auth on admin endpoints. |
 | `default_language` | string | Language code used when `POST /auth` doesn't specify one — see [Localization](#localization). |
 
@@ -108,6 +109,7 @@ Controls how users authenticate to obtain a WebSocket token.
 | `jwt_secret` | string | Secret used to sign and verify JWT tokens. |
 | `jwt_algorithm` | string | JWT signing algorithm (e.g. `HS256`). |
 | `session_duration` | int | Session validity duration in seconds. |
+| `max_auth_requests_minute` | int | Maximum `POST /auth` requests per client IP per minute (default `10`, `-1` to disable). Answers `429` beyond. Behind a reverse proxy, start uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy IP>` so the real client IP is used. |
 
 ### `services`
 
@@ -153,7 +155,7 @@ A client selects a profile when opening a session, via the `profile` field of `P
     "llm": { "...": "..." },
     "mcp": { "...": "..." },
     "attachments": { "...": "..." },
-    "rag": { "collection": "demo" },
+    "rag": { "collection": "demo", "top_k": 5 },
     "connectors": { "...": "..." }
   },
   "another_profile": {
@@ -162,7 +164,7 @@ A client selects a profile when opening a session, via the `profile` field of `P
 }
 ```
 
-Everything below (`llm`, `languages`, `mcp`, `attachments`, `rag.collection`, `connectors`) is scoped under `profiles.<name>`.
+Everything below (`llm`, `languages`, `mcp`, `attachments`, `rag`, `connectors`) is scoped under `profiles.<name>`.
 
 #### `profiles.<name>.languages`
 
@@ -183,11 +185,10 @@ LLM and agent settings.
 | `followup_questions.count` | int | Number of follow-up questions to generate. |
 | `filters` | object | Active output filters. Currently supports `CodeFilter` (strips markdown code fences). |
 | `<connector>.model` | string | Model identifier for the connector named in `connector` (e.g. `LiteLLM.model`). |
-| `<connector>.embedding_model` | string | Embedding model identifier, used for this profile's session-attachment RAG. |
 | `<connector>.api_base` | string | Base URL of the LLM provider API. |
 | `<connector>.api_key` | string | API key for the LLM provider. |
 
-The persistent RAG knowledge base (indexing, and search via `search_knowledge_base`) always embeds using the `default` profile's LLM connector, regardless of which profile the session belongs to — only session-attachment search follows the current profile's embedding model.
+Embedding models are not configured here: each RAG collection carries its own embedder (see [`rag`](#rag)).
 
 #### `profiles.<name>.mcp`
 
@@ -208,13 +209,16 @@ Controls the [file attachment](#file-attachments) feature for this profile.
 | `max_files` | int | Maximum number of files attached at once per session. |
 | `max_file_size_mb` | int | Maximum size, in MB, of a single attached file. |
 | `allowed_extensions` | array | File extensions accepted for upload (e.g. `.pdf`, `.docx`, `.xlsx`, `.md`, `.txt`, `.csv`, ...). |
+| `mode` | string | What is injected into the prompt: `rag` (most relevant chunks only), `full` (complete text of every attached file) or `auto` (default: full text if it fits in `full_text_max_tokens`, chunks otherwise). |
+| `full_text_max_tokens` | int | Threshold of the `auto` mode, on the estimated total size of attached files (≈ 4 characters per token). Default `20000`. |
 | `file_context_top_k` | int | Number of attachment chunks retrieved (and injected into context, or returned by `search_attached_files`) per query. |
 
 #### `profiles.<name>.rag`
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `collection` | string | Default RAG collection searched by `search_knowledge_base` for sessions on this profile. |
+| `collection` | string | RAG collection searched by `search_knowledge_base` for sessions on this profile (the only one they can access; without it, RAG search is unavailable). Must be declared in [`rag.collections`](#rag). Its embedder and chunking settings are also used for session-attachment search. |
+| `top_k` | int | Number of chunks returned per `search_knowledge_base` search. Defaults to `5`. |
 
 #### `profiles.<name>.connectors`
 
@@ -240,6 +244,18 @@ Global usage limits, shared across all profiles.
 | `max_tokens_month` | int | Monthly token budget (`-1` = unlimited). |
 | `max_requests_month` | int | Monthly request budget (`-1` = unlimited). |
 | `max_requests_minute` | int | Per-minute rate limit per session. |
+
+### `extraction`
+
+Text extraction of uploaded or indexed files (PDF, Office, HTML...) runs in an isolated subprocess with resource limits, so that a malicious file (decompression bomb, pathological PDF) cannot exhaust the server. Linux only (`forkserver` multiprocessing context).
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `timeout` | int | Maximum duration of one extraction, in seconds (default: `120`). Also used as CPU time limit. |
+| `max_memory_mb` | int | Maximum memory (address space) of the extraction subprocess, in MB (default: `2048`). |
+| `max_concurrent` | int | Maximum number of simultaneous extraction subprocesses; further extractions wait (default: `4`). |
+| `max_uncompressed_mb` | int | Archives (docx, xlsx, pptx, zip...) whose entries exceed this total uncompressed size are rejected before extraction (default: `500`). |
+| `max_archive_entries` | int | Archives with more entries are rejected before extraction (default: `10000`). |
 
 ### `directories`
 
@@ -274,16 +290,41 @@ Settings for the Word document template (gabarit) used by the `word.*` MCP tools
 
 ### `rag`
 
-Persistent RAG knowledge base settings, shared across profiles (the collection searched is set per profile, see [`profiles.<name>.rag`](#profilesnamerag)).
+Persistent RAG knowledge base settings. `rag.collections` declares each collection by name. A profile references one of them (see [`profiles.<name>.rag`](#profilesnamerag)).
 
-| Key | Type | Description |
+```json
+"rag": {
+  "collections": {
+    "demo": {
+      "embedding_dim": 1024,
+      "chunk_size": 500,
+      "chunk_overlap": 50,
+      "connector": "PgVector",
+      "pgvector": { "table": "rag_documents" },
+      "embedder": {
+        "class": "LiteLLMEmbedder",
+        "model": "openai/Qwen/Qwen3-Embedding-0.6B",
+        "api_base": "https://provider.fr/v1",
+        "api_key": ""
+      }
+    }
+  }
+}
+```
+
+A collection's vectors are only comparable with vectors from the same model, so indexing (cron, API) and search (`search_knowledge_base`) of a collection always use that collection's `embedder`. Changing it requires a full reindex of the collection. Using a collection that is not declared raises an error.
+
+| Key (`rag.collections.<name>.`) | Type | Description |
 |-----|------|-------------|
-| `embedding_dim` | int | Embedding vector dimension (must match the embedding model). |
-| `top_k` | int | Number of chunks returned per search. |
+| `embedding_dim` | int | Embedding vector dimension (must match the embedder's model). |
 | `chunk_size` | int | Target chunk size in tokens. |
 | `chunk_overlap` | int | Overlap between consecutive chunks. |
 | `connector` | string | Vector store backend (`PgVector`). |
-| `pgvector.table` | string | PostgreSQL table used to store vectors. |
+| `pgvector.table` | string | PostgreSQL table used to store vectors. Collections with the same `embedding_dim` can share a table. |
+| `embedder.class` | string | Embedder class from `lib/agent/llmembedder` (`LiteLLMEmbedder`, `DigitalOceanEmbedder`, `LlamaEmbedder`). |
+| `embedder.model` | string | Embedding model identifier. |
+| `embedder.api_base` | string | Base URL of the embedding API. |
+| `embedder.api_key` | string | API key for the embedding API. |
 
 Indexed source files are kept for citation/download purposes under `directories.rag_storage_dir` (see [`directories`](#directories) and [source file retention](#rag-knowledge-base)).
 
@@ -397,7 +438,7 @@ Response:
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/files/{key}/{filename}` | Bearer or `?t=` hash | Download a temporary file generated by a tool. |
-| `GET` | `/files/rag/{collection}/{key}/{filename}` | Bearer, `?t=` hash, or Basic admin | Download a source document retained by the RAG knowledge base (see [source file retention](#rag-knowledge-base)). |
+| `GET` | `/files/rag/{collection}/{key}/{filename}` | Bearer (session whose profile's `rag.collection` is `{collection}`), `?t=` per-file signature, or Basic admin | Download a source document retained by the RAG knowledge base (see [source file retention](#rag-knowledge-base)). |
 
 ---
 
@@ -466,7 +507,7 @@ Files attached via `POST /files/upload` (see [File attachments](#file-attachment
 
 ## RAG knowledge base
 
-The RAG layer indexes documents into a **PostgreSQL / pgvector** vector store. The agent queries it automatically via the `search_knowledge_base` tool, which is scoped to the RAG collection configured on the session's [profile](#profilesnamerag) (`profiles.<name>.rag.collection`), unless the LLM explicitly requests another collection.
+The RAG layer indexes documents into a **PostgreSQL / pgvector** vector store. The agent queries it automatically via the `search_knowledge_base` tool, which is strictly scoped to the RAG collection configured on the session's [profile](#profilesnamerag) (`profiles.<name>.rag.collection`): the LLM cannot target another collection, and a profile without `rag.collection` has no RAG search.
 
 Documents can be indexed manually via the [document management API](#document-management-api), or automatically from folders on disk via the [`Ragindexer` CRON task](#cron).
 
@@ -511,7 +552,7 @@ Both `POST` and `PUT` accept `multipart/form-data` with the fields:
 | `file` | file | Document to index (mutually exclusive with `text`). |
 | `text` | string | Raw text to index (mutually exclusive with `file`). |
 | `source` | string | Identifier for the document (defaults to the filename). |
-| `collection` | string | Target collection (defaults to the `default` profile's `rag.collection`). |
+| `collection` | string | Target collection, declared in `rag.collections` (defaults to the `default` profile's `rag.collection`). |
 
 ---
 
@@ -537,11 +578,17 @@ Requires `profiles.<name>.attachments.enabled` to be `true` for the session's pr
 
 ### Per-session RAG
 
-Attached files are never written to the persistent pgvector store. Instead, each file is chunked and embedded on the fly into an **ephemeral, in-memory index** scoped to the session — cached for the lifetime of the session and discarded when it ends. On every user message, Lumi automatically retrieves the most relevant chunks (`attachments.file_context_top_k`) across all attached files and injects them into the prompt. The `search_attached_files` MCP tool remains available for the LLM to run additional, more targeted searches.
+Attached files are never written to the persistent pgvector store. On every user message, Lumi automatically injects their content into the prompt, according to `attachments.mode`:
+
+- `full`: the complete text of every attached file (page by page for PDFs). Required for requests about the whole document (list, summarize, compare...).
+- `rag`: files are chunked and embedded on the fly into an **ephemeral, in-memory index** scoped to the session (cached for its lifetime, discarded when it ends), and only the most relevant chunks (`attachments.file_context_top_k`) for the message are injected Chunking and embeddings use the settings of the **session's profile's RAG collection** (`profiles.<name>.rag.collection`, or the `default` profile's collection if unset). Nothing is written to that collection.
+- `auto` (default): `full` while the attached files fit in `attachments.full_text_max_tokens`, `rag` beyond.
+
+The `search_attached_files` MCP tool remains available for the LLM to run additional, more targeted searches.
 
 ### Citations
 
-Like `search_knowledge_base`, using attached-file content triggers a `rag` WebSocket event per source file (`{ "type": "rag", "source": "report.pdf", "locations": [2, 5] }`) so the client can show which file (and page, for paginated files) an answer drew from. Since attachments aren't persisted, these events carry no download `url`.
+Like `search_knowledge_base`, using attached-file content triggers a `rag` WebSocket event per source file (`{ "type": "rag", "source": "report.pdf", "locations": [2, 5] }`) so the client can show which file (and page, for paginated files) an answer drew from. When the full text is injected, `locations` is empty (the whole file was used). Since attachments aren't persisted, these events carry no download `url`.
 
 ---
 

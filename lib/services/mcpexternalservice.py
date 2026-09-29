@@ -33,17 +33,12 @@ class MCPExternalService(Service):
         }
         super().__init__(name=name, data=data, serviceDataFormat=service_format)
 
-    def checkAuthentication(self, authorization:dict):
-        if self.name not in authorization:
-            return False
-    
-        authorization = authorization[self.name]
+    #Auth "session" : le token transmis par l'utilisateur est conservé tel quel dans le wallet,
+    #il est vérifié par le serveur distant à la connexion (cf. connect()).
+    def authenticate(self, authorization:dict, allow_credentials:bool = False):
         if "token" not in authorization:
             return False
-
-        self.authenticated = True
-        self.authData = authorization
-        return True
+        return authorization
 
     #Ouvre la connexion au serveur MCP distant et l'enregistre dans `stack` (AsyncExitStack
     #possédé par l'appelant — MCPClientManager, pour toute la durée de vie de l'application quand le
@@ -52,7 +47,7 @@ class MCPExternalService(Service):
     #qui lit ce champ directement sur la config du service (même logique que le filtrage sur `handler`
     #déjà fait par MCPClientManager._connect_external_servers).
     #`auth_data` : authentification propre à un utilisateur (mode "session"), ex. {"token": "..."}
-    #issu de AuthSession.authentication — fusionnée dans les headers en plus de ceux de la config.
+    #issu du wallet de la session (cf. Process.getWallet) — fusionnée dans les headers en plus de ceux de la config.
     async def connect(self, stack: AsyncExitStack, auth_data: dict | None = None) -> ClientSession:
         transport = self.getConfValue(key="transport")
         url = self.getConfValue(key="url")

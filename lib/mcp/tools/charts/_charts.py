@@ -2,7 +2,7 @@ import io
 
 import matplotlib
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 
 def render_chart(chart: dict) -> io.BytesIO:
@@ -10,7 +10,9 @@ def render_chart(chart: dict) -> io.BytesIO:
     titre = chart.get("titre", "")
     données = chart.get("données", {})
 
-    fig, ax = plt.subplots(figsize=(8, 4.5))
+    #API objet (pas pyplot) : pyplot partage un état global, non sûr quand plusieurs outils tournent en parallèle dans des threads
+    fig = Figure(figsize=(8, 4.5))
+    ax = fig.subplots()
 
     if chart_type == "barres":
         labels = données.get("labels", [])
@@ -51,6 +53,5 @@ def render_chart(chart: dict) -> io.BytesIO:
     fig.tight_layout()
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
     buf.seek(0)
     return buf

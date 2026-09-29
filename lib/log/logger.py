@@ -113,10 +113,10 @@ class _LogStream:
                 self._log_file.write(_strip_ansi(plain))
 
     def _stamp(self, line, type:str=INFO):
-        from lib.session.session import AuthSessionManager
+        from lib.process.processmanager import ProcessManager
         ts = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         label = _TYPE_LABELS.get(type, "INFO")
-        session_id = AuthSessionManager.get_current_id()
+        session_id = ProcessManager.getCurrentRootId()
         if session_id:
             return f"[{ts}] [{label}] [#{session_id}] {line}"
         else:
@@ -195,12 +195,21 @@ class Logger:
 
     @staticmethod
     def write(text, type:str=INFO):
-        sys.stderr.write(str(text) + "\n", type=type)
+        Logger._write(str(text) + "\n", type=type)
 
     @staticmethod
     def sessionWrite(text, type:str=INFO):
-        from lib.session.session import AuthSessionManager
-        sys.stderr.write(f"#{AuthSessionManager.get_current_id()} : {text}\n", type=type)
+        from lib.process.processmanager import ProcessManager
+        Logger._write(f"#{ProcessManager.getCurrentRootId()} : {text}\n", type=type)
+
+    #Seul _LogStream accepte le paramètre type : si le Logger n'est pas initialisé
+    #(sys.stderr natif, scripts, tests), on écrit le texte brut.
+    @staticmethod
+    def _write(text:str, type:str=INFO):
+        if isinstance(sys.stderr, _LogStream):
+            sys.stderr.write(text, type=type)
+        else:
+            sys.stderr.write(text)
 
     #Capture temporaire des logs émis depuis le contexte d'exécution courant, ainsi que
     #depuis les coroutines / threads qui en héritent le contexte via contextvars.

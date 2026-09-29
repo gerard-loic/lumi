@@ -42,16 +42,19 @@ class FileDelete(Block):
 
         deleted, missing = [], []
         for ref in refs:
-            #Fichier du run : on le retire du FileStore (supprime le fichier temporaire).
-            removed = FileStore.delete(ref.key) if ref.key is not None else False
-
-            if not removed and ref.exists():
+            #Fichier du run : on le retire du FileStore (supprime le fichier temporaire). Un fichier temporaire
+            #hors scope (autre session) est considéré absent (cf. FileRef.exists), jamais supprimé.
+            if ref.is_filestore:
+                removed = ref.exists() and FileStore.delete(ref.key)
+            elif ref.exists():
                 try:
                     Path(ref.path).unlink()
                     removed = True
                 except OSError as e:
                     Logger.write(f"[Block FileDelete] Cannot delete '{ref.filename}' : {e}", type=ERROR)
                     return False
+            else:
+                removed = False
 
             (deleted if removed else missing).append(ref.filename)
 

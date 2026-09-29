@@ -28,6 +28,7 @@ class Ragindexer(CronTask):
         await super().run()
         print(f"[RagIndexer] {self.config}")
 
+        await VectorStore.ensureTable(self._collection)
         files = self._listFiles()
         for file in files:
             exists = await self._exists(file=file)

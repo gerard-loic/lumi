@@ -1,7 +1,7 @@
 from openai import AsyncOpenAI
 from lib.mcp.client import mcp_manager
 from lib.files.localdata import LocalData
-from lib.session.session import AuthSessionManager
+from lib.process.processmanager import ProcessManager
 
 """
 DigitalOcean — Gestion communication modèle LLM avec DigitalOcean (Gradient AI Platform / Serverless Inference API, compatible OpenAI)
@@ -29,7 +29,7 @@ class DigitalOcean:
     #Enregistrement des tokens utilisés pour la session courante
     def _logUsage(self, usage):
         if usage and getattr(usage, "total_tokens", 0) > 0:
-            LocalData.logLLMUsage(session_uid=AuthSessionManager.get_current_id(), token_used=getattr(usage, "total_tokens", 0))
+            LocalData.logLLMUsage(session_uid=ProcessManager.getCurrentRootId(), token_used=getattr(usage, "total_tokens", 0))
 
     #Appel du LLM
     #extra_tools : outils des serveurs MCP externes en auth "session" connectés pour ce tour (cf.
@@ -60,23 +60,3 @@ class DigitalOcean:
             tools=tools,
             stream=True,
         )
-
-
-"""
-DigitalOceanEmbedder — Génération de vecteurs d'embedding via DigitalOcean (pour rag)
-Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
-"""
-class DigitalOceanEmbedder:
-    def __init__(self):
-        #Configuration issue du profil "default" (utilisé hors contexte de session, ex: RAG/indexation)
-        from lib.agent.profile import ProfileManager
-        config = ProfileManager.getProfile("default").getConfigValue("llm.DigitalOcean")
-        self._model  = config["embedding_model"]
-        self._client = AsyncOpenAI(base_url=config["api_base"], api_key=config["api_key"])
-
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        response = await self._client.embeddings.create(
-            model=self._model,
-            input=texts,
-        )
-        return [item.embedding for item in response.data]

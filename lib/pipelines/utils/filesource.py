@@ -3,9 +3,10 @@ import re
 from pathlib import Path
 
 from lib.files.filestore import FileStore
+from lib.process.processmanager import ProcessManager
 
 #filesource : résolution de la valeur "source" des blocs qui manipulent un fichier (TxtReader,
-#CsvReader, ExcelReader, FileDelete, FileMove). Réside dans lib/pipelines/utils pour être partagé
+#CsvReader, ExcelReader, FileDelete, FileMove, FileWriter). Réside dans lib/pipelines/utils pour être partagé
 #par ces blocs sans les coupler.
 #
 #Une "source" peut être :
@@ -50,18 +51,25 @@ class FileRef:
     def is_filestore(self)->bool:
         return self.key is not None
 
+    #Pour une clé FileStore, le fichier n'existe que s'il est rattaché au run / à la session courant(e) :
+    #un fichier temporaire d'une autre session (ex: pièce jointe uploadée) est traité comme absent
     def exists(self)->bool:
+        if self.key is not None and not self._inScope():
+            return False
         return bool(self.path) and Path(self.path).is_file()
 
-    #Contenu du fichier. Pour une clé FileStore, l'accès passe d'abord par FileStore.load (scope du
-    #run / de la session) ; si le fichier existe sur disque mais hors scope, on le relit directement.
+    def _inScope(self)->bool:
+        process = ProcessManager.getCurrent()
+        return bool(process and process.hasFile(self.key))
+
+    #Contenu du fichier. Pour une clé FileStore, l'accès passe uniquement par FileStore.load (scope du
+    #run / de la session) : pas de relecture directe sur disque d'un fichier hors scope.
     def read(self)->bytes:
         if self.key is not None:
             try:
                 return FileStore.load(self.key)
             except ValueError as e:
-                if not self.exists():
-                    raise FileSourceError(str(e))
+                raise FileSourceError(str(e))
         if self.exists():
             return Path(self.path).read_bytes()
         raise FileSourceError(f"Fichier introuvable : {self.path or self.filename}")
@@ -145,7 +153,8 @@ def _ref_from_string(raw:str, context, hint_name:str=None)->FileRef:
 
 
 #Dict de fichier de pipeline -> FileRef. La clé FileStore (directe ou extraite de l'URL) prime ;
-#à défaut on retombe sur le chemin disque.
+#à défaut on retombe sur le chemin disque. Avec une clé, le chemin est toujours déduit de celle-ci
+#(le "path" du dict, qui peut provenir de données non fiables du contexte, est ignoré).
 def _ref_from_struct(struct, hint_name:str=None)->FileRef:
     if not isinstance(struct, dict):
         raise FileSourceError(f"Structure de fichier invalide : {struct!r}")
@@ -159,7 +168,9 @@ def _ref_from_struct(struct, hint_name:str=None)->FileRef:
             key = None
 
     if key:
-        return FileRef(struct.get("path") or FileStore.path(key), filename, key=key)
+        if not isinstance(key, str) or not _HEX_KEY_RE.match(key):
+            raise FileSourceError(f"Clé de fichier invalide : {key!r}")
+        return FileRef(FileStore.path(key), filename, key=key)
 
     path = struct.get("path")
     if path:

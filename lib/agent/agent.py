@@ -1,13 +1,11 @@
 import json
 from contextlib import AsyncExitStack
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator
 from lib.mcp.client import mcp_manager, MCPToolError
 from lib.mcp.toolloader import MCPTool
 from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ThinkingEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent, FollowUpEvent, RagEvent
 from lib.rag.attachmentretriever import AttachmentRetriever
-from lib.session.session import AuthSessionManager as _SessionManager
 from lib.log.logger import Logger, ERROR, OK, WARNING
-from lib.session.session import AuthSessionManager
 from lib.files.localdata import LocalData
 from lib.agent.filters.llmfilter import LLMFilterManager
 import datetime
@@ -15,6 +13,8 @@ from lib.utils.dynamicimport import DynamicImport
 from lib.agent.profile import ProfileManager, Profile
 from lib.localization.traduction import Traduction
 from lib.utils.uuid import Uuid
+from lib.process.processmanager import ProcessManager
+from lib.process.process import Process
 
 #Accumule un événement RAG (source dédoublonnée, pages fusionnées) plutôt que de l'émettre immédiatement :
 #le LLM peut appeler l'outil de recherche RAG plusieurs fois (ou combiner pré-recherche sur pièces jointes et
@@ -38,6 +38,27 @@ def _accumulate_rag_event(rag_sources: dict, raw_event: str) -> bool:
 #Construit les événements RAG groupés à partir de l'accumulateur, une fois la réponse prête
 def _rag_events_from(rag_sources: dict) -> list:
     return [RagEvent.get(source=source, locations=data["locations"], url=data["url"]) for source, data in rag_sources.items()]
+
+#Met en forme le contenu des pièces jointes (résultats d'AttachmentRetriever.retrieve) à placer en tête du message
+#utilisateur : extraits les plus pertinents, ou contenu complet (full=True)
+def _format_attachment_context(results: list[dict], full: bool = False) -> str:
+    blocks = []
+    for r in results:
+        label = f"[{'Contenu' if full else 'Extrait'} de {r['filename']}" + (f", page {r['page']}" if r.get("page") else "") + "]"
+        blocks.append(f"{label}\n{r['text']}")
+    return "\n\n".join(blocks) + "\n\n"
+
+#Consigne système décrivant les pièces jointes fournies dans le message (`intro` : phrase qui présente les fichiers)
+def _attachment_instructions(intro: str, filenames: str, full: bool) -> str:
+    if full:
+        return f"\n\n{intro} : {filenames}. Leur contenu complet est fourni ci-dessous dans le message."
+    return f"\n\n{intro} : {filenames}. Les extraits les plus pertinents sont déjà fournis ci-dessous dans le message ; si l'outil search_attached_files est disponible, utilise-le si tu as besoin de chercher autre chose dans ces fichiers."
+
+#Citations (RagEvent) des pièces jointes utilisées : pages des extraits retenus, ou fichier entier (sans page) en contenu complet
+def _attachment_citations(results: list[dict], full: bool) -> dict[str, list[int]]:
+    if full:
+        return {filename: [] for filename in dict.fromkeys(r["filename"] for r in results)}
+    return AttachmentRetriever.group_pages_by_file(results)
 
 """
 Agent — Agent d'orchestration / communication LLM
@@ -90,17 +111,22 @@ class Agent:
         Logger.write(f"[AGENT {profile.getName()}] MCP agent initialized", type=OK)
 
     """
-    Gestion d'une connexion SSE (correspondant à une requête client)
+    Tour de conversation dans une session (process racine portant un AgentContext : session HTTP ou Webex)
     """
-    async def chatStream(self, message: str, session_id: Optional[str] = None, exclude_restricted: bool = False) -> AsyncGenerator[str, None]:
+    async def chatStream(self, message: str, session: Process, exclude_restricted: bool = False) -> AsyncGenerator[str, None]:
         #On filtre le message entrant (application des filtres selon les filtres actifs dans la conf)
         message = self.filters.filter(text=message)
 
-        #Session d'auth
-        authSession = AuthSessionManager.get_by_session_id(session_id=session_id)
+        #Contexte conversationnel de la session
+        agent_ctx = session.getAgentContext()
+        if agent_ctx is None:
+            Logger.write(f"[AGENT {self.profile.getName()}] Session {session.getUid()} has no conversation context", type=ERROR)
+            yield ErrorEvent.get(error_code="SESSION_NOT_FOUND", message="Session not found or expired")
+            yield DoneEvent.get()
+            return
 
         #Language
-        language = authSession.getLanguage()
+        language = agent_ctx.getLanguage()
         t = Traduction(language=language)
 
         #Accumulateur des événements RAG de tout le tour de conversation (pré-recherche pièces jointes +
@@ -112,30 +138,31 @@ class Agent:
         #`finally` ci-dessous, dans la même tâche asyncio que celle qui les a ouvertes (contrainte des
         #transports MCP, cf. docstring de open_session_external_tools).
         turn_stack = AsyncExitStack()
+        #Process du tour, enfant de la session : accessible via ProcessManager.getCurrent() par tout code exécuté
+        #pendant ce tour (tool calls MCP internes, filtres...). Wallet, fichiers et contexte agent sont lus sur la session.
+        process, process_token = ProcessManager.start(parent=session)
         try:
-            session_tools, session_external_sessions = await mcp_manager.open_session_external_tools(session_id, turn_stack)
+            session_tools, session_external_sessions = await mcp_manager.open_session_external_tools(turn_stack)
 
             #On récupère l'historique de conversation pour l'intégrer au prompt
-            #TODO : passer sur authSession
-            history = AuthSessionManager.get_history(session_id)[-self._MEMORY_MESSAGES:]
+            history = agent_ctx.getHistory()[-self._MEMORY_MESSAGES:]
 
             #Ajout de la date heure courante au prompt
             now = datetime.datetime.now()  # ou avec timezone si pertinent
             system = self._system + f"\n\nDate et heure actuelles : {now.strftime('%A %d %B %Y, %H:%M')} (heure locale)"
 
             #Modification de la variable de langue
-            #TODO : passer sur authSession
-            system = system.replace("%language%", AuthSessionManager.get_language(session_id=session_id).getName())
+            system = system.replace("%language%", language.getName())
 
             file_context = ""
             if self.profile.getConfigValue("attachments.enabled", default=False):
-                #Si des fichiers sont joints, premier passage automatique de micro-RAG sur le message de l'utilisateur
-                #(fiabilité : on ne compte plus sur le LLM pour décider d'appeler search_attached_files en premier).
-                #Le tool reste disponible pour que le modèle affine sa recherche avec une autre requête si besoin.
-                attachments = AuthSessionManager.get_all_attachments(session_id)
+                #Si des fichiers sont joints, leur contenu est fourni d'office avec le message de l'utilisateur (fiabilité :
+                #on ne compte pas sur le LLM pour décider d'appeler search_attached_files en premier) : texte complet ou
+                #extraits du micro-RAG selon attachments.mode (cf. AttachmentRetriever.retrieve). Le tool reste disponible
+                #pour que le modèle affine sa recherche avec une autre requête si besoin.
+                attachments = agent_ctx.getAttachments()
                 if attachments:
                     filenames = ", ".join(a["filename"] for a in attachments)
-                    system += f"\n\nFichiers joints par l'utilisateur à cette conversation : {filenames}. Les extraits les plus pertinents sont déjà fournis ci-dessous dans le message ; utilise l'outil search_attached_files si tu as besoin de chercher autre chose dans ces fichiers."
 
                     current_call_uid = Uuid.get()
                     current_tool_uid = "agent_micro_rag"
@@ -143,21 +170,18 @@ class Agent:
                     yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="PENDING", long_call=True, message="")
                                         
                     try:
-                        results = await AttachmentRetriever().search(session_id, message)
+                        results, full = await AttachmentRetriever().retrieve(message)
                         yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="OK")
                     except Exception as e:
                         yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="ERROR", long_call=False, message=str(e))     
                         Logger.write(f"[AGENT] Attachment search failed : {str(e)}", type=ERROR)
-                        results = []
+                        results, full = [], False
 
+                    system += _attachment_instructions("Fichiers joints par l'utilisateur à cette conversation", filenames, full)
                     if results:
-                        blocks = []
-                        for r in results:
-                            label = f"[Extrait de {r['filename']}" + (f", page {r['page']}" if r.get("page") else "") + "]"
-                            blocks.append(f"{label}\n{r['text']}")
-                        file_context = "\n\n".join(blocks) + "\n\n"
+                        file_context = _format_attachment_context(results, full)
 
-                        for filename, pages in AttachmentRetriever.group_pages_by_file(results).items():
+                        for filename, pages in _attachment_citations(results, full).items():
                             _accumulate_rag_event(rag_sources, RagEvent.get(source=filename, locations=pages))
 
             user_content = f"{file_context}{message}" if file_context else message
@@ -244,7 +268,7 @@ class Agent:
                     description = t.trad(description)
 
                     #Verifier si l'outil nécessite une confirmation préalable
-                    if meta.get("confirmation", False) and session_id:
+                    if meta.get("confirmation", False):
                         options = meta.get("confirmation_options", [])
                         options = [t.trad(option) for option in options]
                         yield ConfirmationEvent.get(
@@ -252,7 +276,7 @@ class Agent:
                             options=options
                         )
                         try:
-                            answer = await _SessionManager.wait_confirmation(session_id)
+                            answer = await agent_ctx.waitConfirmation()
                         except Exception:
                             answer = -1
                         if answer != meta.get("confirmation_validation_option", -1):
@@ -393,10 +417,10 @@ class Agent:
                 {"role": "assistant", "content": assistant_reply},
             ]
             #On enregistre dans l'historique des messages
-            AuthSessionManager.save_history(session_id, new_history)
+            agent_ctx.setHistory(new_history)
 
             #Log de l'appel pour comptabilisation (1 requete effectuée avec succès)
-            LocalData.logLLMUsage(session_uid=AuthSessionManager.get_current_id(), token_used=0)
+            LocalData.logLLMUsage(session_uid=session.getUid(), token_used=0)
 
             #Génération des questions de suivi suggérées (best-effort, ne doit jamais casser le tour de conversation)
             if self._FOLLOWUP_ENABLED:
@@ -414,35 +438,53 @@ class Agent:
             yield DoneEvent.get()
         finally:
             await turn_stack.aclose()
+            ProcessManager.exit(process_token)
+            ProcessManager.remove(process.getUid())
 
     """
     Appel LLM ponctuel hors session de chat (ex: bloc "Agent" d'un pipeline) : pas d'historique de
-    conversation, pas de streaming, pas de pièces jointes/RAG pré-recherche. La boucle de tool calls
+    conversation, pas de streaming. Si le contexte agent du process courant porte des pièces jointes (ex: bloc
+    MicroRag de pipeline), leur contenu est placé en tête du prompt (cf. AttachmentRetriever.retrieve) : texte
+    complet ou extraits selon `attachment_mode`, extraits recherchés sur `attachment_query` (à défaut le prompt).
+    Les paramètres attachment_* à None prennent la valeur du profil (attachments.*). La boucle de tool calls
     est la même que dans chatStream, mais les outils nécessitant une confirmation sont refusés
     d'office (aucun client pour y répondre), sauf si auto_confirm=True : dans ce cas la confirmation
     est considérée comme accordée et l'outil est exécuté normalement. À n'activer que pour des
     pipelines de confiance : ces outils portent des effets de bord non triviaux (envoi de mail,
     suppression, écritures externes...). L'authentification utilisée pour les appels d'outils MCP
-    est celle du contexte d'exécution courant (AuthSessionManager.get_current_id()) : c'est à l'appelant de l'avoir
-    positionnée au préalable (ex: session dédiée créée pour l'exécution du pipeline).
+    est celle du process courant (ProcessManager.getCurrent(), via le wallet de sa racine) : c'est à l'appelant de
+    l'avoir posé au préalable (ex: process enfant du run de pipeline, cf. lib/pipelines/blocks/agent.py).
     """
-    async def reflect(self, prompt: str, exclude_restricted: bool = True, auto_confirm: bool = False) -> str:
-        session_id = AuthSessionManager.get_current_id()
-
+    async def reflect(self, prompt: str, exclude_restricted: bool = True, auto_confirm: bool = False, attachment_query: str | None = None, attachment_top_k: int | None = None,
+                      attachment_mode: str | None = None, attachment_max_tokens: int | None = None) -> str:
         #Connexions aux serveurs MCP externes en auth "session" pour cet appel (cf.
         #MCPClientManager.open_session_external_tools) — tenues dans `turn_stack` et refermées dans le
         #`finally` ci-dessous, dans la même tâche asyncio que celle qui les a ouvertes (contrainte des
         #transports MCP, cf. docstring de open_session_external_tools).
         turn_stack = AsyncExitStack()
         try:
-            session_tools, session_external_sessions = await mcp_manager.open_session_external_tools(session_id, turn_stack)
+            session_tools, session_external_sessions = await mcp_manager.open_session_external_tools(turn_stack)
 
             now = datetime.datetime.now()
             system = self._system + f"\n\nDate et heure actuelles : {now.strftime('%A %d %B %Y, %H:%M')} (heure locale)"
 
+            #Pièces jointes fournies par l'appelant (pas de condition sur attachments.enabled du profil : c'est le
+            #pipeline qui les a explicitement jointes) : contenu fourni d'office, comme dans chatStream
+            file_context = ""
+            current = ProcessManager.getCurrent()
+            agent_ctx = current.getAgentContext() if current else None
+            attachments = agent_ctx.getAttachments() if agent_ctx else []
+            if attachments:
+                filenames = ", ".join(a["filename"] for a in attachments)
+                results, full = await AttachmentRetriever().retrieve(attachment_query or prompt, mode=attachment_mode, top_k=attachment_top_k, max_tokens=attachment_max_tokens)
+                Logger.write(f"[AGENT {self.profile.getName()}] Attachments ({filenames}) : {'full text' if full else f'{len(results)} excerpt(s)'}")
+                system += _attachment_instructions("Fichiers joints à cette demande", filenames, full)
+                if results:
+                    file_context = _format_attachment_context(results, full)
+
             messages = [
                 {"role": "system", "content": system},
-                {"role": "user",   "content": prompt},
+                {"role": "user",   "content": f"{file_context}{prompt}"},
             ]
 
             Logger.write(f"[AGENT {self.profile.getName()}] Call LLM (reflect)...", type=WARNING)
@@ -513,7 +555,7 @@ class Agent:
                 assistant_msg = await self._callReflectLLM(messages=messages, exclude_restricted=exclude_restricted, extra_tools=session_tools)
 
             Logger.write(f"[AGENT {self.profile.getName()}] Call LLM (reflect) OK !", type=OK)
-            LocalData.logLLMUsage(session_uid=AuthSessionManager.get_current_id(), token_used=0)
+            LocalData.logLLMUsage(session_uid=ProcessManager.getCurrentRootId(), token_used=0)
             return assistant_msg.content or ""
         finally:
             await turn_stack.aclose()

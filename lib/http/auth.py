@@ -1,94 +1,155 @@
-import jwt
 import json
+import time
+import asyncio
 import hashlib
-from datetime import datetime, timezone, timedelta
-from lib.services.services import ServiceManager, Service
+import functools
+from concurrent.futures import ThreadPoolExecutor
+from lib.services.services import ServiceManager
 from lib.config.config import Config
 import secrets
 from lib.log.logger import Logger, ERROR, WARNING
-from lib.session.session import AuthSessionManager
 from lib.localization.language import Language
+from lib.process.processmanager import ProcessManager
+from lib.process.process import Process, KIND_HTTP
+from lib.process.agentcontext import AgentContext
+from lib.utils.jwt import Jwt
+
+#Pool dédié aux appels d'authentification auprès des services (synchrones, bloquants) : ils ne bloquent pas la
+#boucle événementielle, et un afflux de requêtes /auth ne peut occuper que ces threads, sans saturer le pool
+#par défaut d'asyncio (utilisé ailleurs, ex. requêtes pgvector)
+_AUTH_EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="lumi-auth")
 
 """
 Auth — Gestion de l'authentification sur l'agent
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Auth:
-    #S'authentifier (à partir du mix d'authentification transmis on réalise l'authentification en fonction du service principal utilisé, puis on génère le token d'authentification comprenant les infos de connexion aux autres services si nécessaire)
+    #Taille minimale du secret de signature des tokens (HS256 : 256 bits)
+    _MIN_SECRET_LENGTH = 32
+
+    #Vérifie la configuration de l'authentification au démarrage : un secret vide ou court permettrait de forger des tokens
     @staticmethod
-    def authenticate(authorization: dict, profile: str, language: Language):
-        #On récupère le service utilisé pour gérer l'authentification
-        auth_service = ServiceManager.get(name=Config.get(key="authentication.service"))
-        result = auth_service.checkAuthentication(authorization=authorization)
-        if result:
-            fingerprint = hashlib.sha256(
-                json.dumps(authorization, sort_keys=True).encode()
-            ).hexdigest()
+    def init():
+        secret = Config.get(key="authentication.jwt_secret", default="")
+        if not isinstance(secret, str) or len(secret) < Auth._MIN_SECRET_LENGTH:
+            raise Exception(f"[AUTH] authentication.jwt_secret must be at least {Auth._MIN_SECRET_LENGTH} characters long")
 
-            if AuthSessionManager.has_active_ws_for(fingerprint):
-                Logger.write("[AUTH] Authentification refusée : une session WebSocket est déjà ouverte pour cet utilisateur", type=WARNING)
-                return None
-
-            #On authentifie tous les services
-            payload = {
-                "session_id" : secrets.token_hex(16),   #ID de session de la conversation
-                "services" : {}
-            }
-            for name in ServiceManager.services:
-                service = ServiceManager.services[name]
-                authenticated = service.checkAuthentication(authorization=authorization)
-                if not authenticated:
-                    service.authenticate()
-                if authenticated:
-                    payload["services"][name] = service.authData
-
-            Logger.write(f"PAYLOAD : {payload}")
-
-            token = Auth._create_token(payload=payload, expires_in=Config.get("authentication.session_duration"))
-            AuthSessionManager.set_current(payload["session_id"])
-
-            token_hash = hashlib.sha256(token.encode()).hexdigest()
-            AuthSessionManager.add(payload["session_id"], payload["exp"].timestamp(), payload, auth_fingerprint=fingerprint, token_hash=token_hash, profile=profile, language=language)
-
-            #Le token comprend toutes les couches d'authentification aux services
-            return token
-        return False
-
-    #Vérifie un token d'authentification et le renvoie décodé
+    #S'authentifier : `authorization` est de la forme {"<service>": {...}, ...}. L'authentification auprès du
+    #service principal (authentication.service) est obligatoire ; celle des autres services présents est
+    #facultative. Seuls des tokens existants sont acceptés, jamais d'identifiants (cf. Service.authenticate,
+    #allow_credentials). Une session (process racine) est ouverte, son wallet porte les secrets obtenus.
+    #Le token renvoyé ne contient que l'identifiant de session : les secrets restent côté serveur.
+    #Renvoie None si une session WebSocket est déjà ouverte pour cette source d'authentification, False en cas d'échec.
+    #Les appels aux services (réseau, synchrones) sont faits en premier, hors de la boucle événementielle ; la
+    #session n'est ensuite créée qu'en fin de méthode, sans point d'attente, pour que deux authentifications
+    #concurrentes ne s'entremêlent pas dans ProcessManager.
     @staticmethod
-    def checkAuthentification(token:str) -> bool | dict:
-        try:
-            decoded = Auth._verify_token(token=token)
-            session = AuthSessionManager.get(decoded["session_id"])
-            if session is None:
-                return False
-            AuthSessionManager.set_current(decoded["session_id"])
-            return session.authentication
-        except Exception:
+    async def authenticate(authorization: dict, profile: str, language: Language):
+        #Authentification auprès du service principal
+        auth_name = Config.get(key="authentication.service")
+        auth_secret = await Auth._serviceAuthenticate(name=auth_name, authorization=authorization.get(auth_name) or {})
+        if not isinstance(auth_secret, dict):
             return False
 
+        #Authentification aux autres services fournis dans la requête (en parallèle)
+        others = [
+            name for name, service_authorization in authorization.items()
+            if name != auth_name and name in ServiceManager.services and isinstance(service_authorization, dict)
+        ]
+        other_secrets = await asyncio.gather(*(Auth._serviceAuthenticate(name=name, authorization=authorization[name]) for name in others))
 
+        fingerprint = hashlib.sha256(
+            json.dumps(authorization, sort_keys=True).encode()
+        ).hexdigest()
+
+        #Une seule session par source d'authentification : la précédente est remplacée (ce qui borne la mémoire
+        #consommée par utilisateur), sauf si elle est en cours d'utilisation par un client WebSocket.
+        previous = ProcessManager.getRootsByFingerprint(fingerprint, kind=KIND_HTTP)
+        if any(process.isConnected() for process in previous):
+            Logger.write("[AUTH] Authentification refusée : une session WebSocket est déjà ouverte pour cet utilisateur", type=WARNING)
+            return None
+        for process in previous:
+            ProcessManager.remove(process.getUid())
+
+        #Ouverture de la session
+        process = ProcessManager.create(expires_in=Config.get("authentication.session_duration"), fingerprint=fingerprint, kind=KIND_HTTP)
+        process.setAgentContext(AgentContext(profile=profile, language=language))
+
+        #Secrets obtenus auprès des services
+        wallet = process.getWallet()
+        wallet.store(key=auth_name, secret=auth_secret)
+        for name, secret in zip(others, other_secrets):
+            if isinstance(secret, dict):
+                wallet.store(key=name, secret=secret)
+            else:
+                Logger.write(f"[AUTH] Authentification au service {name} échouée, ignoré pour cette session", type=WARNING)
+
+        return Jwt.createToken(
+            payload={"session_id": process.getUid()},
+            secret=Config.get(key="authentication.jwt_secret"),
+            algorithm=Config.get(key="authentication.jwt_algorithm"),
+            expires_in=Config.get("authentication.session_duration"),
+        )
+
+    #Appelle Service.authenticate (synchrone, bloquant : requête réseau vers le service) dans le pool dédié
     @staticmethod
-    def _create_token(payload: dict, expires_in: int = 3600) -> str:
-        secret = Config.get(key="authentication.jwt_secret")
-        algorithm = Config.get(key="authentication.jwt_algorithm")
+    async def _serviceAuthenticate(name: str, authorization: dict):
+        service = ServiceManager.get(name=name)
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_AUTH_EXECUTOR, functools.partial(service.authenticate, authorization=authorization))
 
-        payload["iat"] = datetime.now(tz=timezone.utc)
-        payload["exp"] = datetime.now(tz=timezone.utc) + timedelta(seconds=expires_in)
-
-        return jwt.encode(payload, secret, algorithm=algorithm)
-
+    #Vérifie un token d'authentification et renvoie la session associée (None si invalide ou expirée).
+    #Pose la session comme process courant du contexte d'exécution (ex: préfixe des logs de la requête).
+    #Seules les sessions racines ouvertes par authenticate() sont acceptées (cf. KIND_HTTP).
     @staticmethod
-    def _verify_token(token: str) -> dict:
-        secret = Config.get(key="authentication.jwt_secret")
-        algorithm = Config.get(key="authentication.jwt_algorithm")
-
+    def checkAuthentification(token:str) -> Process | None:
         try:
-            return jwt.decode(token, secret, algorithms=[algorithm])
-        except jwt.ExpiredSignatureError:
-            raise Exception("Token expiré")
-        except jwt.InvalidTokenError as e:
-            raise Exception(f"Token invalide : {e}")
+            decoded = Jwt.verifyToken(
+                token=token,
+                secret=Config.get(key="authentication.jwt_secret"),
+                algorithm=Config.get(key="authentication.jwt_algorithm"),
+            )
+            process = ProcessManager.get(decoded.get("session_id"))
+            if process is None or process.getParent() is not None or process.getKind() != KIND_HTTP:
+                return None
+            ProcessManager.setCurrent(process.getUid())
+            return process
+        except Exception:
+            return None
+
+
+"""
+AuthRateLimiter — Limitation du nombre de requêtes d'authentification par IP cliente (fenêtre glissante d'une minute)
+Limite : authentication.max_auth_requests_minute (défaut 10, -1 : désactivé).
+Derrière un reverse proxy, l'IP cliente n'est la bonne que si uvicorn est lancé avec --proxy-headers
+(et --forwarded-allow-ips) : sinon toutes les requêtes semblent venir du proxy et partagent la même limite.
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
+class AuthRateLimiter:
+    _WINDOW = 60.0
+    _MAX_TRACKED_IPS = 10_000           # Au-delà, purge des IP inactives (borne la mémoire)
+    _requests: dict[str, list[float]] = {}
+
+    #Enregistre une tentative pour `ip`. Renvoie False si la limite est atteinte (tentative non comptée).
+    @staticmethod
+    def allow(ip: str) -> bool:
+        limit = Config.get("authentication.max_auth_requests_minute", 10)
+        if limit is None or limit == -1:
+            return True
+
+        now = time.time()
+        if len(AuthRateLimiter._requests) > AuthRateLimiter._MAX_TRACKED_IPS:
+            AuthRateLimiter._requests = {
+                k: v for k, v in AuthRateLimiter._requests.items() if v and now - v[-1] < AuthRateLimiter._WINDOW
+            }
+
+        timestamps = [t for t in AuthRateLimiter._requests.get(ip, []) if now - t < AuthRateLimiter._WINDOW]
+        if len(timestamps) >= limit:
+            AuthRateLimiter._requests[ip] = timestamps
+            return False
+        timestamps.append(now)
+        AuthRateLimiter._requests[ip] = timestamps
+        return True
 
 
 """

@@ -22,6 +22,9 @@ class WebexBot:
         #Clé d'API utilisée pour authentifier les utilisateurs Webex auprès du service d'authentification
         #(ex: Nexora), propre au profil/connecteur — cf LumePackAPI.webexAuthenticate
         self.api_key = connector.getConfValue("api_key")
+        #Réponse dans les espaces de groupe (profiles.<profil>.connectors.webex.allow_group_messages), optionnel :
+        #désactivé par défaut, une réponse en groupe étant visible de tous les membres de l'espace
+        self.allow_group_messages = connector._config.get("allow_group_messages", False) is True
         self._headers = {
             "Authorization": f"Bearer {bot_token}",
             "Content-Type": "application/json",

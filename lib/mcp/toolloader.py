@@ -1,10 +1,18 @@
 import os
+import asyncio
 import fnmatch
 import inspect
+import functools
+import contextvars
 import importlib.util
+from concurrent.futures import ThreadPoolExecutor
 from mcp.server.fastmcp import FastMCP
 from lib.config.config import Config
-from lib.files.filestore import FileStore
+
+#Pool dédié à l'exécution des outils MCP synchrones (cf. MCPTool._wrap_method) : séparé du pool par défaut
+#d'asyncio pour que des outils longs (conversion LibreOffice, pages web lentes) ne puissent pas le saturer et
+#bloquer les autres usages (ex. requêtes pgvector du RAG)
+_SYNC_TOOLS_EXECUTOR = ThreadPoolExecutor(max_workers=16, thread_name_prefix="lumi-tool")
 
 def slow_tool(func=None):
     """Décorateur signalant qu'un outil peut être lent à s'exécuter."""
@@ -41,16 +49,19 @@ def restricted_tool(func=None):
         return decorator(func)
     return decorator
 
-def _inject_session_auth(session_id: str) -> None:
-    """Définit l'auth et la session courante pour l'exécution d'un outil."""
-    if not session_id:
-        return
-    from lib.session.session import AuthSessionManager
-    from lib.services.services import ServiceManager
-    session = AuthSessionManager.get(session_id)
-    if session:
-        ServiceManager.setAuthorization(authorization=session.authentication)
-        AuthSessionManager.set_current(session_id)
+def _inject_session_auth(process_id: str):
+    """Pose le process courant (et donc l'auth aux services via son wallet) pour l'exécution d'un outil.
+    Renvoie le token à passer à ProcessManager.exit()."""
+    if not process_id:
+        return None
+    from lib.process.processmanager import ProcessManager
+    if not ProcessManager.get(process_id):
+        return None
+    return ProcessManager.setCurrent(process_id)
+
+def _exit_session_auth(token) -> None:
+    from lib.process.processmanager import ProcessManager
+    ProcessManager.exit(token)
 
 
 """
@@ -87,45 +98,46 @@ class MCPTool:
         sig = inspect.signature(method)
         params_no_self = [p for p in sig.parameters.values() if p.name != "self"]
 
-        # lumi_session_id / lumi_file_scope sont injectés par call_tool à chaque appel ; ils sont
-        # filtrés du schéma exposé au LLM (cf. MCPClientManager._tool_schema).
+        # lumi_session_id est injecté par call_tool à chaque appel ; il est filtré du schéma
+        # exposé au LLM (cf. MCPClientManager._tool_schema).
         _session_param = inspect.Parameter(
             "lumi_session_id",
             kind=inspect.Parameter.KEYWORD_ONLY,
             default="",
             annotation=str,
         )
-        _scope_param = inspect.Parameter(
-            "lumi_file_scope",
-            kind=inspect.Parameter.KEYWORD_ONLY,
-            default="",
-            annotation=str,
-        )
         new_sig = sig.replace(
-            parameters=params_no_self + [_session_param, _scope_param],
+            parameters=params_no_self + [_session_param],
             return_annotation=inspect.Parameter.empty,
         )
 
         if inspect.iscoroutinefunction(method):
             async def wrapper(*args, **kwargs):
-                _inject_session_auth(kwargs.pop("lumi_session_id", ""))
-                _scope_token = FileStore.enter_scope(kwargs.pop("lumi_file_scope", ""))
+                _process_token = _inject_session_auth(kwargs.pop("lumi_session_id", ""))
                 try:
                     instance = cls()
                     result = await method(instance, *args, **kwargs)
                     return {"result": result, "events": instance._events}
                 finally:
-                    FileStore.exit_scope(_scope_token)
+                    _exit_session_auth(_process_token)
         else:
-            def wrapper(*args, **kwargs):
-                _inject_session_auth(kwargs.pop("lumi_session_id", ""))
-                _scope_token = FileStore.enter_scope(kwargs.pop("lumi_file_scope", ""))
+            #Outil synchrone (requêtes réseau, conversion de documents...) : FastMCP l'appellerait directement sur la
+            #boucle événementielle, bloquant tout le serveur (WebSockets de tous les utilisateurs compris) pendant son
+            #exécution. Il est donc exécuté dans le pool de threads dédié aux outils, dans une copie du contexte
+            #courant (le process courant posé par _inject_session_auth reste propre à cet appel).
+            def _run_sync(*args, **kwargs):
+                _process_token = _inject_session_auth(kwargs.pop("lumi_session_id", ""))
                 try:
                     instance = cls()
                     result = method(instance, *args, **kwargs)
                     return {"result": result, "events": instance._events}
                 finally:
-                    FileStore.exit_scope(_scope_token)
+                    _exit_session_auth(_process_token)
+
+            async def wrapper(*args, **kwargs):
+                loop = asyncio.get_running_loop()
+                ctx = contextvars.copy_context()
+                return await loop.run_in_executor(_SYNC_TOOLS_EXECUTOR, functools.partial(ctx.run, _run_sync, *args, **kwargs))
 
         wrapper.__name__ = method.__name__
         wrapper.__qualname__ = method.__qualname__
@@ -133,7 +145,6 @@ class MCPTool:
         wrapper.__module__ = method.__module__
         wrapper.__annotations__ = {k: v for k, v in method.__annotations__.items() if k not in ("self", "return")}
         wrapper.__annotations__["lumi_session_id"] = str
-        wrapper.__annotations__["lumi_file_scope"] = str
         wrapper.__signature__ = new_sig
 
         MCPTool._registry[method.__name__] = {

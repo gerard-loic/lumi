@@ -1,0 +1,735 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "lumi/pipeline.schema.json",
+    "title": "Lumi — config/pipelines/<pipeline_uid>/pipeline.json",
+    "description": "Structure attendue du fichier de configuration d'un pipeline. Une clé est requise quand le code la lit sans valeur par défaut exploitable.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["trigger", "blocks"],
+    "properties": {
+        "name": {
+            "description": "Libellé d'affichage, purement informatif",
+            "type": "string"
+        },
+        "services": {
+            "description": "Authentification aux services de config.json utilisés par le pipeline : nom du service -> données d'authentification (ex. {\"token\": ...} ou {\"login\": ..., \"password\": ...})",
+            "type": "object",
+            "additionalProperties": { "type": "object" }
+        },
+        "trigger": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/trigger" }
+        },
+        "blocks": {
+            "description": "Identifiant de bloc -> définition. L'exécution démarre toujours par '_root'.",
+            "type": "object",
+            "required": ["_root"],
+            "propertyNames": { "$ref": "#/$defs/blockId" },
+            "additionalProperties": { "$ref": "#/$defs/block" }
+        }
+    },
+
+    "$defs": {
+
+        "blockId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$"
+        },
+
+        "next": {
+            "description": "Identifiant du bloc suivant, 'exit(1)' (fin en succès) ou 'exit(0)' (fin en échec)",
+            "type": "string",
+            "pattern": "^(exit\\([01]\\)|[A-Za-z0-9_-]+)$"
+        },
+
+        "trigger": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["class", "config"],
+            "properties": {
+                "class": {
+                    "description": "Seul 'Api' est implémenté (lib/pipelines/triggers)",
+                    "enum": ["Api"]
+                },
+                "config": { "type": "object" }
+            },
+            "allOf": [
+                {
+                    "if": { "properties": { "class": { "const": "Api" } } },
+                    "then": { "properties": { "config": { "maxProperties": 0 } } }
+                }
+            ]
+        },
+
+        "block": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["class", "config"],
+            "properties": {
+                "class": {
+                    "enum": ["Agent", "ApiDelete", "ApiGet", "ApiPost", "ApiPut", "Condition", "Context", "CsvReader", "DataView", "DataViewFile", "ExcelReader", "FileDelete", "FileExists", "FileMove", "FileWriter", "JsonFormat", "Loop", "Mail", "MicroRag", "PythonScript", "ServiceMethod", "Sleep", "TxtReader", "Webex", "XmlFormat"]
+                },
+                "config": { "type": "object" },
+                "on_success": { "$ref": "#/$defs/next", "description": "Absent : fin du pipeline en succès" },
+                "on_error": { "$ref": "#/$defs/next", "description": "Absent : fin du pipeline en échec" }
+            },
+            "allOf": [
+                { "if": { "properties": { "class": { "const": "Agent" } } },        "then": { "properties": { "config": { "$ref": "#/$defs/config/Agent" } } } },
+                { "if": { "properties": { "class": { "const": "ApiDelete" } } },    "then": { "properties": { "config": { "$ref": "#/$defs/config/ApiDelete" } } } },
+                { "if": { "properties": { "class": { "const": "ApiGet" } } },       "then": { "properties": { "config": { "$ref": "#/$defs/config/ApiGet" } } } },
+                { "if": { "properties": { "class": { "const": "ApiPost" } } },      "then": { "properties": { "config": { "$ref": "#/$defs/config/ApiPostPut" } } } },
+                { "if": { "properties": { "class": { "const": "ApiPut" } } },       "then": { "properties": { "config": { "$ref": "#/$defs/config/ApiPostPut" } } } },
+                { "if": { "properties": { "class": { "const": "Condition" } } },    "then": { "properties": { "config": { "$ref": "#/$defs/config/Condition" } } } },
+                { "if": { "properties": { "class": { "const": "CsvReader" } } },    "then": { "properties": { "config": { "$ref": "#/$defs/config/CsvReader" } } } },
+                { "if": { "properties": { "class": { "const": "DataView" } } },     "then": { "properties": { "config": { "$ref": "#/$defs/config/DataView" } } } },
+                { "if": { "properties": { "class": { "const": "DataViewFile" } } }, "then": { "properties": { "config": { "$ref": "#/$defs/config/DataViewFile" } } } },
+                { "if": { "properties": { "class": { "const": "ExcelReader" } } },  "then": { "properties": { "config": { "$ref": "#/$defs/config/ExcelReader" } } } },
+                { "if": { "properties": { "class": { "const": "FileDelete" } } },   "then": { "properties": { "config": { "$ref": "#/$defs/config/FileDelete" } } } },
+                { "if": { "properties": { "class": { "const": "FileExists" } } },   "then": { "properties": { "config": { "$ref": "#/$defs/config/FileExists" } } } },
+                { "if": { "properties": { "class": { "const": "FileMove" } } },     "then": { "properties": { "config": { "$ref": "#/$defs/config/FileMove" } } } },
+                { "if": { "properties": { "class": { "const": "FileWriter" } } },   "then": { "properties": { "config": { "$ref": "#/$defs/config/FileWriter" } } } },
+                { "if": { "properties": { "class": { "const": "JsonFormat" } } },   "then": { "properties": { "config": { "$ref": "#/$defs/config/JsonFormat" } } } },
+                { "if": { "properties": { "class": { "const": "Loop" } } },         "then": { "properties": { "config": { "$ref": "#/$defs/config/Loop" } } } },
+                { "if": { "properties": { "class": { "const": "Mail" } } },         "then": { "properties": { "config": { "$ref": "#/$defs/config/Mail" } } } },
+                { "if": { "properties": { "class": { "const": "MicroRag" } } },     "then": { "properties": { "config": { "$ref": "#/$defs/config/MicroRag" } } } },
+                { "if": { "properties": { "class": { "const": "PythonScript" } } }, "then": { "properties": { "config": { "$ref": "#/$defs/config/PythonScript" } } } },
+                { "if": { "properties": { "class": { "const": "ServiceMethod" } } }, "then": { "properties": { "config": { "$ref": "#/$defs/config/ServiceMethod" } } } },
+                { "if": { "properties": { "class": { "const": "Sleep" } } },        "then": { "properties": { "config": { "$ref": "#/$defs/config/Sleep" } } } },
+                { "if": { "properties": { "class": { "const": "TxtReader" } } },    "then": { "properties": { "config": { "$ref": "#/$defs/config/TxtReader" } } } },
+                { "if": { "properties": { "class": { "const": "Webex" } } },        "then": { "properties": { "config": { "$ref": "#/$defs/config/Webex" } } } },
+                { "if": { "properties": { "class": { "const": "XmlFormat" } } },    "then": { "properties": { "config": { "$ref": "#/$defs/config/XmlFormat" } } } }
+            ]
+        },
+
+        "contextKey": {
+            "description": "Nom d'une variable du contexte",
+            "type": "string",
+            "minLength": 1
+        },
+
+        "template": {
+            "description": "Chaine interpolée avec le contexte ({var}, {% for %}, {% if %})",
+            "type": "string"
+        },
+
+        "contextRef": {
+            "description": "Référence de contexte réduite à un seul jeton, ex. '{files}'",
+            "type": "string",
+            "pattern": "^\\{[^{}]+\\}$"
+        },
+
+        "integer": {
+            "description": "Entier, ou chaine interpolée qui en donnera un",
+            "anyOf": [
+                { "type": "integer" },
+                { "type": "string", "pattern": "\\{[^{}]+\\}" }
+            ]
+        },
+
+        "fileDict": {
+            "type": "object",
+            "anyOf": [
+                { "required": ["key"] },
+                { "required": ["url"] },
+                { "required": ["path"] }
+            ],
+            "properties": {
+                "key": { "type": "string" },
+                "url": { "type": "string" },
+                "path": { "type": "string" },
+                "filename": { "type": "string" }
+            }
+        },
+
+        "fileSource": {
+            "description": "Chemin serveur (templatisable), '{var}', URL '/files/<key>/<nom>', clé FileStore ou dict de fichier (cf. lib/pipelines/utils/filesource.py)",
+            "anyOf": [
+                { "type": "string", "minLength": 1 },
+                { "$ref": "#/$defs/fileDict" }
+            ]
+        },
+
+        "fileSources": {
+            "anyOf": [
+                { "$ref": "#/$defs/fileSource" },
+                { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fileSource" } }
+            ]
+        },
+
+        "tableCommon": {
+            "properties": {
+                "has_header": { "type": "boolean" },
+                "columns": { "type": "array", "items": { "type": "string" } },
+                "skip_rows": { "$ref": "#/$defs/integer" },
+                "skip_empty": { "type": "boolean" },
+                "trim": { "type": "boolean" },
+                "limit": { "$ref": "#/$defs/integer" },
+                "as": { "enum": ["list", "dict"] },
+                "output": { "$ref": "#/$defs/contextKey" }
+            }
+        },
+
+        "httpAuth": {
+            "oneOf": [
+                {
+                    "type": "object",
+                    "maxProperties": 0
+                },
+                {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["type", "username", "password"],
+                    "properties": {
+                        "type": { "const": "basic" },
+                        "username": { "type": "string" },
+                        "password": { "type": "string" }
+                    }
+                },
+                {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["type", "token"],
+                    "properties": {
+                        "type": { "const": "bearer" },
+                        "token": { "type": "string" }
+                    }
+                }
+            ]
+        },
+
+        "httpCommon": {
+            "required": ["url"],
+            "properties": {
+                "url": { "$ref": "#/$defs/template" },
+                "headers": { "type": "object", "additionalProperties": { "type": "string" } },
+                "params": { "type": "object" },
+                "send_json": { "type": "boolean" },
+                "auth": { "$ref": "#/$defs/httpAuth" },
+                "timeout": { "$ref": "#/$defs/integer" },
+                "verify_ssl": { "type": "boolean" },
+                "allow_redirects": { "type": "boolean" },
+                "fail_on_error": { "type": "boolean" },
+                "output": { "$ref": "#/$defs/contextKey" }
+            }
+        },
+
+        "whereClause": {
+            "type": "array",
+            "items": {
+                "type": "array",
+                "prefixItems": [
+                    { "type": "string" },
+                    { "enum": ["==", "!=", ">", "<", ">=", "<=", "in", "not in", "contains", "startswith", "endswith"] },
+                    true
+                ],
+                "minItems": 3,
+                "maxItems": 3
+            }
+        },
+
+        "dataViewOperation": {
+            "type": "object",
+            "required": ["op"],
+            "properties": {
+                "op": { "enum": ["filter", "drop_rows", "add_rows", "order", "sort", "drop_columns", "select", "rename_column", "add_column"] }
+            },
+            "allOf": [
+                {
+                    "if": { "properties": { "op": { "const": "filter" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["where"],
+                        "properties": {
+                            "op": true,
+                            "where": { "$ref": "#/$defs/whereClause" },
+                            "match": { "enum": ["all", "any"] }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "op": { "const": "drop_rows" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "oneOf": [ { "required": ["where"] }, { "required": ["indices"] } ],
+                        "properties": {
+                            "op": true,
+                            "where": { "$ref": "#/$defs/whereClause" },
+                            "match": { "enum": ["all", "any"] },
+                            "indices": { "type": "array", "items": { "type": "integer" } }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "op": { "const": "add_rows" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["rows"],
+                        "properties": {
+                            "op": true,
+                            "rows": { "type": "array", "items": { "type": "object" } }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "op": { "enum": ["order", "sort"] } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["by"],
+                        "properties": {
+                            "op": true,
+                            "by": {
+                                "anyOf": [
+                                    { "type": "string" },
+                                    { "type": "array", "minItems": 1, "items": { "type": "string" } }
+                                ]
+                            },
+                            "desc": { "type": "boolean" }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "op": { "enum": ["drop_columns", "select"] } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["columns"],
+                        "properties": {
+                            "op": true,
+                            "columns": { "type": "array", "items": { "type": "string" } }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "op": { "const": "rename_column" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["from", "to"],
+                        "properties": {
+                            "op": true,
+                            "from": { "type": "string" },
+                            "to": { "type": "string" }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "op": { "const": "add_column" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["name"],
+                        "oneOf": [ { "required": ["value"] }, { "required": ["template"] } ],
+                        "properties": {
+                            "op": true,
+                            "name": { "type": "string" },
+                            "value": true,
+                            "template": { "type": "string", "description": "{colonne} résolus ligne par ligne, non interpolé avec le contexte" }
+                        }
+                    }
+                }
+            ]
+        },
+
+        "config": {
+
+            "Agent": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["profile"],
+                "properties": {
+                    "profile": { "type": "string", "minLength": 1, "description": "Profil de config.json (profiles.<nom>)" },
+                    "prompt": { "$ref": "#/$defs/template" },
+                    "auto_confirm": { "type": "boolean", "description": "Exécute sans validation les outils MCP à confirmation" },
+                    "language": { "type": "string", "pattern": "^[a-z]{2}$" },
+                    "output": { "$ref": "#/$defs/contextKey" },
+                    "files_output": { "$ref": "#/$defs/contextKey" },
+                    "micro_rag": {
+                        "anyOf": [
+                            { "$ref": "#/$defs/contextRef" },
+                            { "type": "array", "items": { "$ref": "#/$defs/contextRef" } }
+                        ]
+                    },
+                    "micro_rag_mode": { "enum": ["rag", "full", "auto"] },
+                    "micro_rag_max_tokens": { "$ref": "#/$defs/integer" },
+                    "micro_rag_query": { "$ref": "#/$defs/template" },
+                    "micro_rag_top_k": { "$ref": "#/$defs/integer" }
+                }
+            },
+
+            "ApiGet": {
+                "type": "object",
+                "$ref": "#/$defs/httpCommon",
+                "unevaluatedProperties": false
+            },
+
+            "ApiDelete": {
+                "type": "object",
+                "$ref": "#/$defs/httpCommon",
+                "properties": {
+                    "body": { "type": ["object", "array", "string"] }
+                },
+                "unevaluatedProperties": false
+            },
+
+            "ApiPostPut": {
+                "type": "object",
+                "$ref": "#/$defs/httpCommon",
+                "properties": {
+                    "body": { "type": ["object", "array", "string"] },
+                    "multipart": { "type": "boolean" },
+                    "files": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "anyOf": [
+                                { "type": "string" },
+                                {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": ["path"],
+                                    "properties": {
+                                        "path": { "type": "string" },
+                                        "filename": { "type": "string" },
+                                        "content_type": { "type": "string" }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "unevaluatedProperties": false
+            },
+
+            "Condition": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["expression"],
+                "properties": {
+                    "expression": { "type": "string", "minLength": 1, "description": "Non interpolée, cf. lib/pipelines/utils/condition.py" },
+                    "missing_as_null": { "type": "boolean" },
+                    "fail_on_false": { "type": "boolean" },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "CsvReader": {
+                "type": "object",
+                "$ref": "#/$defs/tableCommon",
+                "required": ["source"],
+                "properties": {
+                    "source": { "$ref": "#/$defs/fileSource" },
+                    "encoding": { "type": "string" },
+                    "delimiter": { "type": "string", "minLength": 1, "description": "'auto' : détection" },
+                    "quotechar": { "type": "string", "minLength": 1, "maxLength": 1 },
+                    "infer_types": { "type": "boolean" }
+                },
+                "unevaluatedProperties": false
+            },
+
+            "DataView": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["input"],
+                "properties": {
+                    "input": { "$ref": "#/$defs/contextKey" },
+                    "key_column": { "type": "string" },
+                    "value_column": { "type": "string" },
+                    "operations": { "type": "array", "items": { "$ref": "#/$defs/dataViewOperation" } },
+                    "as": { "enum": ["list", "dict"] },
+                    "key": { "type": ["string", "null"] },
+                    "flatten": { "type": "boolean" },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "DataViewFile": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["input"],
+                "properties": {
+                    "input": { "$ref": "#/$defs/contextKey" },
+                    "format": { "enum": ["csv", "json", "jsonl"] },
+                    "filename": { "$ref": "#/$defs/template" },
+                    "delimiter": { "type": "string", "minLength": 1 },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "ExcelReader": {
+                "type": "object",
+                "$ref": "#/$defs/tableCommon",
+                "required": ["source"],
+                "properties": {
+                    "source": { "$ref": "#/$defs/fileSource" },
+                    "format": { "enum": ["xlsx", "xlsm", "xls"] },
+                    "sheet": {
+                        "description": "Nom, index 0-based, '*' ou liste ; absent : 1re feuille",
+                        "anyOf": [
+                            { "type": "string" },
+                            { "type": "integer", "minimum": 0 },
+                            { "type": "array", "items": { "type": ["string", "integer"] } },
+                            { "type": "null" }
+                        ]
+                    }
+                },
+                "unevaluatedProperties": false
+            },
+
+            "FileDelete": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source"],
+                "properties": {
+                    "source": { "$ref": "#/$defs/fileSources" },
+                    "missing_ok": { "type": "boolean" },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "FileExists": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source"],
+                "properties": {
+                    "source": { "$ref": "#/$defs/fileSource" },
+                    "fail_on_missing": { "type": "boolean" },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "FileMove": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source", "destination"],
+                "properties": {
+                    "source": { "$ref": "#/$defs/fileSources" },
+                    "destination": { "type": "string", "minLength": 1, "description": "Dossier (existant ou terminé par '/') ou chemin cible complet" },
+                    "overwrite": { "type": "boolean" },
+                    "create_dirs": { "type": "boolean" },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "FileWriter": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source", "destination"],
+                "properties": {
+                    "source": { "$ref": "#/$defs/fileSources", "description": "Fichier(s) du stockage temporaire (FileStore) uniquement" },
+                    "destination": { "type": "string", "minLength": 1, "description": "Dossier (existant ou terminé par '/') ou chemin cible complet" },
+                    "overwrite": { "type": "boolean" },
+                    "create_dirs": { "type": "boolean" },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "JsonFormat": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["input", "output"],
+                "properties": {
+                    "input": { "$ref": "#/$defs/contextKey" },
+                    "format": {
+                        "description": "JSON Schema de validation, ou false pour ne pas valider",
+                        "anyOf": [ { "type": "object" }, { "const": false } ]
+                    },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "Loop": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["input"],
+                "properties": {
+                    "input": { "$ref": "#/$defs/contextKey" },
+                    "item": { "$ref": "#/$defs/contextKey" },
+                    "index": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "Mail": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["username", "password"],
+                "properties": {
+                    "action": { "enum": ["send", "list", "read"], "description": "Défaut : send" },
+                    "username": { "type": "string", "minLength": 1, "description": "Identifiant du compte, et adresse d'expéditeur" },
+                    "password": { "type": "string" },
+                    "smtp_host": { "type": "string" },
+                    "smtp_port": { "$ref": "#/$defs/integer" },
+                    "smtp_use_ssl": { "type": "boolean" },
+                    "smtp_use_tls": { "type": "boolean" },
+                    "to": {
+                        "anyOf": [
+                            { "type": "string", "minLength": 1 },
+                            { "type": "array", "minItems": 1, "items": { "type": "string" } }
+                        ]
+                    },
+                    "subject": { "$ref": "#/$defs/template" },
+                    "body": { "$ref": "#/$defs/template" },
+                    "attachments": {
+                        "type": "array",
+                        "items": { "$ref": "#/$defs/mailAttachment" }
+                    },
+                    "imap_host": { "type": "string" },
+                    "imap_port": { "$ref": "#/$defs/integer" },
+                    "imap_use_ssl": { "type": "boolean" },
+                    "folder": { "type": "string" },
+                    "limit": { "$ref": "#/$defs/integer" },
+                    "email_id": { "type": ["string", "integer"] },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                },
+                "allOf": [
+                    {
+                        "if": {
+                            "anyOf": [
+                                { "not": { "required": ["action"] } },
+                                { "properties": { "action": { "const": "send" } } }
+                            ]
+                        },
+                        "then": { "required": ["smtp_host", "to"] }
+                    },
+                    {
+                        "if": { "required": ["action"], "properties": { "action": { "const": "read" } } },
+                        "then": { "required": ["email_id"] }
+                    },
+                    {
+                        "if": { "required": ["action"], "properties": { "action": { "enum": ["list", "read"] } } },
+                        "then": {
+                            "anyOf": [ { "required": ["imap_host"] }, { "required": ["smtp_host"] } ]
+                        }
+                    }
+                ]
+            },
+
+            "MicroRag": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source"],
+                "properties": {
+                    "source": { "$ref": "#/$defs/fileSources" },
+                    "allowed_extensions": {
+                        "type": "array",
+                        "items": { "type": "string", "pattern": "^\\.[A-Za-z0-9]+$" }
+                    },
+                    "max_file_size_mb": { "$ref": "#/$defs/integer" },
+                    "append": { "type": "boolean" },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "PythonScript": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["script"],
+                "properties": {
+                    "script": {
+                        "description": "Chemin du script .py, relatif au dossier du pipeline (non interpolé)",
+                        "type": "string",
+                        "pattern": "\\.py$"
+                    },
+                    "function": { "type": "string", "minLength": 1 },
+                    "params": { "type": "object" }
+                }
+            },
+
+            "ServiceMethod": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["service", "method"],
+                "properties": {
+                    "service": {
+                        "description": "Nom du service (clé dans 'services' de la config, non interpolé)",
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "method": {
+                        "description": "Méthode publique du service à appeler, signature method(context, params) (non interpolé)",
+                        "type": "string",
+                        "pattern": "^[A-Za-z][A-Za-z0-9_]*$"
+                    },
+                    "params": { "type": "object" }
+                }
+            },
+
+            "Sleep": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "seconds": {
+                        "description": "Secondes (décimales acceptées), ou chaine interpolée",
+                        "anyOf": [
+                            { "type": "number", "minimum": 0 },
+                            { "type": "string", "minLength": 1 }
+                        ]
+                    }
+                }
+            },
+
+            "TxtReader": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source"],
+                "properties": {
+                    "source": { "$ref": "#/$defs/fileSource" },
+                    "encoding": { "type": "string" },
+                    "errors": { "enum": ["strict", "replace", "ignore"] },
+                    "strip": { "type": "boolean" },
+                    "as": { "enum": ["text", "lines"] },
+                    "keepends": { "type": "boolean" },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            },
+
+            "Webex": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "profile": { "type": "string", "minLength": 1, "description": "Profil dont on réutilise profiles.<profil>.connectors.webex (bot_token, webex_api)" },
+                    "bot_token": { "type": "string", "minLength": 1, "description": "Prioritaire sur celui du profil" },
+                    "webex_api": { "type": "string", "minLength": 1, "description": "Défaut : profil ou https://webexapis.com/v1" },
+                    "room_id": { "type": "string", "minLength": 1 },
+                    "to_person_email": { "type": "string", "minLength": 1 },
+                    "to_person_id": { "type": "string", "minLength": 1 },
+                    "message": { "$ref": "#/$defs/template", "description": "Texte Markdown" },
+                    "attachment": { "$ref": "#/$defs/mailAttachment", "description": "Un seul fichier par message Webex : pour une liste, seul le premier est envoyé" },
+                    "timeout": { "$ref": "#/$defs/integer" },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                },
+                "allOf": [
+                    { "anyOf": [ { "required": ["profile"] }, { "required": ["bot_token"] } ] },
+                    { "oneOf": [ { "required": ["room_id"] }, { "required": ["to_person_email"] }, { "required": ["to_person_id"] } ] },
+                    { "anyOf": [ { "required": ["message"] }, { "required": ["attachment"] } ] }
+                ]
+            },
+
+            "XmlFormat": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["input", "output"],
+                "properties": {
+                    "input": { "$ref": "#/$defs/contextKey" },
+                    "format": {
+                        "description": "XML Schema (XSD) sous forme de chaine, ou false pour ne pas valider",
+                        "anyOf": [ { "type": "string", "minLength": 1 }, { "const": false } ]
+                    },
+                    "output": { "$ref": "#/$defs/contextKey" }
+                }
+            }
+        },
+
+        "mailAttachment": {
+            "description": "Chemin, '{var}', dict {path, filename} ou liste imbriquée de ces formes",
+            "anyOf": [
+                { "type": "string", "minLength": 1 },
+                {
+                    "type": "object",
+                    "required": ["path"],
+                    "properties": {
+                        "path": { "type": "string" },
+                        "filename": { "type": "string" }
+                    }
+                },
+                { "type": "array", "items": { "$ref": "#/$defs/mailAttachment" } }
+            ]
+        }
+    }
+}

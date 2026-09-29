@@ -5,6 +5,7 @@ _AUTHORIZED_CLASS_PATH = [
     "lib.cron.tasks",
     "lib.agent.filters",
     "lib.agent.llmconnector",
+    "lib.agent.llmembedder",
     "lib.connectors.webex",
     "lib.pipelines.triggers",
     "lib.pipelines.blocks"

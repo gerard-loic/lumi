@@ -12,8 +12,7 @@ from contextlib import asynccontextmanager, AsyncExitStack
 from mcp import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 from lib.mcp.toolloader import MCPTool, ToolLoader
-from lib.session.session import AuthSessionManager
-from lib.files.filestore import FileStore
+from lib.process.processmanager import ProcessManager
 from lib.log.logger import Logger, ERROR
 
 class MCPToolError(Exception):
@@ -139,16 +138,16 @@ class MCPClientManager:
     #Retourne (tools, sessions) : tools, liste d'objets Tool (même convention de nommage
     #"ext__<service>__<outil>" que les serveurs "static") ; sessions, nom exposé -> (ClientSession,
     #nom réel), pour router call_tool().
-    async def open_session_external_tools(self, session_id: str | None, stack: AsyncExitStack) -> tuple[list, dict]:
-        if not session_id:
-            return [], {}
-
+    #Les tokens utilisateur sont lus dans le wallet du process courant (tour de conversation ou bloc Agent).
+    async def open_session_external_tools(self, stack: AsyncExitStack) -> tuple[list, dict]:
         from lib.config.config import Config
         from lib.services.services import ServiceManager
 
-        auth_session = AuthSessionManager.get(session_id)
-        if not auth_session:
+        process = ProcessManager.getCurrent()
+        if not process:
             return [], {}
+        session_id = process.getRoot().getUid()
+        wallet = process.getWallet()
 
         external_names = [
             name for name, conf in Config.get("services", default={}).items()
@@ -159,10 +158,8 @@ class MCPClientManager:
         sessions: dict[str, tuple[ClientSession, str]] = {}
 
         for name in external_names:
-            #auth_session.authentication est le payload JWT complet ({"session_id", "services": {...}, ...},
-            #cf. Auth.authenticate, lib/http/auth.py) : le token par service est sous "services",
-            #même accès que ServiceManager.setAuthorization / _inject_session_auth (lib/mcp/toolloader.py).
-            auth_data = auth_session.authentication.get("services", {}).get(name) or {}
+            #Le token par service est porté par le wallet de la session (cf. Auth.authenticate, lib/http/auth.py)
+            auth_data = wallet.getSecret(name) or {}
             if not auth_data.get("token"):
                 Logger.write(f"[MCP] External server '{name}' (session auth) : no token for session {session_id}, skipped")
                 continue
@@ -216,8 +213,8 @@ class MCPClientManager:
     #Construit l'entrée de schéma attendue par le LLM pour un outil MCP donné.
     def _tool_schema(self, t) -> dict:
         schema = dict(t.inputSchema)
-        # lumi_session_id / lumi_file_scope sont des paramètres internes — on les masque au LLM
-        _internal = {"lumi_session_id", "lumi_file_scope"}
+        # lumi_session_id est un paramètre interne — on le masque au LLM
+        _internal = {"lumi_session_id"}
         properties = {k: v for k, v in schema.get("properties", {}).items() if k not in _internal}
         required = [r for r in schema.get("required", []) if r not in _internal]
         return {
@@ -273,15 +270,12 @@ class MCPClientManager:
             external_session, real_name = external_sessions.get(name) or self._external_sessions[name]
             result = await external_session.call_tool(real_name, arguments)
         else:
-            # lumi_session_id est injecté ici pour que le wrapper de l'outil puisse
-            # configurer l'auth de la bonne session sans passer par un état global.
-            # lumi_file_scope propage le scope de fichiers courant (ex. "pipeline:<id>") jusqu'à
-            # l'outil, pour que les fichiers qu'il produit via FileStore soient rattachés au run
-            # et non à la sous-session éphémère de l'agent.
+            # lumi_session_id est injecté ici pour que le wrapper de l'outil pose le process courant
+            # (auth aux services via le wallet, rattachement des fichiers produits via FileStore)
+            # sans passer par un état global. Placé après **arguments : le LLM ne peut pas le surcharger.
             arguments = {
                 **arguments,
-                "lumi_session_id": AuthSessionManager.get_current_id() or "",
-                "lumi_file_scope": FileStore.current_scope() or "",
+                "lumi_session_id": ProcessManager.getCurrentId() or "",
             }
             result = await self.session.call_tool(name, arguments)
 

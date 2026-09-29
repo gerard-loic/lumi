@@ -1,3 +1,4 @@
+from pathlib import Path
 from lib.pipelines.pipelinecontext import PipelineContext
 
 class Block:
@@ -7,9 +8,14 @@ class Block:
         self._config = config
         self._on_success_block = on_success_block
         self._on_error_block = on_error_block
+        self._pipeline_dir = None
 
     def getUid(self)->str:
         return self._block_uid
+
+    #Dossier de configuration du pipeline propriétaire du bloc (renseigné par Pipeline au chargement)
+    def setPipelineDir(self, pipeline_dir:Path):
+        self._pipeline_dir = pipeline_dir
 
     def execute(self, context:PipelineContext)->bool:
         return False

@@ -1,6 +1,10 @@
 import time
 from lib.files.localdata import LocalData
 from lib.config.config import Config
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from lib.process.agentcontext import AgentContext
 
 """
 LLMLimiter : classe permettant de gérer la limitation de l'usage au LLM
@@ -16,22 +20,18 @@ class LLMLimiter:
             return None
         return limit
 
-    #Retourne True si la session dépasse le nombre de requêtes autorisées par minute.
+    #Retourne True si la conversation dépasse le nombre de requêtes autorisées par minute.
     @staticmethod
-    def isFloodDetected(session_id: str) -> bool:
-        
+    def isFloodDetected(agent_ctx: "AgentContext") -> bool:
         limit = LLMLimiter.getFloodLimit()
         if not limit:
             return False
-        from lib.session.session import AuthSessionManager
-        session = AuthSessionManager.get(session_id)
-        if not session:
-            return False
         now = time.time()
-        session.flood_timestamps[:] = [t for t in session.flood_timestamps if now - t < 60.0]
-        if len(session.flood_timestamps) >= limit:
+        timestamps = agent_ctx.getFloodTimestamps()
+        timestamps[:] = [t for t in timestamps if now - t < 60.0]
+        if len(timestamps) >= limit:
             return True
-        session.flood_timestamps.append(now)
+        timestamps.append(now)
         return False
 
     #Retourne le nombre de tokens autorisés par mois

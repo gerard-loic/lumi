@@ -1,7 +1,7 @@
 from openai import AsyncOpenAI
 from lib.mcp.client import mcp_manager
 from lib.files.localdata import LocalData
-from lib.session.session import AuthSessionManager
+from lib.process.processmanager import ProcessManager
 
 """
 Cerebras — Gestion communication modèle LLM avec Cerebras (Cerebras Cloud Inference API, compatible OpenAI)
@@ -29,7 +29,7 @@ class Cerebras:
     #Enregistrement des tokens utilisés pour la session courante
     def _logUsage(self, usage):
         if usage and getattr(usage, "total_tokens", 0) > 0:
-            LocalData.logLLMUsage(session_uid=AuthSessionManager.get_current_id(), token_used=getattr(usage, "total_tokens", 0))
+            LocalData.logLLMUsage(session_uid=ProcessManager.getCurrentRootId(), token_used=getattr(usage, "total_tokens", 0))
 
     #Appel du LLM
     #extra_tools : outils des serveurs MCP externes en auth "session" connectés pour ce tour (cf.

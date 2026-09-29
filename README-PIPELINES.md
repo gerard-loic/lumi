@@ -119,11 +119,11 @@ un bloc déjà exécuté (l'appel est récursif). À utiliser avec prudence.
 ### 1.6 Cycle de vie d'un run
 
 1. Un trigger correspond → un `PipelineRunner` est créé avec un `process_uid` unique et lancé dans un thread dédié.
-2. Un scope de fichiers temporaires `pipeline:<process_uid>` est ouvert (voir [§4.11](#411-fichiers-temporaires)).
+2. Un process `<process_uid>` est ouvert : il porte les authentifications aux services du pipeline et les fichiers temporaires du run (voir [§4.16](#416-fichiers-temporaires)).
 3. Les données du trigger sont injectées dans le contexte sous `trigger` (voir [§2.1](#21-les-données-du-trigger)).
 4. `_root` est exécuté, puis la chaîne `on_success` / `on_error` est suivie.
 5. Chaque bloc est journalisé (statut + logs) : consultable via l'API de suivi.
-6. En fin de run (succès **ou** échec), tous les fichiers temporaires du scope sont purgés.
+6. En fin de run (succès **ou** échec), le process est fermé et tous les fichiers temporaires du run sont purgés.
 
 ---
 
@@ -264,11 +264,13 @@ Tous les blocs partagent :
 | `Context`      | Injecter des valeurs dans le contexte                     |
 | `Agent`        | Faire réfléchir un agent LLM sur un prompt                |
 | `JsonFormat`   | Parser / valider du JSON présent dans le contexte         |
+| `XmlFormat`    | Parser / valider du XML présent dans le contexte          |
 | `ApiGet`       | Requête HTTP `GET`                                        |
 | `ApiPost`      | Requête HTTP `POST`                                       |
 | `ApiPut`       | Requête HTTP `PUT`                                        |
 | `ApiDelete`    | Requête HTTP `DELETE`                                     |
 | `Mail`         | Envoyer un email (SMTP) ou lire une boîte (IMAP)          |
+| `Webex`        | Envoyer une notification Webex (espace ou message direct) |
 | `DataView`     | Transformer une table de données (filtre, tri, colonnes…) |
 | `DataViewFile` | Sérialiser une liste de lignes dans un fichier (CSV/JSON) |
 | `TxtReader`    | Lire un fichier texte / Markdown                          |
@@ -276,8 +278,13 @@ Tous les blocs partagent :
 | `ExcelReader`  | Lire un classeur Excel `.xlsx` / `.xlsm` / `.xls` en table |
 | `FileDelete`   | Supprimer un ou plusieurs fichiers                        |
 | `FileMove`     | Déplacer / renommer un ou plusieurs fichiers              |
+| `FileWriter`   | Écrire sur le disque une copie d'un fichier temporaire    |
 | `FileExists`   | Tester la présence d'un fichier                           |
 | `Condition`    | Évaluer une expression booléenne et brancher le pipeline  |
+| `Sleep`        | Mettre le run en pause pendant N secondes                 |
+| `MicroRag`     | Préparer des fichiers pour le micro-RAG d'un bloc `Agent` |
+| `PythonScript` | Exécuter un script Python du dossier du pipeline         |
+| `ServiceMethod`| Appeler une méthode d'un service (ex : `LumePackAPI`)     |
 
 ### 4.1 `Context`
 
@@ -313,6 +320,11 @@ réflexion, ce qui permet aux outils MCP appelés par l'agent d'accéder aux cre
 | `language`      | string | `app.default_language`    | Code langue de la session.                                                     |
 | `output`        | string | `"result"`                | Clé de contexte où stocker la réponse de l'agent.                              |
 | `files_output`  | string | `"files"`                 | Clé de contexte où stocker les fichiers produits par les outils MCP pendant la réflexion (liste de `{key, filename, path}`). |
+| `micro_rag`     | string \| array | —              | Fichiers préparés par un ou plusieurs blocs `MicroRag` : référence `"{var}"` ou liste de références. Voir [§4.13](#413-microrag). |
+| `micro_rag_mode` | string | profil (`attachments.mode`), sinon `"auto"` | `"rag"` : extraits les plus pertinents ; `"full"` : texte complet ; `"auto"` : texte complet s'il tient dans `micro_rag_max_tokens`, extraits sinon. |
+| `micro_rag_max_tokens` | int | profil (`attachments.full_text_max_tokens`), sinon `20000` | Seuil du mode `"auto"` (total estimé des fichiers joints, ≈ 4 caractères par token). |
+| `micro_rag_query` | string | le `prompt`             | Requête de recherche des extraits (modes `rag` / `auto` sur un contenu trop long), si le prompt (souvent une consigne) ne décrit pas l'information à retrouver. |
+| `micro_rag_top_k` | int  | profil (`attachments.file_context_top_k`), sinon `8` | Nombre d'extraits ajoutés au prompt. |
 
 Échoue si le profil est introuvable ou si l'authentification échoue.
 
@@ -366,7 +378,46 @@ schéma échoue.
 }
 ```
 
-### 4.4 Blocs HTTP : `ApiGet` / `ApiPost` / `ApiPut` / `ApiDelete`
+### 4.4 `XmlFormat`
+
+Équivalent XML de `JsonFormat` : parse une chaîne XML présente dans le contexte, la valide
+optionnellement contre un XML Schema (XSD), et écrit la structure obtenue.
+
+| Paramètre | Type              | Défaut  | Rôle                                                                        |
+|-----------|-------------------|---------|--------------------------------------------------------------------------|
+| `input`   | string            | `""`    | Clé de contexte contenant la chaîne XML sérialisée. La valeur **doit** être une chaîne. |
+| `format`  | string \| `false` | `false` | XML Schema (XSD) de validation, sous forme de chaîne. `false` → aucune validation. |
+| `output`  | string            | `""`    | Clé de contexte où stocker la structure désérialisée.                     |
+
+La structure produite est `{ "<racine>": <contenu> }`, où le contenu d'un élément est :
+
+* sa valeur texte s'il n'a ni attribut ni enfant (`null` s'il est vide) ;
+* sinon un objet : attributs préfixés par `@`, enfants par nom (sans namespace), **liste**
+  si l'élément est répété, texte éventuel sous `#text`.
+
+Toutes les valeurs restent des chaînes (pas de conversion de type). Le parser ignore les
+commentaires, les DTD et ne résout pas les entités externes (protection XXE).
+
+Échoue si l'entrée n'est pas une chaîne, si le XML est invalide, si le XSD est invalide,
+ou si la validation de schéma échoue.
+
+```json
+"parse": {
+    "class": "XmlFormat",
+    "config": {
+        "input": "reponse_agent",
+        "format": "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\"><xs:element name=\"rapport\"><xs:complexType><xs:sequence><xs:element name=\"titre\" type=\"xs:string\"/><xs:element name=\"point\" type=\"xs:string\" maxOccurs=\"unbounded\"/></xs:sequence></xs:complexType></xs:element></xs:schema>",
+        "output": "rapport"
+    },
+    "on_success": "suite",
+    "on_error": "exit(0)"
+}
+```
+
+Avec `<rapport><titre>T</titre><point>a</point><point>b</point></rapport>` en entrée,
+`rapport` vaut `{"rapport": {"titre": "T", "point": ["a", "b"]}}`.
+
+### 4.5 Blocs HTTP : `ApiGet` / `ApiPost` / `ApiPut` / `ApiDelete`
 
 Effectuent une requête REST et écrivent la réponse dans le contexte. La méthode HTTP est
 imposée par la classe.
@@ -423,7 +474,7 @@ Exemple (authentification puis réutilisation du jeton) :
 }
 ```
 
-### 4.5 `Mail`
+### 4.6 `Mail`
 
 Envoie un email (SMTP) ou lit une boîte de réception (IMAP).
 
@@ -481,7 +532,43 @@ Envoie un email (SMTP) ou lit une boîte de réception (IMAP).
 }
 ```
 
-### 4.6 `DataView`
+### 4.6 bis `Webex`
+
+Envoie une notification Webex (message Markdown, avec une pièce jointe optionnelle) via un bot.
+Le jeton du bot peut être repris d'un profil (`profiles.<profil>.connectors.webex`, le connecteur
+n'a pas besoin d'être activé) ou fourni directement.
+
+| Paramètre         | Type             | Défaut      | Rôle                                                              |
+|-------------------|------------------|-------------|-------------------------------------------------------------------|
+| `profile`         | string           | —           | Profil dont on réutilise `bot_token` et `webex_api`.              |
+| `bot_token`       | string           | —           | Jeton du bot ; prioritaire sur celui du profil.                   |
+| `webex_api`       | string           | profil ou `https://webexapis.com/v1` | URL de base de l'API Webex.              |
+| `room_id`         | string           | —           | Espace destinataire.                                              |
+| `to_person_email` | string           | —           | Email du destinataire (message direct).                           |
+| `to_person_id`    | string           | —           | Identifiant Webex du destinataire (message direct).               |
+| `message`         | string           | `""`        | Texte Markdown. Interpolé.                                        |
+| `attachment`      | string \| object | —           | Fichier joint : chemin, `"{var}"` vers une structure `{path, filename}` (une liste → seul le premier est envoyé, Webex n'accepte qu'un fichier par message). |
+| `timeout`         | int              | `30`        | Délai d'attente HTTP (s).                                         |
+| `output`          | string           | `"webex"`   | Clé de contexte où écrire `{id, room_id}` du message créé.        |
+
+Exactement un destinataire parmi `room_id`, `to_person_email` et `to_person_id`. Il faut au moins
+un `message` ou un `attachment`. Le bot doit être membre de l'espace ciblé par `room_id`.
+
+```json
+"notifier": {
+    "class": "Webex",
+    "config": {
+        "profile": "default",
+        "to_person_email": "{trigger.data.demandeur}",
+        "message": "Le rapport du **{trigger.data.jour}** est prêt.",
+        "attachment": "{report}"
+    },
+    "on_success": "exit(0)",
+    "on_error": "exit(1)"
+}
+```
+
+### 4.7 `DataView`
 
 Construit une vue tabulaire à partir d'un dict ou d'une liste du contexte, lui applique
 une suite ordonnée d'opérations, puis réécrit le résultat dans le contexte.
@@ -537,7 +624,7 @@ Opérateurs de `where` : `==` `!=` `>` `<` `>=` `<=` `in` `"not in"` `contains`
 }
 ```
 
-### 4.7 `DataViewFile`
+### 4.8 `DataViewFile`
 
 Sérialise une liste de lignes (typiquement la sortie d'un `DataView` en `as: "list"`)
 dans un fichier temporaire rattaché au run.
@@ -569,7 +656,7 @@ purgé automatiquement à la fin.
 
 Puis, par exemple, joindre le fichier dans un `Mail` : `"attachments": ["{fichier_csv.path}"]`.
 
-### 4.8 Blocs lecteurs de fichier : `TxtReader` / `CsvReader` / `ExcelReader`
+### 4.9 Blocs lecteurs de fichier : `TxtReader` / `CsvReader` / `ExcelReader`
 
 Ces trois blocs lisent un fichier et déposent son contenu dans le contexte. Ils partagent le
 paramètre **`source`**, qui accepte indifféremment :
@@ -582,7 +669,7 @@ paramètre **`source`**, qui accepte indifféremment :
 | `{ "path": "...", "filename": "..." }`         | Structure de fichier fournie telle quelle dans la config.             |
 
 > Un fichier de run n'est lisible que **pendant** le run qui l'a produit (voir
-> [§4.11](#411-fichiers-temporaires)).
+> [§4.16](#416-fichiers-temporaires)).
 
 #### `TxtReader`
 
@@ -666,10 +753,10 @@ ISO 8601.
 }
 ```
 
-### 4.9 Blocs de gestion de fichier : `FileDelete` / `FileMove` / `FileExists`
+### 4.10 Blocs de gestion de fichier : `FileDelete` / `FileMove` / `FileWriter` / `FileExists`
 
 Ces blocs agissent sur le fichier lui-même (et non sur son contenu). Ils acceptent le même
-paramètre `source` que les blocs lecteurs ([§4.8](#48-blocs-lecteurs-de-fichier--txtreader--csvreader--excelreader)) :
+paramètre `source` que les blocs lecteurs ([§4.9](#49-blocs-lecteurs-de-fichier--txtreader--csvreader--excelreader)) :
 chemin serveur, `"{var}"` (dict / liste de fichier de pipeline), URL `"/files/..."`, ou clé
 `FileStore`.
 
@@ -697,7 +784,7 @@ fichier temporaire) ; un fichier du serveur est supprimé du disque.
 
 Déplace (ou renomme) un ou plusieurs fichiers vers un emplacement du serveur. **Déplacer un fichier
 produit pendant le run vers un chemin durable est le moyen de le conserver au-delà de la fin du
-run** (le stockage temporaire est purgé — voir [§4.11](#411-fichiers-temporaires)).
+run** (le stockage temporaire est purgé — voir [§4.16](#416-fichiers-temporaires)).
 
 | Paramètre     | Type            | Défaut     | Rôle                                                                     |
 |---------------|-----------------|------------|----------------------------------------------------------------------|
@@ -712,6 +799,31 @@ run** (le stockage temporaire est purgé — voir [§4.11](#411-fichiers-tempora
     "class": "FileMove",
     "config": { "source": "{rapport_csv}", "destination": "/srv/archives/{trigger.data.jour}/", "output": "archive" },
     "on_success": "exit(1)",
+    "on_error": "exit(0)"
+}
+```
+
+#### `FileWriter`
+
+Écrit sur le disque du serveur une **copie** d'un ou plusieurs fichiers du stockage temporaire
+(fichiers générés pendant le run : sortie d'un bloc `DataViewFile` / `Agent`, URL `"/files/..."`,
+clé `FileStore`). Contrairement à `FileMove`, le fichier temporaire est conservé : son URL de
+téléchargement reste utilisable par les blocs suivants (ex. pièce jointe d'un `Mail`) jusqu'à la
+fin du run. Une `source` désignant un chemin serveur est refusée (utiliser `FileMove`).
+
+| Paramètre     | Type            | Défaut     | Rôle                                                                     |
+|---------------|-----------------|------------|----------------------------------------------------------------------|
+| `source`      | string/obj/array | —          | **Obligatoire.** Fichier(s) temporaire(s) à écrire.                  |
+| `destination` | string          | —          | **Obligatoire.** Chemin cible. Dossier existant ou terminé par `/` → le fichier y est écrit sous son nom d'origine ; sinon chemin complet (renommage, une seule source). Plusieurs sources → `destination` doit être un dossier. |
+| `overwrite`   | bool            | `false`    | Autorise l'écrasement d'un fichier cible existant.                   |
+| `create_dirs` | bool            | `true`     | Crée les dossiers parents manquants.                                 |
+| `output`      | string          | `"result"` | Clé de contexte → `{"path", "filename", "size"}` (ou une liste si plusieurs sources). |
+
+```json
+"sauvegarder": {
+    "class": "FileWriter",
+    "config": { "source": "{rapport_csv}", "destination": "/srv/exports/{trigger.data.jour}/", "output": "export" },
+    "on_success": "envoyer_mail",
     "on_error": "exit(0)"
 }
 ```
@@ -739,7 +851,7 @@ fait toujours échouer le bloc, quel que soit `fail_on_missing`.
 }
 ```
 
-### 4.10 `Condition`
+### 4.11 `Condition`
 
 Évalue une **expression booléenne** portant sur des variables de contexte et branche le pipeline
 selon le résultat : `on_success` si l'expression est vraie, `on_error` si elle est fausse. Le
@@ -789,7 +901,194 @@ ou chaîne numérique) — pratique pour les données de `trigger.data`, souvent
 }
 ```
 
-### 4.11 Fichiers temporaires
+### 4.12 `Sleep`
+
+Met le run en pause pendant `seconds` secondes, puis passe au bloc `on_success`. Chaque run
+s'exécute dans son propre thread : la pause ne bloque ni le serveur ni les autres runs.
+
+| Paramètre | Type                    | Défaut | Rôle                                                                          |
+|-----------|-------------------------|--------|-----------------------------------------------------------------------------|
+| `seconds` | number \| string        | `0`    | Durée de la pause en secondes (décimales acceptées). Une chaîne est convertie, ce qui permet une durée issue du contexte. |
+
+Échoue si la durée n'est pas un nombre fini positif ou nul.
+
+```json
+"attente": {
+    "class": "Sleep",
+    "config": {
+        "seconds": "{trigger.data.delai}"
+    },
+    "on_success": "relance"
+}
+```
+
+### 4.13 `MicroRag`
+
+Équivalent pipeline des fichiers joints à une conversation websocket : prépare un ou
+plusieurs fichiers pour qu'un bloc `Agent` puisse raisonner dessus. Le texte est extrait dans
+ce bloc (page par page pour un PDF). Le découpage en chunks et le calcul des embeddings n'ont
+lieu que si un bloc `Agent` en a besoin (mode `rag`, ou `auto` sur un contenu trop long), et
+**une seule fois** : les blocs `Agent` suivants réutilisent le résultat.
+Rien n'est écrit en base vectorielle : tout reste dans le contexte du run.
+
+| Paramètre            | Type                   | Défaut        | Rôle                                                                    |
+|----------------------|------------------------|---------------|-----------------------------------------------------------------------|
+| `source`             | string \| object \| array | —      | **Obligatoire.** Fichier(s) à intégrer, même syntaxe que `TxtReader` (chemin serveur, `"{var}"`, URL `/files/...`, clé FileStore). Une liste, ou un `"{var}"` qui pointe vers une liste, intègre tous les fichiers. |
+| `allowed_extensions` | array                  | formats des pièces jointes (`.pdf`, `.docx`, `.xlsx`, `.pptx`, `.md`, `.txt`, `.csv`, `.html`…) | Extensions acceptées. |
+| `max_file_size_mb`   | int                    | `20`          | Taille maximale d'un fichier.                                          |
+| `append`             | bool                   | `false`       | Ajoute les fichiers à ceux déjà présents sous `output` au lieu de les remplacer (enchaînement de plusieurs blocs `MicroRag`). |
+| `output`             | string                 | `"micro_rag"` | Clé de contexte où stocker les fichiers préparés.                      |
+
+Échoue si un fichier est introuvable, vide, trop volumineux, d'une extension non autorisée
+ou si l'extraction du texte échoue.
+
+Côté bloc `Agent`, la clé `micro_rag` joint ces fichiers à la réflexion. Leur contenu est
+placé en tête du prompt avant l'appel au LLM, selon `micro_rag_mode` :
+
+* **`full`** : le texte complet de tous les fichiers (page par page, avec numéro, pour un PDF).
+  Indispensable pour les demandes qui portent sur **tout** le document : lister les
+  articles, résumer, comparer, vérifier une absence…
+* **`rag`** : une recherche par similarité est lancée sur `micro_rag_query` (à défaut sur
+  le `prompt`), et seuls les `micro_rag_top_k` extraits les plus pertinents sont envoyés.
+  Adapté aux documents volumineux et aux questions ciblées (« que dit le contrat sur X ? »),
+  mais le LLM ne voit pas le reste du document.
+* **`auto`** (défaut) : `full` si le total estimé des fichiers tient dans
+  `micro_rag_max_tokens`, `rag` sinon.
+
+Si le profil autorise l'outil `files.search_attached_files`, l'agent peut aussi lancer
+d'autres recherches dans ces fichiers pendant sa réflexion.
+
+> La valeur de `micro_rag` doit être une référence **seule** (`"{docs}"`), pas un texte
+> contenant une variable : la structure préparée est transmise telle quelle au bloc `Agent`.
+
+```json
+"prepare_docs": {
+    "class": "MicroRag",
+    "config": {
+        "source": "{trigger.data.contrat}",
+        "output": "docs"
+    },
+    "on_success": "analyse",
+    "on_error": "exit(0)"
+},
+"analyse": {
+    "class": "Agent",
+    "config": {
+        "profile": "agent-base",
+        "prompt": "Liste les clauses de résiliation du contrat joint et leurs délais de préavis.",
+        "micro_rag": "{docs}",
+        "micro_rag_mode": "auto",
+        "micro_rag_query": "résiliation, préavis, durée du contrat",
+        "micro_rag_top_k": 10,
+        "output": "analyse"
+    },
+    "on_success": "exit(1)",
+    "on_error": "exit(0)"
+}
+```
+
+### 4.14 `PythonScript`
+
+Exécute un script Python placé dans le **dossier du pipeline**, à côté de `pipeline.json` :
+
+```
+config/pipelines/mon_pipeline/
+├── pipeline.json
+└── scripts/
+    └── calcul.py
+```
+
+Le script définit une fonction (par défaut `run`) appelée avec deux arguments :
+
+* `context` — le contexte du run (`PipelineContext`), en lecture **et** en écriture :
+  * `context.get("cle")` : valeur d'une clé de premier niveau (une chaîne est interpolée) ;
+  * `context.resolve("a.b[0].c")` : valeur typée d'un chemin, sans conversion en chaîne ;
+  * `context.set("cle", valeur)` : crée ou remplace une variable ;
+  * `context.merge({...})` : fusionne plusieurs variables (chaînes interpolées au passage) ;
+  * `context.transform("Bonjour {nom}")` : interpole un template.
+* `params` — le dict `params` de la config du bloc, déjà interpolé avec le contexte.
+
+La fonction réussit par défaut : le bloc échoue uniquement si elle renvoie `False` ou lève
+une exception (le message est alors journalisé dans les logs du bloc).
+
+| Paramètre  | Type   | Défaut  | Rôle                                                                     |
+|------------|--------|---------|------------------------------------------------------------------------|
+| `script`   | string | —       | **Obligatoire.** Chemin du script, relatif au dossier du pipeline. Doit finir par `.py` et rester dans ce dossier. **Non interpolé** : une donnée du contexte ne peut pas choisir le code exécuté. |
+| `function` | string | `"run"` | Fonction du script à appeler.                                           |
+| `params`   | object | `{}`    | Paramètres transmis à la fonction (interpolés).                          |
+
+* Le script est rechargé à **chaque exécution** : une modification est prise en compte sans
+  redémarrage (contrairement à `pipeline.json`).
+* Il s'exécute **sans bac à sable**, avec les droits du serveur (il peut importer `lib.*`,
+  accéder au réseau, au disque…). Il a le même niveau de confiance que `pipeline.json`.
+* Pour journaliser, utiliser `Logger.write(...)` (`from lib.log.logger import Logger`) :
+  contrairement à `print`, ses messages sont rattachés aux logs du bloc.
+
+```python
+# config/pipelines/mon_pipeline/scripts/calcul.py
+def run(context, params):
+    lignes = context.resolve("commandes")
+    total = sum(l["montant"] for l in lignes if l["pays"] == params["pays"])
+    if total == 0:
+        return False            # -> on_error
+    context.set("total", total * params["taux"])
+```
+
+```json
+"calcul": {
+    "class": "PythonScript",
+    "config": {
+        "script": "scripts/calcul.py",
+        "params": {
+            "pays": "{trigger.data.pays}",
+            "taux": 1.2
+        }
+    },
+    "on_success": "envoi",
+    "on_error": "exit(0)"
+}
+```
+
+### 4.15 `ServiceMethod`
+
+Appelle une méthode d'un **service** déclaré dans la clé `services` de la configuration
+(ex : le service `nexora` de handler `LumePackAPI`). Même convention que `PythonScript` : la
+méthode reçoit `context` (lecture et écriture) et `params` (le dict `params` de la config du
+bloc, interpolé), et doit donc avoir la signature :
+
+```python
+# lib/services/lumepackapi.py
+class LumePackAPI(Service):
+    def test(self, context, params):
+        context.set("test", "OUI")
+```
+
+La méthode réussit par défaut : le bloc échoue uniquement si elle renvoie `False` ou lève une
+exception. Pour appeler l'API au nom de l'utilisateur, elle utilise `self.getAuth()` (secret du
+wallet du run) : le service est une instance partagée, il ne doit porter aucun état propre au run.
+
+| Paramètre | Type   | Défaut | Rôle                                                                                   |
+|-----------|--------|--------|--------------------------------------------------------------------------------------|
+| `service` | string | —      | **Obligatoire.** Nom du service (clé dans `services`, pas le `handler`). **Non interpolé.** |
+| `method`  | string | —      | **Obligatoire.** Méthode publique à appeler (les noms commençant par `_` sont refusés). **Non interpolé.** |
+| `params`  | object | `{}`   | Paramètres transmis à la méthode (interpolés).                                        |
+
+```json
+"test_nexora": {
+    "class": "ServiceMethod",
+    "config": {
+        "service": "nexora",
+        "method": "test",
+        "params": {
+            "id": "{trigger.data.id}"
+        }
+    },
+    "on_success": "suite",
+    "on_error": "exit(1)"
+}
+```
+
+### 4.16 Fichiers temporaires
 
 * Tout fichier écrit via `FileStore` pendant un run (bloc `DataViewFile`, ou outil MCP
   appelé pendant un bloc `Agent`) est **rattaché au run** (`process_uid`).

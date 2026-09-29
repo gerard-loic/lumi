@@ -1,65 +1,57 @@
 Version ABYSS : 
 - [x] Gestion d'un fallback de font pour les PDF
-- [ ] Création de pipelines [EN COURS]
-- [ ] Suivi des pipelines [EN COURS]
+- [x] Création de pipelines
+- [x] Suivi des pipelines
 - [x] Support connecteur LLM DigitalOcean 
 - [x] Support connecteur LLM Cerebras
-- [ ] Support connecteur Llama
-- [ ] Support autres connecteurs ?
-- [ ] Dans Embedder liaison dynamique / gestion différentiée des providers
+- [x] Support connecteur Llama
+- [x] Dans Embedder liaison dynamique / gestion différentiée des providers
 - [ ] Documentation spécifique sur l'écriture des fichiers de configuration avec options
-- [ ] Vérifier le service d'auth Webex nécessaire ?
 - [ ] Revue des logs
-- [ ] Vérificateur de format des fichiers de configuration
+- [x] Vérificateur de format des fichiers de configuration
 - [x] Modification de la gestion de l'authentification => conteneur d'authentifications
-- [ ] Correctif sécurité service d'auth ?
+- [x] Correctif sécurité service d'auth ?
 - [x] Bloc : conditionnelle (Condition) - [ ] switch
-- [ ] Bloc : sleep
-- [ ] Bloc : transformMapping (?)
-- [ ] Bloc : render (produire un documentd depuis le contexte) (à vérifier : dataFileView)
+- [x] Bloc : sleep
 - [x] Bloc : Loop
 - [x] Bloc : DataView
 - [x] Bloc : csvformat (CsvReader)
-- [ ] Bloc : xmlformat
+- [x] Bloc : xmlformat
 - [x] Bloc : filereader (TxtReader)
 - [x] Bloc : ExcelReader
 - [x] Bloc : filedelete
 - [x] Bloc : filemove
 - [x] Bloc : FileExists
-- [ ] Bloc : webexNotification
-- [ ] Bloc : MicroRag
+- [x] Bloc : webexNotification
+- [x] Bloc : MicroRag
 - [x] Bloc : apiGet
 - [x] Bloc : apiPost
 - [x] Bloc : apiPut
 - [x] Bloc : apiDelete
-- [ ] Bloc : webhookCall
-- [ ] Bloc : filewriter
-- [ ] Bloc : serviceMethod
-- [ ] Trigger : cron
-- [ ] Trigger : callback
-- [ ] Trigger : urlWatch
-- [ ] Trigger : apiWatch
-- [ ] Trigger : fileWatch
-- [ ] Trigger : mailWatch
-- [ ] Trigger : dbWatch
-- [ ] Trigger : serviceWatch
-- [ ] Trigger : agentWatch
-- [ ] Trigger : webHook (secret + vérif signature)
-- [ ] Trigger : CLI
-- [ ] Trigger : pipelineEvent
-- [ ] Revoir le readme -> prévoir une documentation sur l'écriture d'un pipeline + une documentation sur la configuration
-- [ ] Prévoir la configuration des profiles dans des fichiers de configuration à part
+- [x] Bloc : pythonScript
+- [x] Bloc : filewriter
+- [x] Bloc : serviceMethod
+- [x] Revoir le readme -> prévoir une documentation sur l'écriture d'un pipeline + une documentation sur la configuration
 - [x] Log in out de chaque bloc
 - [ ] Delestage à revoir
-- [ ] Système de trousseau d'authentification
-- [ ] Modification des pipelines à la volée
+- [x] Système de trousseau d'authentification
+- [x] Correctifs de sécurité
+- [x] Refonte du gestionnaire d'authentification et de processus
+- [ ] MAJ README + README PIPELINES
+- [ ] Revue de code
+- [ ] Finalisation de la version
+- [x] Revue de sécurité
 
 BACKLOG
+- [ ] Support autres connecteurs ?
 - [ ] API statistiques détaillées (usage / pipeline)
+- [ ] Modification des pipelines à la volée
+- [ ] Prévoir la configuration des profiles dans des fichiers de configuration à part
 - [ ] API info profil
 - [ ] Gestionnaire de droits d'API Basic
 - [ ] Bloc : zip 
 - [ ] Bloc : unzip
+- [ ] Bloc : transformMapping (?)
 - [ ] Bloc : ImageToText (for Nova)
 - [ ] Bloc : subpipeline
 - [ ] Revue de l'API d'info session / profil
@@ -106,7 +98,19 @@ BACKLOG
 - [ ] Suppression d'un fichier du raisonnement
 - [ ] Annuler une demande en cours
 - [ ] Meilleure gestion de la réponse vide (implémenter un sleep)
-
+- [ ] Trigger : cron
+- [ ] Trigger : callback
+- [ ] Trigger : urlWatch
+- [ ] Trigger : apiWatch
+- [ ] Trigger : fileWatch
+- [ ] Trigger : mailWatch
+- [ ] Trigger : dbWatch
+- [ ] Trigger : serviceWatch
+- [ ] Trigger : agentWatch
+- [ ] Trigger : webHook (secret + vérif signature)
+- [ ] Trigger : CLI
+- [ ] Trigger : pipelineEvent
+- [ ] Vérifier le service d'auth Webex nécessaire ?
 
 
 
