@@ -2,17 +2,6 @@ from lib.log.logger import Logger, ERROR
 from lib.utils.dynamicimport import DynamicImport
 from lib.agent.profile import Profile
 
-"""
-LLMFilter — Classe parente des filtres LLM
-Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
-"""
-class LLMFilter:
-    def __init__(self, configuration:dict={}):
-        self._configuration = configuration
-
-    def filter(self, text:str=""):
-        return text
-
 
 """
 LLMFilterManager — Gestion des filtres LLM appliqués

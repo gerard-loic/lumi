@@ -1,6 +1,6 @@
-from lib.pipelines.block import Block
+from lib.pipelines._abstract import Block
 from lib.pipelines.pipelinecontext import PipelineContext
-from lib.services.services import ServiceManager
+from lib.services.servicemanager import ServiceManager
 from lib.log.logger import Logger, ERROR, OK
 
 #Bloc ServiceMethod : appelle une méthode d'un service déclaré dans la config (clé "services"), ex. LumePackAPI.test.

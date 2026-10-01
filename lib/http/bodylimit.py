@@ -2,17 +2,15 @@ from fastapi import HTTPException
 from starlette.types import ASGIApp, Receive, Scope, Send
 from lib.config.config import Config
 
-#Marge ajoutée à la taille maximale d'une pièce jointe pour l'enveloppe multipart (délimiteurs, en-têtes de partie)
-_MULTIPART_OVERHEAD = 1024 * 1024
-
 """
 BodySizeLimitMiddleware — Limite la taille du corps des requêtes HTTP
 Starlette écrit un fichier uploadé entièrement sur disque avant d'appeler la route, sans limite de taille : la
 limite doit donc s'appliquer en amont, pendant la réception. Refus en 413 d'après l'en-tête Content-Length s'il
 est présent, sinon dès que le volume reçu dépasse la limite (corps envoyé en chunked).
 Limites :
-  - POST /files/upload : plus grande attachments.max_file_size_mb des profils (+ enveloppe multipart), la limite
-    propre au profil de la session étant vérifiée ensuite par la route (cf. Attachement) ;
+  - POST /files/upload : plus grande attachments.max_file_size_mb des profils (+ enveloppe multipart,
+    security.multipart_overhead_mb), la limite propre au profil de la session étant vérifiée ensuite par la
+    route (cf. Attachement) ;
   - autres routes : app.max_request_body_mb (défaut 100, ex. indexation RAG par l'API d'administration).
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
@@ -53,7 +51,9 @@ class BodySizeLimitMiddleware:
         if path == "/files/upload":
             profiles = Config.get("profiles", {})
             max_mb = max((p.get("attachments", {}).get("max_file_size_mb", 20) for p in profiles.values() if p.get("attachments", {}).get("enabled", False)), default=0)
-            return int(max_mb * 1024 * 1024) + _MULTIPART_OVERHEAD
+            #Marge ajoutée pour l'enveloppe multipart (délimiteurs, en-têtes de partie)
+            overhead_mb = Config.get("security.multipart_overhead_mb", 1)
+            return int((max_mb + overhead_mb) * 1024 * 1024)
         return int(Config.get("app.max_request_body_mb", 100) * 1024 * 1024)
 
     @staticmethod

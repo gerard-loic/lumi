@@ -1,10 +1,11 @@
 import base64
 import httpx
 from urllib.parse import urlencode
-from lib.services.services import Service
+from lib.services._abstract import Service
 from lib.log.logger import Logger, ERROR
 from pydantic import Field, BaseModel
 from typing import Annotated, Literal, Optional, Any
+
 
 OrderByField = Annotated[Literal["ASC", "DESC"], Field(description="...")]
 LimiteField = Annotated[int, Field(description="Nombre maximal de résultats à retourner")]
@@ -302,5 +303,4 @@ class LumePackAPI(Service):
         except httpx.RequestError as e:
             raise RuntimeError(f"Erreur réseau sur /{endpoint} : {e}") from e
 
-    def test(self, context, params):
-        context.set("test", "OUI")
+

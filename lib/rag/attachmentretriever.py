@@ -98,6 +98,30 @@ class AttachmentRetriever:
                 pages.append(page)
         return pages_by_file
 
+    #Met en forme le contenu des pièces jointes (résultats de retrieve) à placer en tête du message utilisateur :
+    #extraits les plus pertinents, ou contenu complet (full=True)
+    @staticmethod
+    def format_context(results: list[dict], full: bool = False) -> str:
+        blocks = []
+        for r in results:
+            label = f"[{'Contenu' if full else 'Extrait'} de {r['filename']}" + (f", page {r['page']}" if r.get("page") else "") + "]"
+            blocks.append(f"{label}\n{r['text']}")
+        return "\n\n".join(blocks) + "\n\n"
+
+    #Consigne système décrivant les pièces jointes fournies dans le message (`intro` : phrase qui présente les fichiers)
+    @staticmethod
+    def instructions(intro: str, filenames: str, full: bool) -> str:
+        if full:
+            return f"\n\n{intro} : {filenames}. Leur contenu complet est fourni ci-dessous dans le message."
+        return f"\n\n{intro} : {filenames}. Les extraits les plus pertinents sont déjà fournis ci-dessous dans le message ; si l'outil search_attached_files est disponible, utilise-le si tu as besoin de chercher autre chose dans ces fichiers."
+
+    #Citations (RagEvent) des pièces jointes utilisées : pages des extraits retenus, ou fichier entier (sans page) en contenu complet
+    @staticmethod
+    def citations(results: list[dict], full: bool) -> dict[str, list[int]]:
+        if full:
+            return {filename: [] for filename in dict.fromkeys(r["filename"] for r in results)}
+        return AttachmentRetriever.group_pages_by_file(results)
+
     #Chunke un fichier en conservant la page d'origine de chaque chunk quand le fichier est paginé (PDF) :
     #un chunking par page (comme PdfIndexer.index côté RAG persistant) plutôt qu'un chunking global.
     async def _buildChunks(self, attachment: dict, indexer: Indexer, embedder: Embedder) -> list[dict]:

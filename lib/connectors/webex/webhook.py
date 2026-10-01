@@ -7,7 +7,7 @@ from lib.process.processmanager import ProcessManager
 from lib.process.process import KIND_WEBEX
 from lib.process.agentcontext import AgentContext
 from lib.localization.language import LanguageManager
-from lib.services.services import ServiceManager
+from lib.services.servicemanager import ServiceManager
 from lib.config.config import Config
 from lib.log.logger import Logger, ERROR, WARNING, OK
 

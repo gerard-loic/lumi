@@ -1,5 +1,5 @@
 import os
-from lib.cron.tasks.crontask import CronTask
+from lib.cron.tasks._abstract import CronTask
 from lib.rag.vectorstore import VectorStore
 from lib.rag.indexer import Indexer
 from lib.agent.profile import ProfileManager

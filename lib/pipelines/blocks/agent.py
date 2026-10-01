@@ -1,6 +1,6 @@
 import re
 import asyncio
-from lib.pipelines.block import Block
+from lib.pipelines._abstract import Block
 from lib.pipelines.pipelinecontext import PipelineContext
 from lib.agent.agent import AgentManager
 from lib.mcp.client import mcp_manager

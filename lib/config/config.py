@@ -13,6 +13,7 @@ class Config:
         Config.conf = {}
         Config._loadConfFile(file_path="config/config.json", jsonformat_path="lib/_references/config.schema.json")
 
+    #Récupération d'une clé de configuration (peut être une clé composée ex. cle.souscle)
     @staticmethod
     def get(key: str, default=_MISSING):
         node = Config.conf
@@ -24,6 +25,7 @@ class Config:
             node = node[part]
         return node
 
+    #Chargement fichier de configuration
     @staticmethod
     def _loadConfFile(file_path:str, jsonformat_path:str = None):
         with open(file_path, encoding='utf-8') as f:
@@ -46,4 +48,4 @@ class StaticConfig:
     
     @staticmethod
     def versionName():
-        return "Abyss (beta)"
+        return "Abyss"

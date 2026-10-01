@@ -4,18 +4,7 @@ import resource
 import signal
 import threading
 
-"""
-Sandbox — Exécution d'une fonction dans un sous-processus isolé, avec limites de mémoire, de CPU et de durée
-Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 
-Utilisé pour les traitements de fichiers non fiables (extraction de texte des pièces jointes : PDF, Office...) :
-un fichier piégé (bombe de décompression, PDF pathologique) ne peut épuiser que les ressources du sous-processus,
-qui est tué au besoin, sans affecter le serveur. Un thread, lui, ne peut être ni limité ni interrompu.
-
-Contexte "forkserver" : les sous-processus sont forkés depuis un serveur qui ne porte ni threads ni état du
-serveur principal (pas de fork d'un processus multi-thread), avec les modules d'extraction préchargés
-(cf. init) pour ne pas payer leur import à chaque appel. Linux uniquement.
-"""
 
 _CONTEXT = multiprocessing.get_context("forkserver")
 
@@ -24,15 +13,28 @@ class SandboxError(Exception):
     pass
 
 
+"""
+Sandbox — Exécution d'une fonction dans un sous-processus isolé, avec limites de mémoire, de CPU et de durée
+Utilisé pour les traitements de fichiers non fiables (extraction de texte des pièces jointes : PDF, Office...) :
+un fichier piégé (bombe de décompression, PDF pathologique) ne peut épuiser que les ressources du sous-processus,
+qui est tué au besoin, sans affecter le serveur. Un thread, lui, ne peut être ni limité ni interrompu.
+
+Contexte "forkserver" : les sous-processus sont forkés depuis un serveur qui ne porte ni threads ni état du
+serveur principal (pas de fork d'un processus multi-thread), avec les modules d'extraction préchargés
+(cf. init) pour ne pas payer leur import à chaque appel. Linux uniquement.
+
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class Sandbox:
-    #Nombre maximal de sous-processus simultanés (les appels suivants attendent leur tour) : borne la mémoire totale
-    _slots = threading.BoundedSemaphore(4)
+    #Nombre maximal de sous-processus simultanés (les appels suivants attendent leur tour) : borne la mémoire totale.
+    #Défini par init() (clé de configuration security.sandbox_max_process)
+    _slots: threading.BoundedSemaphore | None = None
 
     #À appeler au démarrage, avant la première exécution :
     #  - modules      : modules préchargés dans le serveur de fork
     #  - max_concurrent : nombre maximal de sous-processus simultanés
     @staticmethod
-    def init(modules: list[str], max_concurrent: int = 4) -> None:
+    def init(modules: list[str], max_concurrent: int) -> None:
         _CONTEXT.set_forkserver_preload(modules)
         Sandbox._slots = threading.BoundedSemaphore(max_concurrent)
 
@@ -47,6 +49,8 @@ class Sandbox:
 
     @staticmethod
     def _runBlocking(func, args: tuple, timeout: float, max_memory_mb: int, max_cpu: int):
+        if Sandbox._slots is None:
+            raise SandboxError("Sandbox non initialisée : appeler Sandbox.init() au démarrage")
         with Sandbox._slots:
             return Sandbox._runProcess(func, args, timeout, max_memory_mb, max_cpu)
 

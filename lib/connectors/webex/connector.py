@@ -1,10 +1,10 @@
 import json
 from fastapi import APIRouter, BackgroundTasks, Header, Request, HTTPException
-from lib.connectors.connector import Connector
 from lib.connectors.webex.webexbot import WebexBot
 from lib.connectors.webex.webhook import WebexWebhookHandler
 from lib.config.config import Config
 from lib.agent.agent import Agent
+from lib.connectors._abstract import Connector
 
 """
 WebexConnector — connecteur agent pour Webex

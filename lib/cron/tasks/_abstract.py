@@ -1,13 +1,17 @@
 from datetime import datetime
-
+from abc import ABC, abstractmethod
 from lib.log.logger import Logger, INFO, ERROR, OK
 
 """
 CronTask — Classe parente d'une tâche CRON
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
-class CronTask():
+class CronTask(ABC):
+    #---------------------------------------------------------------------------------------------------------
+    #Méthodes généralistes
+
     def __init__(self, className:str, config:dict):
+        super().__init__()
         self.className = className
 
         if "time" not in config:
@@ -27,23 +31,28 @@ class CronTask():
         Logger.write(f"[CronTask {self.className}] {str(text)}", ERROR)
         raise Exception(f"[CronTask {self.className}] {str(text)}")
 
-    #Execution de la tâche
-    async def run(self):
-        self.log(text="Run", type=OK)
-
     #Test si la tâche doit être executée
     def testExecution(self, timestamp:int) -> bool:
         dt = datetime.fromtimestamp(timestamp)
         return self._matchField(field="minute", value=dt.minute) and self._matchField(field="hour", value=dt.hour)
-
+    
     def _matchField(self, field:str, value:int) -> bool:
         if field not in self.time:
             return True
-
+    
         rule = self.time[field]
         if rule == "*":
             return True
         if isinstance(rule, str) and rule.startswith("/"):
             return value % int(rule[1:]) == 0
         return int(rule) == value
+
+    #---------------------------------------------------------------------------------------------------------
+    #Interface
+
+    #Execution de la tâche
+    async def run(self): ...
+
+
+    
         

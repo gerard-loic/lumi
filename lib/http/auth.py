@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import functools
 from concurrent.futures import ThreadPoolExecutor
-from lib.services.services import ServiceManager
+from lib.services.servicemanager import ServiceManager
 from lib.config.config import Config
 import secrets
 from lib.log.logger import Logger, ERROR, WARNING
@@ -20,19 +20,18 @@ from lib.utils.jwt import Jwt
 _AUTH_EXECUTOR = ThreadPoolExecutor(max_workers=8, thread_name_prefix="lumi-auth")
 
 """
-Auth — Gestion de l'authentification sur l'agent
+Auth — Gestion de l'authentification sur l'agent via Websockets
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Auth:
-    #Taille minimale du secret de signature des tokens (HS256 : 256 bits)
-    _MIN_SECRET_LENGTH = 32
-
     #Vérifie la configuration de l'authentification au démarrage : un secret vide ou court permettrait de forger des tokens
     @staticmethod
     def init():
+        #Taille minimale du secret de signature des tokens (HS256 : 256 bits)
+        min_length = Config.get(key="security.min_secret_length", default=32)
         secret = Config.get(key="authentication.jwt_secret", default="")
-        if not isinstance(secret, str) or len(secret) < Auth._MIN_SECRET_LENGTH:
-            raise Exception(f"[AUTH] authentication.jwt_secret must be at least {Auth._MIN_SECRET_LENGTH} characters long")
+        if not isinstance(secret, str) or len(secret) < min_length:
+            raise Exception(f"[AUTH] authentication.jwt_secret must be at least {min_length} characters long")
 
     #S'authentifier : `authorization` est de la forme {"<service>": {...}, ...}. L'authentification auprès du
     #service principal (authentication.service) est obligatoire ; celle des autres services présents est
@@ -119,15 +118,13 @@ class Auth:
 
 
 """
-AuthRateLimiter — Limitation du nombre de requêtes d'authentification par IP cliente (fenêtre glissante d'une minute)
-Limite : authentication.max_auth_requests_minute (défaut 10, -1 : désactivé).
+AuthRateLimiter — Limitation du nombre de requêtes d'authentification par IP cliente (fenêtre glissante)
+Limite : authentication.max_auth_requests_minute (défaut 10, -1 : désactivé) par fenêtre de security.auth_rate_window secondes (défaut 60).
 Derrière un reverse proxy, l'IP cliente n'est la bonne que si uvicorn est lancé avec --proxy-headers
 (et --forwarded-allow-ips) : sinon toutes les requêtes semblent venir du proxy et partagent la même limite.
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class AuthRateLimiter:
-    _WINDOW = 60.0
-    _MAX_TRACKED_IPS = 10_000           # Au-delà, purge des IP inactives (borne la mémoire)
     _requests: dict[str, list[float]] = {}
 
     #Enregistre une tentative pour `ip`. Renvoie False si la limite est atteinte (tentative non comptée).
@@ -137,13 +134,16 @@ class AuthRateLimiter:
         if limit is None or limit == -1:
             return True
 
+        window = Config.get("security.auth_rate_window", 60)
+        max_tracked_ips = Config.get("security.auth_rate_max_tracked_ips", 10_000)   # Au-delà, purge des IP inactives (borne la mémoire)
+
         now = time.time()
-        if len(AuthRateLimiter._requests) > AuthRateLimiter._MAX_TRACKED_IPS:
+        if len(AuthRateLimiter._requests) > max_tracked_ips:
             AuthRateLimiter._requests = {
-                k: v for k, v in AuthRateLimiter._requests.items() if v and now - v[-1] < AuthRateLimiter._WINDOW
+                k: v for k, v in AuthRateLimiter._requests.items() if v and now - v[-1] < window
             }
 
-        timestamps = [t for t in AuthRateLimiter._requests.get(ip, []) if now - t < AuthRateLimiter._WINDOW]
+        timestamps = [t for t in AuthRateLimiter._requests.get(ip, []) if now - t < window]
         if len(timestamps) >= limit:
             AuthRateLimiter._requests[ip] = timestamps
             return False

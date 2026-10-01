@@ -4,10 +4,11 @@ from typing import AsyncGenerator
 from lib.mcp.client import mcp_manager, MCPToolError
 from lib.mcp.toolloader import MCPTool
 from lib.agent.events import TokenEvent, DoneEvent, ToolEvent, ThinkingEvent, ErrorEvent, ConfirmationEvent, ConfirmationRefusedEvent, FollowUpEvent, RagEvent
+from lib.agent.eventshelper import RagAccumulator
 from lib.rag.attachmentretriever import AttachmentRetriever
 from lib.log.logger import Logger, ERROR, OK, WARNING
 from lib.files.localdata import LocalData
-from lib.agent.filters.llmfilter import LLMFilterManager
+from lib.agent.filtershelper import LLMFilterManager
 import datetime
 from lib.utils.dynamicimport import DynamicImport
 from lib.agent.profile import ProfileManager, Profile
@@ -15,50 +16,6 @@ from lib.localization.traduction import Traduction
 from lib.utils.uuid import Uuid
 from lib.process.processmanager import ProcessManager
 from lib.process.process import Process
-
-#Accumule un événement RAG (source dédoublonnée, pages fusionnées) plutôt que de l'émettre immédiatement :
-#le LLM peut appeler l'outil de recherche RAG plusieurs fois (ou combiner pré-recherche sur pièces jointes et
-#outil RAG) pour une même réponse, ce qui produirait sinon des citations dupliquées/entrelacées avec les tokens
-#de la réponse. Retourne True si l'événement a été absorbé (événement de type "rag"), False sinon.
-def _accumulate_rag_event(rag_sources: dict, raw_event: str) -> bool:
-    try:
-        data = json.loads(raw_event)
-    except (TypeError, ValueError):
-        return False
-    if data.get("type") != "rag":
-        return False
-    entry = rag_sources.setdefault(data["source"], {"locations": [], "url": None})
-    for loc in data.get("locations") or []:
-        if loc not in entry["locations"]:
-            entry["locations"].append(loc)
-    if data.get("url") and not entry["url"]:
-        entry["url"] = data["url"]
-    return True
-
-#Construit les événements RAG groupés à partir de l'accumulateur, une fois la réponse prête
-def _rag_events_from(rag_sources: dict) -> list:
-    return [RagEvent.get(source=source, locations=data["locations"], url=data["url"]) for source, data in rag_sources.items()]
-
-#Met en forme le contenu des pièces jointes (résultats d'AttachmentRetriever.retrieve) à placer en tête du message
-#utilisateur : extraits les plus pertinents, ou contenu complet (full=True)
-def _format_attachment_context(results: list[dict], full: bool = False) -> str:
-    blocks = []
-    for r in results:
-        label = f"[{'Contenu' if full else 'Extrait'} de {r['filename']}" + (f", page {r['page']}" if r.get("page") else "") + "]"
-        blocks.append(f"{label}\n{r['text']}")
-    return "\n\n".join(blocks) + "\n\n"
-
-#Consigne système décrivant les pièces jointes fournies dans le message (`intro` : phrase qui présente les fichiers)
-def _attachment_instructions(intro: str, filenames: str, full: bool) -> str:
-    if full:
-        return f"\n\n{intro} : {filenames}. Leur contenu complet est fourni ci-dessous dans le message."
-    return f"\n\n{intro} : {filenames}. Les extraits les plus pertinents sont déjà fournis ci-dessous dans le message ; si l'outil search_attached_files est disponible, utilise-le si tu as besoin de chercher autre chose dans ces fichiers."
-
-#Citations (RagEvent) des pièces jointes utilisées : pages des extraits retenus, ou fichier entier (sans page) en contenu complet
-def _attachment_citations(results: list[dict], full: bool) -> dict[str, list[int]]:
-    if full:
-        return {filename: [] for filename in dict.fromkeys(r["filename"] for r in results)}
-    return AttachmentRetriever.group_pages_by_file(results)
 
 """
 Agent — Agent d'orchestration / communication LLM
@@ -69,6 +26,7 @@ Stratégie :
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Agent:
+    #Constructeur d'un agent. Connector:la classe llmConnecteor utilisée, profile:le profile utilisé
     def __init__(self, connector:str, profile:Profile):
         self.profile = profile
 
@@ -98,6 +56,7 @@ class Agent:
         if not self._connector.has_tools():
             self._system += "\n\nAucun outil n'est disponible dans ce contexte : ne mentionne, ne simule et n'invoque jamais un appel d'outil, quelles que soient les autres consignes ci-dessus. Réponds uniquement à partir de la conversation, ou indique que tu n'as pas accès à cette information."
 
+        #Configuration issue du profile
         self._MAX_TOOL_ITERATIONS          = self.profile.getConfigValue(key="mcp.max_tool_iterations", default=10)
         self._MEMORY_MESSAGES              = self.profile.getConfigValue(key="llm.memory_messages", default=5)
         self._EMPTY_LLM_RESPONSE_MAX_RETRY = self.profile.getConfigValue(key="llm.empty_llm_response_max_retry", default=2)
@@ -112,6 +71,7 @@ class Agent:
 
     """
     Tour de conversation dans une session (process racine portant un AgentContext : session HTTP ou Webex)
+    exclude_restricted : exclut les outils tagués avec le décorateur @restricted_tool
     """
     async def chatStream(self, message: str, session: Process, exclude_restricted: bool = False) -> AsyncGenerator[str, None]:
         #On filtre le message entrant (application des filtres selon les filtres actifs dans la conf)
@@ -131,12 +91,12 @@ class Agent:
 
         #Accumulateur des événements RAG de tout le tour de conversation (pré-recherche pièces jointes +
         #tool calls, sur toutes les itérations) : émis groupés une fois la réponse finale prête (voir plus bas)
-        rag_sources: dict = {}
+        rag_sources = RagAccumulator()
 
         #Connexions aux serveurs MCP externes en auth "session" pour ce tour (cf.
         #MCPClientManager.open_session_external_tools) — tenues dans `turn_stack` et refermées dans le
         #`finally` ci-dessous, dans la même tâche asyncio que celle qui les a ouvertes (contrainte des
-        #transports MCP, cf. docstring de open_session_external_tools).
+        #transports MCP).
         turn_stack = AsyncExitStack()
         #Process du tour, enfant de la session : accessible via ProcessManager.getCurrent() par tout code exécuté
         #pendant ce tour (tool calls MCP internes, filtres...). Wallet, fichiers et contexte agent sont lus sur la session.
@@ -160,6 +120,7 @@ class Agent:
                 #on ne compte pas sur le LLM pour décider d'appeler search_attached_files en premier) : texte complet ou
                 #extraits du micro-RAG selon attachments.mode (cf. AttachmentRetriever.retrieve). Le tool reste disponible
                 #pour que le modèle affine sa recherche avec une autre requête si besoin.
+                #@TODO : comportement à modifier
                 attachments = agent_ctx.getAttachments()
                 if attachments:
                     filenames = ", ".join(a["filename"] for a in attachments)
@@ -177,12 +138,12 @@ class Agent:
                         Logger.write(f"[AGENT] Attachment search failed : {str(e)}", type=ERROR)
                         results, full = [], False
 
-                    system += _attachment_instructions("Fichiers joints par l'utilisateur à cette conversation", filenames, full)
+                    system += AttachmentRetriever.instructions("Fichiers joints par l'utilisateur à cette conversation", filenames, full)
                     if results:
-                        file_context = _format_attachment_context(results, full)
+                        file_context = AttachmentRetriever.format_context(results, full)
 
-                        for filename, pages in _attachment_citations(results, full).items():
-                            _accumulate_rag_event(rag_sources, RagEvent.get(source=filename, locations=pages))
+                        for filename, pages in AttachmentRetriever.citations(results, full).items():
+                            rag_sources.add(RagEvent.get(source=filename, locations=pages))
 
             user_content = f"{file_context}{message}" if file_context else message
 
@@ -323,7 +284,7 @@ class Agent:
                     yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="OK")
 
                     for event in tool_events:
-                        if not _accumulate_rag_event(rag_sources, event):
+                        if not rag_sources.add(event):
                             yield event
 
                     # Interception des actions spéciales — le LLM n'est pas rappelé
@@ -407,7 +368,7 @@ class Agent:
 
             #Emission groupée des citations RAG accumulées pendant tout le tour (dédoublonnées par source),
             #une fois la réponse finale prête plutôt qu'au fil des tool calls
-            for rag_event in _rag_events_from(rag_sources):
+            for rag_event in rag_sources.events():
                 yield rag_event
 
             #On construit la chaine complète depuis les tokens
@@ -478,9 +439,9 @@ class Agent:
                 filenames = ", ".join(a["filename"] for a in attachments)
                 results, full = await AttachmentRetriever().retrieve(attachment_query or prompt, mode=attachment_mode, top_k=attachment_top_k, max_tokens=attachment_max_tokens)
                 Logger.write(f"[AGENT {self.profile.getName()}] Attachments ({filenames}) : {'full text' if full else f'{len(results)} excerpt(s)'}")
-                system += _attachment_instructions("Fichiers joints à cette demande", filenames, full)
+                system += AttachmentRetriever.instructions("Fichiers joints à cette demande", filenames, full)
                 if results:
-                    file_context = _format_attachment_context(results, full)
+                    file_context = AttachmentRetriever.format_context(results, full)
 
             messages = [
                 {"role": "system", "content": system},
@@ -611,7 +572,10 @@ class Agent:
         return questions[:self._FOLLOWUP_COUNT]
 
 
-
+"""
+AgentManager — Gestionnaire d'agents
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class AgentManager:
     @staticmethod
     def init():

@@ -2,7 +2,7 @@ from contextlib import AsyncExitStack
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.client.sse import sse_client
-from lib.services.services import Service
+from lib.services._abstract import Service
 
 """
 MCPExternalService — Service représentant un serveur MCP externe (distant, HTTP/SSE).

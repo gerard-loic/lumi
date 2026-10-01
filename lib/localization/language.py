@@ -95,7 +95,7 @@ class Language:
         self._translations = {}
         self._loadLanguageFiles()
 
-
+    #Chargement des fichiers de langue
     def _loadLanguageFiles(self):
         #Chargement des fichiers de language de base
         basePath = Config.get("directories.languages_dir")
@@ -109,18 +109,21 @@ class Language:
         for filePath in languagePath.glob("*.json"):
             self._loadLanguageFile(basePath, filePath.stem)
             
-
+    #Chargement d'un fichier de langue
     def _loadLanguageFile(self, folder:str, fileName:str):
         filePath = Path(f"{folder}/{self._code}/{fileName}.json")
         with filePath.open(encoding="utf-8") as f:
             self._translations.update(json.load(f))
 
+    #Retourne le code de la langue
     def getCode(self)->str:
         return self._code
 
+    #Retourne le nom de la langue
     def getName(self)->str:
         return self._name
 
+    #Retourne une traduction
     def getTraduction(self, code:str)->str:
         if code in self._translations:
             return self._translations[code]
@@ -143,12 +146,14 @@ class LanguageManager:
 
         Logger.write(f"[LanguageManager] {len(LanguageManager._languages)} languages loaded", OK)
 
+    #Retourne si un language existe
     @staticmethod
     def languageExists(code:str)->bool:
         if code in LanguageManager._languages:
             return True
         return False
 
+    #Retourne un language
     @staticmethod
     def getLanguage(code:str)->Language:
         if code in LanguageManager._languages:

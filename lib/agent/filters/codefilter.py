@@ -1,5 +1,5 @@
 import re
-from lib.agent.filters.llmfilter import LLMFilter
+from lib.agent.filters._abstract import LLMFilter
 from lib.log.logger import Logger
 """
 CodeFilter — Filtre utilisé en entrée LLM pour filtrer du code éventuellement transmis par le client
@@ -35,7 +35,6 @@ class CodeFilter(LLMFilter):
         super().__init__(configuration)
 
     def filter(self, text = ""):
-        text = super().filter(text)
         text = self._FENCED_BLOCK.sub('', text)
         text = self._INLINE_CODE.sub('', text)
         text = self._CODE_LINE.sub('', text)

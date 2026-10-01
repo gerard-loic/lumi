@@ -1,4 +1,4 @@
-from lib.services.services import ServiceManager
+from lib.services.servicemanager import ServiceManager
 
 """
 Wallet — Authentifications aux services portées par un process racine (cf. Process.getWallet)

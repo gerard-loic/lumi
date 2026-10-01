@@ -1,7 +1,7 @@
 import io
 import os
 
-from lib.pipelines.block import Block
+from lib.pipelines._abstract import Block
 from lib.pipelines.pipelinecontext import PipelineContext
 from lib.pipelines.utils.filesource import resolve_file_source, FileSourceError
 from lib.pipelines.utils.tabular import build_records, to_output

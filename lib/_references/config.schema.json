@@ -25,6 +25,7 @@
                 "allowed_cors_headers": { "$ref": "#/$defs/stringList" },
                 "url": { "type": "string" },
                 "ws_inactivity_timeout": { "type": "integer", "minimum": 0, "description": "Secondes" },
+                "max_request_body_mb": { "type": "number", "exclusiveMinimum": 0, "description": "Taille max du corps d'une requête HTTP (Mo)" },
                 "default_language": { "$ref": "#/$defs/language" },
                 "admin_users": {
                     "type": "array",
@@ -51,7 +52,8 @@
                 "jwt_algorithm": {
                     "enum": ["HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512", "EdDSA"]
                 },
-                "session_duration": { "type": "integer", "minimum": 1, "description": "Secondes" }
+                "session_duration": { "type": "integer", "minimum": 1, "description": "Secondes" },
+                "max_auth_requests_minute": { "$ref": "#/$defs/limit", "description": "Requêtes POST /auth max par IP et par fenêtre (security.auth_rate_window), -1 = illimité" }
             }
         },
 
@@ -97,6 +99,29 @@
                 "max_tokens_month": { "$ref": "#/$defs/limit" },
                 "max_requests_month": { "$ref": "#/$defs/limit" },
                 "max_requests_minute": { "$ref": "#/$defs/limit" }
+            }
+        },
+
+        "security": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "sandbox_max_process": { "type": "integer", "minimum": 1, "description": "Nombre max de process sandbox simultanés" },
+                "min_secret_length": { "type": "integer", "minimum": 1 },
+                "auth_rate_window": { "type": "integer", "minimum": 1, "description": "Secondes" },
+                "auth_rate_max_tracked_ips": { "type": "integer", "minimum": 1 },
+                "multipart_overhead_mb": { "type": "number", "minimum": 0 }
+            }
+        },
+
+        "extraction": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "timeout": { "type": "integer", "minimum": 1, "description": "Secondes (aussi limite de temps CPU)" },
+                "max_memory_mb": { "type": "integer", "minimum": 1 },
+                "max_uncompressed_mb": { "type": "integer", "minimum": 1 },
+                "max_archive_entries": { "type": "integer", "minimum": 1 }
             }
         },
 
@@ -307,7 +332,7 @@
             "type": "object",
             "required": ["connector"],
             "properties": {
-                "connector": { "enum": ["LiteLLM", "Cerebras", "DigitalOcean"] },
+                "connector": { "enum": ["LiteLLM", "Cerebras", "DigitalOcean", "Llama"] },
                 "system_prompt_file": { "type": "string" },
                 "system_prompt": { "type": "string" },
                 "memory_messages": { "type": "integer", "minimum": 0 },
@@ -328,7 +353,8 @@
                 },
                 "LiteLLM": { "$ref": "#/$defs/llmConnector" },
                 "Cerebras": { "$ref": "#/$defs/llmConnector" },
-                "DigitalOcean": { "$ref": "#/$defs/llmConnector" }
+                "DigitalOcean": { "$ref": "#/$defs/llmConnector" },
+                "Llama": { "$ref": "#/$defs/llmConnectorOptionalKey" }
             },
             "additionalProperties": false,
             "anyOf": [
@@ -347,6 +373,10 @@
                 {
                     "if": { "properties": { "connector": { "const": "DigitalOcean" } } },
                     "then": { "required": ["DigitalOcean"] }
+                },
+                {
+                    "if": { "properties": { "connector": { "const": "Llama" } } },
+                    "then": { "required": ["Llama"] }
                 }
             ]
         },
@@ -355,6 +385,18 @@
             "type": "object",
             "additionalProperties": false,
             "required": ["model", "api_base", "api_key"],
+            "properties": {
+                "model": { "type": "string" },
+                "api_base": { "type": "string" },
+                "api_key": { "type": "string" }
+            }
+        },
+
+        "llmConnectorOptionalKey": {
+            "description": "Connecteur dont l'API peut ne pas exiger de clé (ex. serveur llama.cpp / Ollama local)",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["model", "api_base"],
             "properties": {
                 "model": { "type": "string" },
                 "api_base": { "type": "string" },

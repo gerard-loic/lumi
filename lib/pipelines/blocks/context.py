@@ -1,4 +1,4 @@
-from lib.pipelines.block import Block
+from lib.pipelines._abstract import Block
 from lib.pipelines.pipelinecontext import PipelineContext
 
 #Bloc Context : injecte des valeurs statiques dans le contexte du pipeline.

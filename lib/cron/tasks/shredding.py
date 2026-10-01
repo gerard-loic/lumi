@@ -2,7 +2,7 @@ import os
 import re
 from datetime import datetime
 
-from lib.cron.tasks.crontask import CronTask
+from lib.cron.tasks._abstract import CronTask
 from lib.config.config import Config
 
 _LOG_FILE_RE = re.compile(r"^(\d{8})\.log$")

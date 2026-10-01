@@ -3,6 +3,10 @@ import time
 import random
 import uuid
 
+"""
+Uuid — Utilitaire de gestion de clés uniques
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class Uuid:
     @staticmethod
     def getUuid()->str:

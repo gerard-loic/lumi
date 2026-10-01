@@ -2,31 +2,21 @@ from openai import AsyncOpenAI
 from lib.mcp.client import mcp_manager
 from lib.files.localdata import LocalData
 from lib.process.processmanager import ProcessManager
+from lib.agent.llmconnector._abstract import LLMConnector
 
 """
 Llama — Gestion communication modèle LLM Llama via une API compatible OpenAI
 (Meta Llama API : https://api.llama.com/compat/v1, llama.cpp server / Ollama en local : http://localhost:8080/v1 ...)
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
-class Llama:
+class Llama(LLMConnector):
     def __init__(self, config:dict, tools_enabled:list=None):
-        self._model    = config["model"]
+        super().__init__(config=config, tools_enabled=tools_enabled)
         #api_key optionnelle : un serveur local (llama.cpp, Ollama) n'en demande pas, mais le client OpenAI exige une valeur non vide
-        self._client   = AsyncOpenAI(base_url=config["api_base"], api_key=config.get("api_key") or "none")
-        self._tools_enabled        = tools_enabled
-        self._tools               = mcp_manager.tools_as_openai_format(exclude_restricted=False, tools_enabled=tools_enabled)
-        self._tools_no_restricted = mcp_manager.tools_as_openai_format(exclude_restricted=True, tools_enabled=tools_enabled)
+        self._client = AsyncOpenAI(base_url=self._api_base, api_key=self._api_key or "none")
 
         print(f"[Agent Llama] {len(self._tools)} Loaded MCP tools : {[t['function']['name'] for t in self._tools]}")
 
-    #Indique si au moins un outil est disponible pour ce profil (utilisé pour adapter le prompt système)
-    def has_tools(self) -> bool:
-        return bool(self._tools)
-
-    #Retourne un résumé texte (nom + description) des outils réellement disponibles, pour grounder des appels LLM annexes (ex: follow-up)
-    def tools_summary(self, exclude_restricted: bool = False) -> str:
-        tools = self._tools_no_restricted if exclude_restricted else self._tools
-        return "\n".join(f"- {t['function']['name']} : {t['function'].get('description', '')}" for t in tools)
 
     #Enregistrement des tokens utilisés pour la session courante
     def _logUsage(self, usage):

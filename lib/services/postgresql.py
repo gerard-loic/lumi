@@ -3,7 +3,7 @@ import psycopg2
 import psycopg2.extras
 from psycopg2 import sql
 from lib.config.config import Config
-from lib.services.services import Service
+from lib.services._abstract import Service
 
 #CREATE EXTENSION IF NOT EXISTS pg_trgm
 #CREATE EXTENSION IF NOT EXISTS vector

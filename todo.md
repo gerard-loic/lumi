@@ -1,48 +1,9 @@
-Version ABYSS : 
-- [x] Gestion d'un fallback de font pour les PDF
-- [x] Création de pipelines
-- [x] Suivi des pipelines
-- [x] Support connecteur LLM DigitalOcean 
-- [x] Support connecteur LLM Cerebras
-- [x] Support connecteur Llama
-- [x] Dans Embedder liaison dynamique / gestion différentiée des providers
-- [ ] Documentation spécifique sur l'écriture des fichiers de configuration avec options
-- [ ] Revue des logs
-- [x] Vérificateur de format des fichiers de configuration
-- [x] Modification de la gestion de l'authentification => conteneur d'authentifications
-- [x] Correctif sécurité service d'auth ?
-- [x] Bloc : conditionnelle (Condition) - [ ] switch
-- [x] Bloc : sleep
-- [x] Bloc : Loop
-- [x] Bloc : DataView
-- [x] Bloc : csvformat (CsvReader)
-- [x] Bloc : xmlformat
-- [x] Bloc : filereader (TxtReader)
-- [x] Bloc : ExcelReader
-- [x] Bloc : filedelete
-- [x] Bloc : filemove
-- [x] Bloc : FileExists
-- [x] Bloc : webexNotification
-- [x] Bloc : MicroRag
-- [x] Bloc : apiGet
-- [x] Bloc : apiPost
-- [x] Bloc : apiPut
-- [x] Bloc : apiDelete
-- [x] Bloc : pythonScript
-- [x] Bloc : filewriter
-- [x] Bloc : serviceMethod
-- [x] Revoir le readme -> prévoir une documentation sur l'écriture d'un pipeline + une documentation sur la configuration
-- [x] Log in out de chaque bloc
-- [ ] Delestage à revoir
-- [x] Système de trousseau d'authentification
-- [x] Correctifs de sécurité
-- [x] Refonte du gestionnaire d'authentification et de processus
-- [ ] MAJ README + README PIPELINES
-- [ ] Revue de code
-- [ ] Finalisation de la version
-- [x] Revue de sécurité
+
 
 BACKLOG
+- [ ] Delestage à revoir
+- [ ] Revue des logs
+- [ ] Optimisation du microRag
 - [ ] Support autres connecteurs ?
 - [ ] API statistiques détaillées (usage / pipeline)
 - [ ] Modification des pipelines à la volée
@@ -244,7 +205,49 @@ Version WAVE :
 - [x] Version
 - [x] Readme
 - [x] Optimisation pour déploiement Docker
-------------
+
+Version ABYSS : 
+- [x] Gestion d'un fallback de font pour les PDF
+- [x] Création de pipelines
+- [x] Suivi des pipelines
+- [x] Support connecteur LLM DigitalOcean 
+- [x] Support connecteur LLM Cerebras
+- [x] Support connecteur Llama
+- [x] Dans Embedder liaison dynamique / gestion différentiée des providers
+- [x] Documentation spécifique sur l'écriture des fichiers de configuration avec options
+- [x] Vérificateur de format des fichiers de configuration
+- [x] Modification de la gestion de l'authentification => conteneur d'authentifications
+- [x] Correctif sécurité service d'auth ?
+- [x] Bloc : conditionnelle (Condition) - [ ] switch
+- [x] Bloc : sleep
+- [x] Bloc : Loop
+- [x] Bloc : DataView
+- [x] Bloc : csvformat (CsvReader)
+- [x] Bloc : xmlformat
+- [x] Bloc : filereader (TxtReader)
+- [x] Bloc : ExcelReader
+- [x] Bloc : filedelete
+- [x] Bloc : filemove
+- [x] Bloc : FileExists
+- [x] Bloc : webexNotification
+- [x] Bloc : MicroRag
+- [x] Bloc : apiGet
+- [x] Bloc : apiPost
+- [x] Bloc : apiPut
+- [x] Bloc : apiDelete
+- [x] Bloc : pythonScript
+- [x] Bloc : filewriter
+- [x] Bloc : serviceMethod
+- [x] Revoir le readme -> prévoir une documentation sur l'écriture d'un pipeline + une documentation sur la configuration
+- [x] Log in out de chaque bloc
+- [x] Système de trousseau d'authentification
+- [x] Correctifs de sécurité
+- [x] Refonte du gestionnaire d'authentification et de processus
+- [x] MAJ README + README PIPELINES
+- [x] Revue de code
+- [x] Finalisation de la version
+- [x] Revue de sécurité
+
 
 Installer cloudflared
 

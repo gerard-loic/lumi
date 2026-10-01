@@ -4,49 +4,6 @@ from lib.agent.agent import Agent, AgentManager
 from lib.agent.profile import ProfileManager
 from lib.utils.dynamicimport import DynamicImport
 
-"""
-Connector — Classe parente d'un connecteur d'agent
-Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
-"""
-class Connector:
-    _config = {}
-    _started = False
-    _name = None
-
-    def __init__(self, name:str, agent:Agent, config:dict={}, profile:str=None):
-        self._config = config
-        self._name = name
-        self._agent = agent
-        self._profile = profile
-
-    #Démarre le connecteur
-    async def start(self):
-        Logger.write(text=f"[Connector {self._name}] started", type=OK)
-        self._started = True
-
-    #Arrête le connecteur
-    async def stop(self):
-        Logger.write(text=f"[Connector {self._name}] stopped", type=WARNING)
-        self._started = False
-
-    #Retourne les routes additionnelles pour le routeur
-    def get_router(self):
-        return None
-
-    #Retourne une valeur de configuration
-    def getConfValue(self, key:str):
-        if key not in self._config:
-            self.raiseException(message=f"[Connector {self._name}] Config key {key} does not exist")
-        else:
-            return self._config[key]
-
-    def raiseException(self, message:str):
-        Logger.write(text=f"[Connector {self._name}] {message}", type=ERROR)
-        raise Exception(f"[Connector {self._name}] {message}")
-    
-    def log(self, message):
-        Logger.write(text=f"[Connector {self._name}] {str(message)}")
-
 
 """
 ConnectorManager — Gestion des connecteurs d'agent

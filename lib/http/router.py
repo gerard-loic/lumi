@@ -1,4 +1,5 @@
 import asyncio
+import traceback
 from fastapi import APIRouter, HTTPException, Header, Request, UploadFile, File, Depends, WebSocket, WebSocketDisconnect, Query
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -7,11 +8,10 @@ from typing import Optional
 from lib.http.models import ToolInfo, AuthRequest, PipelineStartResponse, PipelineInfoRequest, PipelineInfoResponse, PipelineStepInfoRequest, PipelineStepInfoResponse, PipelineStartRequest, PipelineStartBody, HealthResponse, UsageResponse, AuthResponse, RagAddDocumentResponse, RagIndexRequest, RagDeleteDocumentRequest, RagDeleteCollectionRequest, RagStatResponse, RagDeleteCollectionResponse, RagDeleteDocumentResponse, FileUploadResponse, AuthSessionResponse
 from lib.http.auth import Auth, AdminAuth, AuthRateLimiter
 from lib.process.processmanager import ProcessManager
-from lib.files.filestore import FileStore
 from lib.files.ragstore import RagStore
 from lib.mcp.client import mcp_manager
 from lib.mcp.toolloader import ToolLoader, MCPTool
-from lib.services.services import ServiceManager
+from lib.services.servicemanager import ServiceManager
 from lib.log.logger import Logger, ERROR, WARNING
 from lib.config.config import Config, StaticConfig
 from lib.rag.raghelper import RagHelper
@@ -21,13 +21,11 @@ from lib.agent.events import ErrorEvent
 from lib.rag.attachement import Attachement
 from lib.agent.profile import ProfileManager
 from lib.agent.agent import AgentManager
-from lib.localization.language import LanguageManager, Language
+from lib.localization.language import LanguageManager
 from lib.localization.traduction import Traduction
 from lib.pipelines.pipelinemanager import PipelineManager
-from lib.pipelines.pipelinerunner import PipelineRunner
-from lib.pipelines.pipeline import Pipeline
 from lib.pipelines.pipelineinfo import PipelineInfo
-from lib.pipelines.trigger import triggerEvent, TRIGGER_API_CALL
+from lib.pipelines.triggerevent import TriggerEvent, TRIGGER_API_CALL
 
 _rag_basic_auth = HTTPBasic()
 _rag_basic_auth_optional = HTTPBasic(auto_error=False)
@@ -289,14 +287,14 @@ class Router:
                             #Cas de déconnexion client. On termine silencieusement
                             pass
                         except Exception as e:
-                            Logger.write(f"[HTTP] [WS] ws_chat — Streaming error: {e}", type=ERROR)
+                            Logger.write(f"[HTTP] [WS] ws_chat — Streaming error: {e}\n{traceback.format_exc()}", type=ERROR)
 
                     active_stream = asyncio.create_task(_stream())
 
         except WebSocketDisconnect:
             Logger.write("[HTTP] [WS] ws_chat — Client disconnected", type=WARNING)
         except Exception as e:
-            Logger.write(f"[HTTP] [WS] ws_chat — Unexpected error : {e}", type=ERROR)
+            Logger.write(f"[HTTP] [WS] ws_chat — Unexpected error : {e}\n{traceback.format_exc()}", type=ERROR)
         finally:
             self._active_ws -= 1
             session.releaseCnx()
@@ -592,6 +590,18 @@ class Router:
             Logger.write(f"[HTTP] [500] rag_delete_collection — {str(e)}", type=ERROR)
             raise HTTPException(status_code=500, detail=str(e))
 
+    """
+    Route [POST] /pipeline/{pipeline}/start : démarre un pipeline (trigger de type TRIGGER_API_CALL)
+    Le lancement est asynchrone : la route rend la main dès que le process est créé,
+    l'avancement se suit ensuite via [GET] /pipeline/process/{process_uid}.
+    Auth    : Basic admin
+    Entrée  : pipeline (path)            — identifiant du pipeline (dossier custom_pipelines/{pipeline}/pipeline.json)
+              PipelineStartBody (JSON, optionnel)
+                payload (dict, optionnel) — données transmises au pipeline, accessibles dans le contexte sous "trigger.data"
+    Sortie  : PipelineStartResponse { pipelines[] { pipeline_uid, process_uid } }
+              Liste vide si le trigger du pipeline n'accepte pas les appels API.
+    Erreurs : 400 si le pipeline n'existe pas
+    """
     async def pipeline_start(self, req: PipelineStartRequest = Depends(), body: Optional[PipelineStartBody] = None, credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> PipelineStartResponse:
         self._check_admin_auth(credentials)
 
@@ -602,7 +612,7 @@ class Router:
         #Le payload JSON éventuel est transmis au pipeline via l'event : il atterrit dans le
         #contexte sous "trigger.data" (cf. PipelineRunner._run).
         payload = body.payload if body is not None and body.payload is not None else {}
-        out = PipelineManager.trigger(event=triggerEvent(type=TRIGGER_API_CALL, data=payload), target_pipelines=[req.pipeline])
+        out = PipelineManager.trigger(event=TriggerEvent(type=TRIGGER_API_CALL, data=payload), target_pipelines=[req.pipeline])
 
         out = {
             "pipelines" : out
@@ -610,6 +620,17 @@ class Router:
 
         return out
 
+
+    """
+    Route [GET] /pipeline/process/{process_uid} : renvoie l'état d'un process de pipeline et la liste de ses étapes
+    Auth    : Basic admin
+    Entrée  : process_uid (path) — identifiant du process (renvoyé par [POST] /pipeline/{pipeline}/start)
+    Sortie  : PipelineInfoResponse { pipeline_uid, process_uid, created_at, started_at, ended_at, is_ended, is_success, steps[] }
+              is_ended   — true dès que le process est terminé (succès ou échec)
+              is_success — false tant que le process n'est pas terminé
+              steps[]    — étapes exécutées, sans leurs logs (détail via [GET] /pipeline/process/{process_uid}/{id})
+    Erreurs : 404 si le process n'existe pas
+    """
     async def pipeline_info(self, req: PipelineInfoRequest = Depends(), credentials: HTTPBasicCredentials = Depends(_rag_basic_auth)) -> PipelineInfoResponse:
         self._check_admin_auth(credentials)
 

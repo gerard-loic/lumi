@@ -1,4 +1,4 @@
-from lib.pipelines.block import Block
+from lib.pipelines._abstract import Block
 from lib.pipelines.pipelinecontext import PipelineContext
 from lib.pipelines.utils.dataview import DataView as _DataView, OPERATORS
 from lib.log.logger import Logger, ERROR, OK

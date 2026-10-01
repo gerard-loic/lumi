@@ -1,6 +1,10 @@
 
 import re
 
+"""
+PipelineContext — mémoire partagée d'une execution de pipeline et mini moteur de template Jinja
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class PipelineContext:
     #Détecte "{% for var in path %}", "{% endfor %}", "{% if cond %}", "{% elif cond %}",
     #"{% else %}", "{% endif %}", ou une variable "{path}"
@@ -20,10 +24,15 @@ class PipelineContext:
         re.IGNORECASE
     )
 
+    #_data : valeurs du contexte partagées entre les blocs du run
+    #_config : config brute (non transformée) du bloc en cours d'exécution
     def __init__(self):
         self._data = {}
         self._config = {}
 
+    #Définition de la configuration
+    #Définit la config du bloc en cours (appelé par le PipelineRunner avant chaque bloc). Elle est
+    #stockée brute : les templates qu'elle contient ne sont résolus qu'à la lecture via getConfig
     def setConfig(self, config:dict):
         self._config = config
 
@@ -33,12 +42,18 @@ class PipelineContext:
     def getConfig(self, key:str, default=None):
         return self._transformValue(self._config.get(key, default))
 
+    #Retourne la configuration complete
     def getFullConfig(self)->dict:
         return self._transformValue(self._config)
 
+    #Définit une donnée
+    #Enregistre une valeur dans le contexte telle quelle, sans transformation
     def set(self, key:str, value):
         self._data[key] = value
 
+    #Retourne une donné
+    #Renvoie la valeur associée à la clé. Si c'est une chaine, elle est transformée (templates résolus)
+    #avant d'être renvoyée. Lève KeyError si la clé est absente
     def get(self, key:str):
         data = self._data[key]
         if isinstance(data, (str)):
@@ -56,6 +71,7 @@ class PipelineContext:
     def getStructure(self)->dict:
         return self._describeStructure(self._data)
 
+    #Remplace récursivement chaque valeur feuille par le nom de son type, en conservant les dict/list
     @classmethod
     def _describeStructure(cls, value):
         if isinstance(value, dict):
@@ -71,7 +87,9 @@ class PipelineContext:
         for key, value in values.items():
             self.set(key, self._transformValue(value))
 
-
+    #Transforme une valeur en prenant compte du contexte (Chaines avec {})
+    #Résout un template (variables, boucles, conditions) à partir des données du contexte et renvoie
+    #la chaine produite. Lève ValueError si le template est mal formé (balise orpheline, expression invalide)
     def transform(self, text:str)->str:
         tokens = self._tokenize(text)
         nodes, _, stop = self._parse(tokens, 0)
@@ -79,6 +97,8 @@ class PipelineContext:
             raise ValueError(f"Balise {{% {stop[0]} %}} sans bloc correspondant dans le template")
         return self._renderNodes(nodes, self._data)
 
+    #Transforme récursivement une valeur : les chaines sont résolues via transform, les dict/list sont
+    #parcourus, les autres types sont renvoyés tels quels
     def _transformValue(self, value):
         if isinstance(value, str):
             return self.transform(value)
@@ -88,6 +108,8 @@ class PipelineContext:
             return [self._transformValue(v) for v in value]
         return value
 
+    #Découpe le texte en tokens : ("text", contenu), ("var", chemin), ("for", var, chemin), ("if", expr),
+    #("elif", expr), ("else",), ("endfor",), ("endif",)
     def _tokenize(self, text:str)->list:
         tokens = []
         pos = 0
@@ -152,6 +174,8 @@ class PipelineContext:
             index += 1
         return nodes, index, None
 
+    #Produit la chaine finale à partir de l'arbre de noeuds. scope contient les variables accessibles :
+    #les données du contexte, enrichies de la variable de boucle à l'intérieur d'un for (copie locale)
     def _renderNodes(self, nodes:list, scope:dict)->str:
         parts = []
         for node in nodes:
@@ -172,6 +196,8 @@ class PipelineContext:
                     parts.append(self._renderNodes(body_nodes, item_scope))
         return "".join(parts)
 
+    #Parcourt un chemin "a.b[0].c" dans scope : le premier segment est une clé de scope, les suivants
+    #des clés de dict ou attributs d'objet, chaque segment pouvant être suivi d'index de liste [n]
     def _resolvePath(self, path:str, scope:dict):
         value = None
         for i, token in enumerate(path.split(".")):
@@ -184,6 +210,8 @@ class PipelineContext:
                 value = value[int(idx)]
         return value
 
+    #Évalue une condition de la forme "<gauche> <opérateur> <droite>" d'un {% if %} / {% elif %}.
+    #Les opérateurs IN / NOT IN sont insensibles à la casse
     def _evalCondition(self, expr:str, scope:dict)->bool:
         m = self._COND_RE.match(expr.strip())
         if not m:
@@ -227,6 +255,7 @@ class PipelineContext:
             return None
         return self._resolvePath(token, scope)
 
+    #Accède à un membre : clé si obj est un dict, attribut sinon
     @staticmethod
     def _getAttr(obj, name:str):
         if isinstance(obj, dict):

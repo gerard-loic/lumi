@@ -3,8 +3,8 @@ from lib.config.config import Config
 from lib.log.logger import Logger, ERROR, WARNING, OK, INFO
 from pathlib import Path
 from lib.utils.dynamicimport import DynamicImport
-from lib.pipelines.trigger import triggerEvent
-from lib.pipelines.block import Block
+from lib.pipelines.triggerevent import TriggerEvent
+from lib.pipelines._abstract import Block
 from lib.utils.configfilechecker import ConfigFileChecker
 
 class Pipeline:
@@ -32,7 +32,7 @@ class Pipeline:
     def getService(self, service:str)->dict:
         return self._services[service]
 
-    def trigger(self, event:triggerEvent)->bool:
+    def trigger(self, event:TriggerEvent)->bool:
         for trigger in self._triggers:
             if trigger.executable(event=event):
                 return True

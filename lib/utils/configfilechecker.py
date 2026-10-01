@@ -5,9 +5,8 @@ from lib.log.logger import Logger, ERROR
 
 """
 ConfigFileChecker — Vérification de la structure d'un fichier JSON à partir d'un JSON Schema
-Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
-
 La version du schéma est déduite de sa clé "$schema" (Draft 2020-12 par défaut).
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class ConfigFileChecker:
     def __init__(self, schemaPath:str):
@@ -23,6 +22,7 @@ class ConfigFileChecker:
             raise Exception(f"JSON Schema {schemaPath} unreadable : {e}")
         self.validator = validatorClass(schema, format_checker=validatorClass.FORMAT_CHECKER)
 
+    #Vérifie le fichier JSON à partir de son emplacement
     def checkFile(self, jsonPath:str) -> bool:
         try:
             with open(jsonPath, "r", encoding="utf-8") as f:
@@ -33,6 +33,7 @@ class ConfigFileChecker:
             return False
         return self.check(data, source=jsonPath)
 
+    #Vérifie une variable au format JSON
     def check(self, data, source:str="<data>") -> bool:
         self.errors = [
             f"{error.json_path} : {error.message}"

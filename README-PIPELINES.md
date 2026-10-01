@@ -13,7 +13,9 @@ Cette documentation couvre :
 5. [Déclencher et suivre un pipeline](#5-déclencher-et-suivre-un-pipeline)
 6. [Exemple complet commenté](#6-exemple-complet-commenté)
 
-> Documentation générée à partir du code de `lib/pipelines/` (état au 2026-09-09).
+> Documentation générée à partir du code de `lib/pipelines/` et du schéma
+> `lib/_references/pipeline.schema.json` (état au 2026-10-01, Lumi 1.6.0 Abyss).
+> Vue d'ensemble de Lumi : [README.md](README.md).
 
 ---
 
@@ -39,12 +41,20 @@ config/pipelines/
 * Les pipelines sont chargés **une seule fois au démarrage** du service
   (`PipelineManager.init()`). Toute modification d'un `pipeline.json` nécessite un
   redémarrage.
+* Au chargement, chaque `pipeline.json` est **validé** contre le JSON Schema
+  `lib/_references/pipeline.schema.json` : clé inconnue, classe de bloc inexistante,
+  paramètre mal typé ou obligatoire manquant → exception et le service ne démarre pas.
+  Le schéma documente aussi, bloc par bloc, les paramètres acceptés : c'est la référence
+  en cas de doute.
 
 ### 1.2 Structure globale
 
 ```json
 {
     "name": "Libellé lisible du pipeline",
+    "services": {
+        "nexora": { "login": "robot@example.com", "password": "..." }
+    },
     "trigger": [
         { "class": "Api", "config": { } }
     ],
@@ -67,7 +77,8 @@ config/pipelines/
 
 | Clé        | Type   | Rôle                                                                    |
 |------------|--------|-----------------------------------------------------------------------|
-| `name`     | string | Libellé d'affichage. Purement informatif.                              |
+| `name`     | string | Libellé d'affichage. Purement informatif (optionnel).                 |
+| `services` | object | Optionnel. Authentification du run auprès des services de `config.json` (voir [§1.7](#17-authentification-aux-services--services)). |
 | `trigger`  | array  | Liste des déclencheurs. Voir [§3](#3-les-triggers-disponibles-et-leur-configuration). Au moins un est requis. |
 | `blocks`   | object | Dictionnaire `identifiant_de_bloc → définition`. Doit contenir `_root`. |
 
@@ -89,9 +100,14 @@ config/pipelines/
 | `on_success` | non         | Que faire si le bloc réussit (`execute` renvoie vrai).                                 |
 | `on_error`   | non         | Que faire si le bloc échoue (`execute` renvoie faux ou lève une exception).            |
 
-Le résolveur de classe transforme `class` en `lib.pipelines.blocks.<class en minuscules>` et
-y cherche la classe nommée exactement `<class>`. Ainsi `"class": "ApiPost"` charge
-`lib/pipelines/blocks/apipost.py` → classe `ApiPost`.
+Le résolveur de classe (`DynamicImport`) transforme `class` en
+`lib.pipelines.blocks.<class en minuscules>` et y cherche la classe nommée exactement
+`<class>`. Ainsi `"class": "ApiPost"` charge `lib/pipelines/blocks/apipost.py` → classe
+`ApiPost`. Les blocs héritent de `Block` (`lib/pipelines/_abstract.py`). Un nouveau bloc
+doit aussi être ajouté à l'énumération `block.class` (et à `$defs/config`) du schéma
+`pipeline.schema.json`, sans quoi les pipelines qui l'utilisent sont refusés au chargement.
+
+Les identifiants de bloc ne peuvent contenir que lettres, chiffres, `_` et `-`.
 
 ### 1.4 Le bloc `_root`
 
@@ -114,16 +130,40 @@ La valeur de `on_success` / `on_error` est :
 > de suivi (`is_success`).
 
 Il n'y a **pas** de garde contre les cycles : `on_success`/`on_error` peut pointer vers
-un bloc déjà exécuté (l'appel est récursif). À utiliser avec prudence.
+un bloc déjà exécuté (l'appel est récursif). C'est ce mécanisme qu'utilise le bloc
+`Loop` ([§4.11 bis](#411-bis-loop)) ; en dehors de ce cas, à utiliser avec prudence.
 
 ### 1.6 Cycle de vie d'un run
 
 1. Un trigger correspond → un `PipelineRunner` est créé avec un `process_uid` unique et lancé dans un thread dédié.
-2. Un process `<process_uid>` est ouvert : il porte les authentifications aux services du pipeline et les fichiers temporaires du run (voir [§4.16](#416-fichiers-temporaires)).
-3. Les données du trigger sont injectées dans le contexte sous `trigger` (voir [§2.1](#21-les-données-du-trigger)).
-4. `_root` est exécuté, puis la chaîne `on_success` / `on_error` est suivie.
-5. Chaque bloc est journalisé (statut + logs) : consultable via l'API de suivi.
-6. En fin de run (succès **ou** échec), le process est fermé et tous les fichiers temporaires du run sont purgés.
+2. Un process `<process_uid>` est ouvert : il porte le wallet (authentifications aux services du pipeline) et les fichiers temporaires du run (voir [§4.16](#416-fichiers-temporaires)).
+3. Le run s'authentifie auprès de chaque service déclaré sous `services` (voir [§1.7](#17-authentification-aux-services--services)).
+4. Les données du trigger sont injectées dans le contexte sous `trigger` (voir [§2.1](#21-les-données-du-trigger)).
+5. `_root` est exécuté, puis la chaîne `on_success` / `on_error` est suivie.
+6. Chaque bloc est journalisé (statut + logs) : consultable via l'API de suivi.
+7. En fin de run (succès **ou** échec), le process est fermé et tous les fichiers temporaires du run sont purgés.
+
+### 1.7 Authentification aux services : `services`
+
+La clé `services` associe un **nom de service** (clé de `services` dans `config.json`, pas
+le `handler`) aux données d'authentification à lui transmettre :
+
+```json
+"services": {
+    "nexora": { "login": "robot@example.com", "password": "..." },
+    "autre_api": { "token": "..." }
+}
+```
+
+* Au démarrage de chaque run, `Service.authenticate()` est appelé pour chaque entrée. La
+  config d'un pipeline étant une source de confiance, l'échange **login / mot de passe**
+  y est autorisé (contrairement à `POST /auth`, qui n'accepte que des jetons existants).
+* Le secret obtenu (ex. `{"token": "..."}`) est rangé dans le **wallet** du run. Il est
+  utilisé par les outils MCP appelés pendant un bloc `Agent`, et par les méthodes appelées
+  via `ServiceMethod` (`self.getAuth()`).
+* Un échec d'authentification est **journalisé mais n'arrête pas le run** : les blocs qui
+  dépendent du service échoueront ensuite.
+* Les données ne sont pas interpolées : ce sont des valeurs statiques du fichier.
 
 ---
 
@@ -244,10 +284,9 @@ Déclenche le pipeline sur un appel HTTP à `POST /pipeline/{pipeline_uid}/start
 
 ### 3.2 Autres triggers
 
-Les modules suivants existent dans `lib/pipelines/triggers/` mais sont pour l'instant
-**des emplacements réservés non implémentés** : `cron`, `file`, `mail`, `polling`,
-`webhook`. Les référencer dans un `pipeline.json` provoquera une erreur de chargement.
-Seul `Api` est fonctionnel à ce jour.
+`Api` est le **seul** trigger disponible à ce jour : toute autre valeur de `class` est
+refusée par la validation du `pipeline.json`. Les triggers héritent de `Trigger`
+(`lib/pipelines/_abstract.py`) et reçoivent un `TriggerEvent` (`lib/pipelines/triggerevent.py`).
 
 ---
 
@@ -281,6 +320,7 @@ Tous les blocs partagent :
 | `FileWriter`   | Écrire sur le disque une copie d'un fichier temporaire    |
 | `FileExists`   | Tester la présence d'un fichier                           |
 | `Condition`    | Évaluer une expression booléenne et brancher le pipeline  |
+| `Loop`         | Parcourir une liste du contexte, ligne par ligne          |
 | `Sleep`        | Mettre le run en pause pendant N secondes                 |
 | `MicroRag`     | Préparer des fichiers pour le micro-RAG d'un bloc `Agent` |
 | `PythonScript` | Exécuter un script Python du dossier du pipeline         |
@@ -309,14 +349,15 @@ Toujours en succès.
 ### 4.2 `Agent`
 
 Déclenche une réflexion LLM (`agent.reflect`) à partir d'un prompt et écrit la réponse
-dans le contexte. Ouvre une session d'authentification de service dédiée le temps de la
-réflexion, ce qui permet aux outils MCP appelés par l'agent d'accéder aux credentials.
+dans le contexte. La réflexion s'exécute dans un process enfant du run, qui hérite de son
+wallet : les outils MCP appelés par l'agent utilisent les authentifications déclarées
+sous `services` ([§1.7](#17-authentification-aux-services--services)).
 
 | Paramètre       | Type   | Défaut                    | Rôle                                                                              |
 |-----------------|--------|---------------------------|--------------------------------------------------------------------------------|
-| `profile`       | string | `""`                      | Nom du profil agent à charger (modèle LLM + services associés).                |
+| `profile`       | string | —                         | **Obligatoire.** Nom du profil (`profiles.<nom>` de `config.json`) : modèle LLM, outils MCP, réglages des pièces jointes. |
 | `prompt`        | string | `""`                      | Prompt transmis à l'agent. Interpolé avec le contexte.                         |
-| `authorization` | object | `{}`                      | Paramètres d'authentification de service (par service). Valeurs interpolées.   |
+| `auto_confirm`  | bool   | `false`                   | `true` → les outils MCP à confirmation (`@confirmation_tool`) s'exécutent sans validation ; `false` → ils sont refusés. À réserver aux pipelines de confiance (envoi de mail, suppression, écritures externes…). |
 | `language`      | string | `app.default_language`    | Code langue de la session.                                                     |
 | `output`        | string | `"result"`                | Clé de contexte où stocker la réponse de l'agent.                              |
 | `files_output`  | string | `"files"`                 | Clé de contexte où stocker les fichiers produits par les outils MCP pendant la réflexion (liste de `{key, filename, path}`). |
@@ -326,7 +367,11 @@ réflexion, ce qui permet aux outils MCP appelés par l'agent d'accéder aux cre
 | `micro_rag_query` | string | le `prompt`             | Requête de recherche des extraits (modes `rag` / `auto` sur un contenu trop long), si le prompt (souvent une consigne) ne décrit pas l'information à retrouver. |
 | `micro_rag_top_k` | int  | profil (`attachments.file_context_top_k`), sinon `8` | Nombre d'extraits ajoutés au prompt. |
 
-Échoue si le profil est introuvable ou si l'authentification échoue.
+Échoue si le profil est introuvable, si une référence `micro_rag` est invalide ou si la
+réflexion lève une erreur.
+
+> Depuis la 1.6.0, le paramètre `authorization` du bloc n'existe plus : les
+> authentifications se déclarent une fois pour tout le run, sous `services`.
 
 ```json
 "analyse": {
@@ -334,9 +379,6 @@ réflexion, ce qui permet aux outils MCP appelés par l'agent d'accéder aux cre
     "config": {
         "profile": "agent-base",
         "prompt": "Résume ces emails et signale ceux qui demandent une action : {mails}",
-        "authorization": {
-            "nexora": { "token": "{auth.body.data.token}" }
-        },
         "output": "analyse"
     },
     "on_success": "send_mail",
@@ -351,9 +393,9 @@ JSON Schema, et écrit la structure obtenue.
 
 | Paramètre | Type            | Défaut  | Rôle                                                                        |
 |-----------|-----------------|---------|--------------------------------------------------------------------------|
-| `input`   | string          | `""`    | Clé de contexte contenant la chaîne JSON sérialisée. La valeur **doit** être une chaîne. |
+| `input`   | string          | —       | **Obligatoire.** Clé de contexte contenant la chaîne JSON sérialisée. La valeur **doit** être une chaîne. |
 | `format`  | object \| `false` | `false` | JSON Schema de validation. `false` → aucune validation.                   |
-| `output`  | string          | `""`    | Clé de contexte où stocker la structure désérialisée.                     |
+| `output`  | string          | —       | **Obligatoire.** Clé de contexte où stocker la structure désérialisée.    |
 
 Échoue si l'entrée n'est pas une chaîne, si le JSON est invalide, ou si la validation de
 schéma échoue.
@@ -385,9 +427,9 @@ optionnellement contre un XML Schema (XSD), et écrit la structure obtenue.
 
 | Paramètre | Type              | Défaut  | Rôle                                                                        |
 |-----------|-------------------|---------|--------------------------------------------------------------------------|
-| `input`   | string            | `""`    | Clé de contexte contenant la chaîne XML sérialisée. La valeur **doit** être une chaîne. |
+| `input`   | string            | —       | **Obligatoire.** Clé de contexte contenant la chaîne XML sérialisée. La valeur **doit** être une chaîne. |
 | `format`  | string \| `false` | `false` | XML Schema (XSD) de validation, sous forme de chaîne. `false` → aucune validation. |
-| `output`  | string            | `""`    | Clé de contexte où stocker la structure désérialisée.                     |
+| `output`  | string            | —       | **Obligatoire.** Clé de contexte où stocker la structure désérialisée.    |
 
 La structure produite est `{ "<racine>": <contenu> }`, où le contenu d'un élément est :
 
@@ -483,22 +525,22 @@ Envoie un email (SMTP) ou lit une boîte de réception (IMAP).
 | Paramètre  | Type   | Défaut   | Rôle                                                     |
 |------------|--------|----------|-------------------------------------------------------|
 | `action`   | string | `"send"` | `"send"`, `"list"` ou `"read"`.                       |
-| `username` | string | `""`     | Identifiant du compte ; sert aussi d'adresse d'expéditeur. |
-| `password` | string | `""`     | Mot de passe / mot de passe d'application.            |
+| `username` | string | —        | **Obligatoire.** Identifiant du compte ; sert aussi d'adresse d'expéditeur. |
+| `password` | string | —        | **Obligatoire.** Mot de passe / mot de passe d'application. |
 | `output`   | string | `"content"` | Clé de contexte où écrire le résultat. (Le code utilise `content` par défaut ; pour `send`, le résultat est un booléen.) |
 
 **SMTP — `action: "send"`**
 
 | Paramètre      | Type              | Défaut  | Rôle                                             |
 |----------------|-------------------|---------|-----------------------------------------------|
-| `smtp_host`    | string            | `""`    | Serveur SMTP.                                 |
+| `smtp_host`    | string            | —       | **Obligatoire** en `send`. Serveur SMTP.      |
 | `smtp_port`    | int               | `587`   | Port SMTP.                                    |
 | `smtp_use_ssl` | bool              | `false` | Connexion SSL directe (`SMTP_SSL`).          |
 | `smtp_use_tls` | bool              | `true`  | `STARTTLS` après connexion (ignoré si `smtp_use_ssl`). |
-| `to`           | string \| string[] | `[]`    | Destinataire(s). Interpolé.                   |
+| `to`           | string \| string[] | —       | **Obligatoire** en `send`. Destinataire(s). Interpolé. |
 | `subject`      | string            | `""`    | Sujet. Interpolé.                             |
 | `body`         | string            | `""`    | Corps texte brut. Interpolé.                  |
-| `attachments`  | string[]          | `[]`    | Chemins de fichiers locaux à joindre (ceux introuvables sont ignorés). |
+| `attachments`  | array             | `[]`    | Pièces jointes. Chaque entrée : chemin local (interpolé), référence `"{var}"` vers un fichier ou une liste de fichiers (ex. `"{files}"` d'un bloc `Agent`, sortie d'un `DataViewFile`), dict `{"path", "filename"}`, ou liste imbriquée de ces formes. Le nom présenté au destinataire est `filename`. Les fichiers introuvables sont ignorés. |
 
 **IMAP — `action: "list"` et `action: "read"`**
 
@@ -509,7 +551,7 @@ Envoie un email (SMTP) ou lit une boîte de réception (IMAP).
 | `imap_use_ssl` | bool   | `true`        | Connexion SSL (`IMAP4_SSL`).                 |
 | `folder`       | string | `"INBOX"`     | Dossier ciblé.                               |
 | `limit`        | int    | `20`          | Nombre max d'emails retournés (`list`).      |
-| `email_id`     | string | `0`           | Identifiant IMAP de l'email à lire (`read`). |
+| `email_id`     | string | —             | **Obligatoire** en `read`. Identifiant IMAP de l'email à lire. |
 
 * `action: "list"` → écrit une liste de `{id, subject, from, date}` (du plus récent au plus ancien).
 * `action: "read"` → écrit `{id, subject, from, to, date, body, attachments[]}`.
@@ -654,7 +696,8 @@ purgé automatiquement à la fin.
 }
 ```
 
-Puis, par exemple, joindre le fichier dans un `Mail` : `"attachments": ["{fichier_csv.path}"]`.
+Puis, par exemple, joindre le fichier dans un `Mail` : `"attachments": ["{fichier_csv}"]`
+(le nom `mails_clients.csv` est alors conservé pour le destinataire).
 
 ### 4.9 Blocs lecteurs de fichier : `TxtReader` / `CsvReader` / `ExcelReader`
 
@@ -901,6 +944,48 @@ ou chaîne numérique) — pratique pour les données de `trigger.data`, souvent
 }
 ```
 
+### 4.11 bis `Loop`
+
+Parcourt une liste du contexte (typiquement la sortie d'un `DataView` en `as: "list"`, ou
+d'un `CsvReader`) ligne par ligne. À chaque passage, le bloc écrit la ligne courante et son
+index dans le contexte, puis sort par `on_success` : c'est le **corps de boucle**, dont le
+dernier bloc doit **reboucler vers ce même bloc `Loop`**. Une fois toutes les lignes
+parcourues, le bloc sort par `on_error` : c'est la **sortie normale de fin de boucle**, pas
+une erreur d'exécution.
+
+| Paramètre | Type   | Défaut    | Rôle                                                                   |
+|-----------|--------|-----------|----------------------------------------------------------------------|
+| `input`   | string | —         | **Obligatoire.** Clé de contexte contenant la liste à parcourir.      |
+| `item`    | string | `"item"`  | Clé de contexte recevant la ligne courante.                           |
+| `index`   | string | `"index"` | Clé de contexte recevant l'index courant (à partir de `0`).           |
+
+* L'avancement est stocké dans le contexte du run (pas sur le bloc) : plusieurs runs
+  simultanés du même pipeline ne se perturbent pas.
+* En fin de boucle, l'avancement est remis à zéro : le même bloc `Loop` peut être rejoué
+  plus loin dans le run.
+* Échoue aussi (donc sort par `on_error`) si `input` est absent ou ne désigne pas une liste :
+  consultez les logs de l'étape pour distinguer ce cas d'une fin de boucle normale.
+* Chaque itération est un appel récursif : réservez `Loop` à des listes de taille raisonnable.
+
+```json
+"boucle": {
+    "class": "Loop",
+    "config": { "input": "clients", "item": "client" },
+    "on_success": "notifier_client",
+    "on_error": "exit(1)"
+},
+"notifier_client": {
+    "class": "Webex",
+    "config": {
+        "profile": "default",
+        "to_person_email": "{client.email}",
+        "message": "Bonjour {client.nom}, votre rapport est disponible."
+    },
+    "on_success": "boucle",
+    "on_error": "boucle"
+}
+```
+
 ### 4.12 `Sleep`
 
 Met le run en pause pendant `seconds` secondes, puis passe au bloc `on_success`. Chaque run
@@ -1064,8 +1149,9 @@ class LumePackAPI(Service):
 ```
 
 La méthode réussit par défaut : le bloc échoue uniquement si elle renvoie `False` ou lève une
-exception. Pour appeler l'API au nom de l'utilisateur, elle utilise `self.getAuth()` (secret du
-wallet du run) : le service est une instance partagée, il ne doit porter aucun état propre au run.
+exception. Pour appeler l'API de manière authentifiée, elle utilise `self.getAuth()` (secret du
+wallet du run, obtenu via la clé `services` du pipeline — [§1.7](#17-authentification-aux-services--services)) :
+le service est une instance partagée, il ne doit porter aucun état propre au run.
 
 | Paramètre | Type   | Défaut | Rôle                                                                                   |
 |-----------|--------|--------|--------------------------------------------------------------------------------------|
@@ -1116,6 +1202,8 @@ Content-Type: application/json
   `trigger.data`.
 * Le pipeline ne démarre que si l'un de ses triggers accepte l'événement (pour `Api`,
   toujours).
+* `400` si aucun dossier `<custom_pipelines>/{pipeline_uid}/pipeline.json` n'existe.
+* Le lancement est asynchrone : la réponse est renvoyée dès la création du run.
 
 Réponse :
 
@@ -1153,6 +1241,9 @@ récapitulatif, puis envoie ce récapitulatif par email.
 ```json
 {
     "name": "Recap mail",
+    "services": {
+        "nexora": { "token": "<jeton de service>" }
+    },
     "trigger": [
         { "class": "Api", "config": { } }
     ],
@@ -1177,9 +1268,6 @@ récapitulatif, puis envoie ce récapitulatif par email.
             "config": {
                 "profile": "agent-base",
                 "prompt": "Fais un récapitulatif de ces mails, uniquement ceux du jour, en indiquant les plus importants et ceux qui demandent une action de ma part : {mails}",
-                "authorization": {
-                    "nexora": { "token": "<jeton de service>" }
-                },
                 "output": "analyse"
             },
             "on_success": "send_mail",
@@ -1207,6 +1295,8 @@ récapitulatif, puis envoie ce récapitulatif par email.
 
 Déroulé :
 
+0. Au démarrage du run, le service `nexora` est authentifié avec le jeton déclaré sous
+   `services` ; les outils MCP appelés par l'agent l'utiliseront.
 1. **`_root`** (`Mail` / `list`) écrit la liste des emails sous `mails`.
    Sur échec → `exit(0)` (fin en échec).
 2. **`analyse`** (`Agent`) interpole `{mails}` dans le prompt, appelle le LLM, écrit la

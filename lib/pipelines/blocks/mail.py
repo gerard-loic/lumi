@@ -9,7 +9,7 @@ from email.mime.text import MIMEText
 from email import encoders, message_from_bytes
 from email.header import decode_header
 
-from lib.pipelines.block import Block
+from lib.pipelines._abstract import Block
 from lib.pipelines.pipelinecontext import PipelineContext
 from lib.log.logger import Logger, ERROR, OK
 

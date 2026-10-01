@@ -1,5 +1,9 @@
 from lib.pipelines.pipelinelog import PipelineLog
 
+"""
+PipelineInfo — facade permettant de fournir des infos sur l'execution d'un pipeline
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class PipelineInfo:
 
     @staticmethod

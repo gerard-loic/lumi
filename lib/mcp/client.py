@@ -84,7 +84,7 @@ class MCPClientManager:
     #importée normalement échouerait donc toujours (deux objets classe différents pour le même code).
     async def _connect_external_servers(self, stack: AsyncExitStack) -> None:
         from lib.config.config import Config
-        from lib.services.services import ServiceManager
+        from lib.services.servicemanager import ServiceManager
 
         external_names = [
             name for name, conf in Config.get("services", default={}).items()
@@ -141,7 +141,7 @@ class MCPClientManager:
     #Les tokens utilisateur sont lus dans le wallet du process courant (tour de conversation ou bloc Agent).
     async def open_session_external_tools(self, stack: AsyncExitStack) -> tuple[list, dict]:
         from lib.config.config import Config
-        from lib.services.services import ServiceManager
+        from lib.services.servicemanager import ServiceManager
 
         process = ProcessManager.getCurrent()
         if not process:

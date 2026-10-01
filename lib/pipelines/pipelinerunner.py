@@ -11,25 +11,35 @@ from lib.process.process import KIND_PIPELINE
 
 if TYPE_CHECKING:
     from lib.pipelines.pipeline import Pipeline
-    from lib.pipelines.block import Block
-    from lib.pipelines.trigger import triggerEvent
+    from lib.pipelines._abstract import Block
+    from lib.pipelines.triggerevent import TriggerEvent
 
 
+"""
+PipelineRunner — gestionnaire d'execution d'un pipeline
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class PipelineRunner:
-    def __init__(self, pipeline:"Pipeline", event:"triggerEvent"=None):
+    #Constructeur
+    #pipeline(Pipeline) : pipeline devant être executé
+    #event(TriggerEvent) : event ayant initié le démarrage du pipeline
+    def __init__(self, pipeline:"Pipeline", event:"TriggerEvent"=None):
         self._pipeline = pipeline
         self._event = event
         self._process = Uuid.getUuid()
         self._thread = None
         self._log_id = None
 
+    #Retourne le numéro identifiant du process lié à l'execution du pipeline
     def getProcess(self)->str:
         return self._process
 
+    #Démarre le traitement
     def launch(self):
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
+    #Execution Thread
     def _run(self):
         Logger.write(f"[PipelineRunner] [Process #{self._process}] Run pipeline {self._pipeline.getUid()}")
 
@@ -76,7 +86,7 @@ class PipelineRunner:
             ProcessManager.exit(process_token)
             ProcessManager.remove(self._process)
 
-
+    #Execution d'un bloc
     def _executeBlock(self, block:"Block", context:PipelineContext):
         #On écrit le log du noeud initial
         block_log_id = PipelineLog.createBlock(pipeline_process_id=self._log_id, name=block.getUid())
@@ -136,6 +146,7 @@ class PipelineRunner:
             else:
                 self._end(success=False)
 
+    #Fin de l'execution du process
     def _end(self, success:bool):
         if success:
             Logger.write(f"[PipelineRunner] [Process #{self._process}] Execution ended with success", type=OK)

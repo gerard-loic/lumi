@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from lib.pipelines.block import Block
+from lib.pipelines._abstract import Block
 from lib.pipelines.pipelinecontext import PipelineContext
 from lib.pipelines.utils.filesource import resolve_file_ref, FileSourceError
 from lib.log.logger import Logger, ERROR, OK

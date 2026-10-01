@@ -1,8 +1,13 @@
+"""
+Dict — Utilitaires sur objets de type dict
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class Dict:
+    #Fusionne récursivement deux dictionnaires.
+    #Les valeurs de dict2 écrasent celles de dict1.
     @staticmethod
     def mergeDicts(dict1, dict2):
-        #Fusionne récursivement deux dictionnaires.
-        #Les valeurs de dict2 écrasent celles de dict1.
+       
         result = dict1.copy()
         for key, value in dict2.items():
             if key in result and isinstance(result[key], dict) and isinstance(value, dict):

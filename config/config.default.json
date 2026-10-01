@@ -125,6 +125,14 @@
         }
     },
 
+    "security" : {
+        "sandbox_max_process" : 4,
+        "min_secret_length" : 32,
+        "auth_rate_window" : 60,
+        "auth_rate_max_tracked_ips" : 10000,
+        "multipart_overhead_mb" : 1
+    },
+
     "usage" : {
         "max_tokens_month" : -1,
         "max_requests_month" : -1,
@@ -134,7 +142,6 @@
     "extraction" : {
         "timeout" : 120,
         "max_memory_mb" : 2048,
-        "max_concurrent" : 4,
         "max_uncompressed_mb" : 500,
         "max_archive_entries" : 10000
     },

@@ -3,8 +3,13 @@ from lib.config.config import Config
 from lib.pipelines.pipeline import Pipeline
 from lib.log.logger import Logger, OK, WARNING
 from lib.pipelines.pipelinerunner import PipelineRunner
-from lib.pipelines.trigger import triggerEvent
+from lib.pipelines.triggerevent import TriggerEvent
 
+
+"""
+PipelineManager — gestionnaire de pipelines
+Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
+"""
 class PipelineManager:
 
     @staticmethod
@@ -22,8 +27,9 @@ class PipelineManager:
             if PipelineManager.pipelineExists(pipeline_uid=pipeline_uid):
                 PipelineManager._pipelines[pipeline_uid] = Pipeline(pipeline_uid=pipeline_uid)
 
+    #Propage un événement
     @staticmethod
-    def trigger(event:triggerEvent, target_pipelines:list=[])->list:
+    def trigger(event:TriggerEvent, target_pipelines:list=[])->list:
         pipelines = []
         for pipeline_uid in PipelineManager._pipelines:
             if len(target_pipelines) == 0 or pipeline_uid in target_pipelines:
@@ -38,7 +44,7 @@ class PipelineManager:
                     })
         return pipelines
     
-
+    #Retourne si un pipeline existe
     @staticmethod
     def pipelineExists(pipeline_uid:str)->bool:
         dossier = Path(f"{Config.get('directories.custom_pipelines')}/{pipeline_uid}")

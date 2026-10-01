@@ -16,11 +16,11 @@ Les outils MCP retrouvent le process courant via lumi_session_id (cf. lib/mcp/to
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class FileStore:
+    #Chemin absolu du fichier temporaire correspondant à `key` (existence non vérifiée).
     @staticmethod
     def path(key: str) -> str:
         return str(Path(Config.get("directories.temp_dir")) / key)
 
-    # ------------------------------------------------------------------------ save
     #Écrit un fichier temporaire et renvoie son URL de téléchargement.
     #Rattaché au process courant : URL signée par son token, purge à sa fermeture.
     #Sans process courant : fichier orphelin, URL non signée, non purgé automatiquement.
@@ -60,6 +60,8 @@ class FileStore:
 
         return key
 
+    #Extrait la clé (32 caractères hexa) d'une URL de fichier /files/<key>/<filename>.
+    #Lève ValueError si l'URL ne correspond pas au format attendu.
     @staticmethod
     def key_from_url(url: str) -> str:
         match = _KEY_URL_RE.search(url)
@@ -67,6 +69,7 @@ class FileStore:
             raise ValueError("URL de fichier invalide.")
         return match.group(1)
 
+    #Extrait le nom de fichier (décodé) d'une URL de fichier, ou None si l'URL est invalide.
     @staticmethod
     def filename_from_url(url: str) -> str | None:
         match = _KEY_URL_RE.search(url)
@@ -87,6 +90,8 @@ class FileStore:
             raise ValueError("Fichier introuvable.")
         return file_path.read_bytes()
 
+    #Supprime le fichier temporaire `key` sans contrôle de process.
+    #Renvoie True si le fichier existait et a été supprimé, False sinon.
     @staticmethod
     def delete(key:str) -> bool:
         file_path = f"{Config.get("directories.temp_dir")}/{key}"
@@ -95,6 +100,8 @@ class FileStore:
             return True
         return False
 
+    #Purge tous les fichiers du répertoire temporaire (hors .gitkeep), tous process confondus.
+    #Renvoie le nombre de fichiers supprimés.
     @staticmethod
     def deleteAll() -> int:
         tmpdir = Path(Config.get("directories.temp_dir"))

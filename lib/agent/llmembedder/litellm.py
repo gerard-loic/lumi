@@ -1,16 +1,14 @@
 import litellm
-
+from lib.agent.llmembedder._abstract import LLMEmbedder
 
 """
 Embedder — Génération de vecteurs d'embedding via LiteLLM (pour rag)
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
-class LiteLLMEmbedder:
+class LiteLLMEmbedder(LLMEmbedder):
     #`config` : configuration de l'embedder de la collection RAG (rag.collections.<collection>.embedder)
     def __init__(self, config: dict):
-        self._model    = config["model"]
-        self._api_base = config["api_base"]
-        self._api_key  = config["api_key"]
+        super().__init__(config=config)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         response = await litellm.aembedding(

@@ -16,12 +16,12 @@ from lib.http.router import Router
 from lib.config.config import Config, StaticConfig
 from lib.log.logger import Logger
 from lib.agent.agent import AgentManager
-from lib.services.services import ServiceManager
+from lib.services.servicemanager import ServiceManager
 from lib.process.processmanager import ProcessManager
 from lib.http.auth import Auth
 from lib.files.filestore import FileStore
 from lib.files.localdata import LocalData
-from lib.connectors.connector import ConnectorManager
+from lib.connectors.connectormanager import ConnectorManager
 from lib.cron.cronmanager import CronManager
 from lib.agent.profile import ProfileManager
 from lib.localization.language import LanguageManager
@@ -39,7 +39,7 @@ Auth.init()
 # ----------------------------------------------------------------
 # Extraction isolée des fichiers (cf. lib/rag/textextractor.py) : à initialiser avant toute extraction
 # ----------------------------------------------------------------
-Sandbox.init(modules=["lib.rag.extractworkers"], max_concurrent=Config.get("extraction.max_concurrent", 4))
+Sandbox.init(modules=["lib.rag.extractworkers"], max_concurrent=Config.get("security.sandbox_max_process", 4))
 
 # ----------------------------------------------------------------
 # Initialisation logger
