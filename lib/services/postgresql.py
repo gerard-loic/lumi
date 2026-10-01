@@ -89,10 +89,6 @@ class PostgreSQL(Service):
         try:
             with cnx.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 query = sql.Composed(parts)
-<<<<<<< HEAD
-                print(cur.mogrify(query, params).decode())
-=======
->>>>>>> abyss
                 cur.execute(query, params)
                 record = cur.fetchone()
         finally:
