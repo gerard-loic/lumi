@@ -1,8 +1,8 @@
-![alt text](https://raw.githubusercontent.com/gerard-loic/lumi/refs/heads/master/public/lumi-waves.jpg?raw=true)
+![alt text](https://raw.githubusercontent.com/gerard-loic/lumi/refs/heads/master/public/lumi-abyss.jpg?raw=true)
 
 # Lumi
 
-Lumi version 1.5.7 (Waves)
+Lumi version 1.6.0 (Abyss — beta)
 
 Lumi is an open-source AI chatbot backend built on top of **FastAPI** and the **Model Context Protocol (MCP)**. It exposes a WebSocket chat API that connects a Large Language Model to a set of custom tools and a **RAG knowledge base**, enabling the agent to answer questions grounded in real data rather than hallucinated knowledge.
 
@@ -13,27 +13,69 @@ Lumi is an open-source AI chatbot backend built on top of **FastAPI** and the **
 - **RAG (Retrieval-Augmented Generation)** — a built-in knowledge base lets the agent search indexed documents before answering. The agent triggers searches automatically via the `search_knowledge_base` MCP tool.
 - **Document generation** — native tools for generating PDF, Word, and Excel files, including embedded charts (bar, pie, line). Word documents follow a customizable company **template (gabarit)**, with a cover page, header/footer, auto-generated table of contents, and table styles.
 - **Follow-up suggestions** — after each reply, the agent can propose short follow-up questions to help guide the conversation.
-- **Configurable LLM backend** — uses LiteLLM under the hood, so you can point it at any compatible model (OpenAI, Azure, local models, etc.) by changing a config value.
+- **Configurable LLM backend** — pick a connector per profile: `LiteLLM` (any LiteLLM-compatible model: OpenAI, Azure, local models, etc.), or the OpenAI-compatible `Cerebras`, `DigitalOcean`, and `Llama` connectors — see [`profiles.<name>.llm`](#profilesnamellm).
+- **Pipelines** — declarative, JSON-defined workflows chaining blocks (LLM agent, HTTP calls, mail, Webex, file reading/writing, data transformation, conditions, loops, Python scripts…) that share a common context, started and monitored through the HTTP API — see [Pipelines](#pipelines) and the dedicated guide [README-PIPELINES.md](README-PIPELINES.md).
+- **External MCP servers** — remote MCP servers (HTTP or SSE) can be plugged in as services, their tools being exposed to the agent alongside the built-in ones — see [External MCP servers](#external-mcp-servers).
 - **Configuration profiles** — a single Lumi instance can serve several independent agents (different LLM model, tools, attachment policy, RAG collection, connectors) side by side, selected per session via [profiles](#profiles).
 - **Multilingual conversations** — each profile declares which languages it supports; a session picks one at authentication time, and the agent's system prompt, tool descriptions, confirmation prompts, and error messages are all translated accordingly — see [Localization](#localization).
 - **Session info endpoint** — `GET /auth` returns the calling session's profile-derived configuration (follow-up questions, language, attachment policy) so a client can adapt its UI without hardcoding per-profile behavior — see [HTTP API](#http-api).
 - **File attachments** — users can attach files to a conversation; the agent reasons over their content through an ephemeral, per-session RAG index — see [File attachments](#file-attachments).
 - **Source citations** — replies built from the knowledge base or from attached files come with `rag` events pointing back to the originating document, page, and (for the persistent RAG) a secure download URL.
-- **Authentication** — a JWT-based `/auth` endpoint protects the chat API and temporary file downloads. Admin endpoints use HTTP Basic Auth.
+- **Authentication** — a JWT-based `/auth` endpoint protects the chat API and temporary file downloads. A session can authenticate to several services at once; the resulting secrets are kept in a per-session **wallet** that tools and services read from. Admin endpoints use HTTP Basic Auth.
 - **Temporary file serving** — tools can produce files that are made available for download through a secure, time-limited URL.
 - **Webex connector** — the agent can be deployed as a Webex bot, receiving and answering messages from Webex spaces via webhooks.
 - **Scheduled CRON tasks** — a built-in scheduler runs background maintenance tasks (log retention/shredding, RAG folder indexing) on a configurable minute/hour schedule.
 - **Usage statistics** — a `/usage` endpoint returns token and request consumption for the current month.
 - **Docker-friendly layout** — everything deployment-specific (config, custom tools/services, prompts, templates, secrets) lives under `config/`, and everything Lumi writes at runtime (temp files, logs, local DB, RAG storage) lives under `storage/`. The rest of the tree is the application itself, so a container image only needs those two directories mounted as volumes — see [`config/` directory layout](#config-directory-layout).
+- **Validated configuration** — `config/config.json` and every `pipeline.json` are checked against a JSON Schema at startup (`lib/_references/`), so a typo or misplaced key fails fast with an explicit error.
 - **Extensible by design** — add custom tools, services, LLM filters, and CRON tasks by dropping files into their respective directories, without touching the built-in `lib/` code. Which MCP tools are exposed is finely controlled via `mcp.tools_enabled` (exact names, whole-group wildcards, or single-tool overrides).
 
-## What's new in v1.5.0 — Waves
+## What's new in v1.6.0 — Abyss
 
-- **Multilingual LLM conversations** — profiles now declare an allowed `languages` list; a session selects one via `POST /auth`, and the agent substitutes it into the system prompt (`%language%`) so replies are generated in that language.
-- **Translation manager** — a new `LanguageManager` / `Language` / `Traduction` layer loads per-language JSON dictionaries from `static/languages/<code>/` (built-in) and merges in overrides from `config/languages/<code>/` (deployment-specific), keyed by dotted translation codes (e.g. `[word.generer_fichier_word.confirmation]`).
-- **Translated MCP tool helpers, confirmations, and errors** — tool display names, confirmation questions/options, and system error messages (rate limiting, response-in-progress, …) are now resolved through the session's language instead of being hardcoded.
-- **`GET /auth` session info endpoint** — returns the current session's effective configuration (follow-up questions enabled, language, attachment policy) derived from its profile, so the client can adapt the agent's UI directly instead of duplicating profile settings.
-- **Reorganized directory layout for Docker** — built-in code moved under `lib/` (`lib/mcp/tools/`, `lib/services/`), and everything deployment-specific was consolidated under two directories: `config/` (configuration, custom tools/services/languages, prompts, templates, secrets) and `storage/` (temp files, logs, local DB, RAG storage). See [`config/` directory layout](#config-directory-layout).
+Lumi 1.6.x (Abyss) is a major release built around a brand-new **pipeline engine**, along with new LLM providers, a reworked authentication model, and a hardened configuration and security layer.
+
+### Pipeline engine
+
+- **Pipeline management** — declarative workflows defined in JSON (`config/pipelines/<pipeline_uid>/pipeline.json`), chaining blocks that share a common templated context. See [Pipelines](#pipelines) and the dedicated guide [README-PIPELINES.md](README-PIPELINES.md).
+- **API trigger** — pipelines are started through the HTTP API (`POST /pipeline/{pipeline_uid}/start`).
+- **Pipeline monitoring API** — each run can be tracked step by step (status and logs) via `GET /pipeline/process/...`.
+- **25 built-in blocks** to build pipelines:
+
+| Category | Blocks |
+|----------|--------|
+| API operations (GET, POST, PUT, DELETE) | `ApiGet`, `ApiPost`, `ApiPut`, `ApiDelete` |
+| LLM agent | `Agent` |
+| Conditions | `Condition` |
+| Processing loops | `Loop` |
+| File management (read, write, move, delete, existence check) | `FileWriter`, `FileMove`, `FileDelete`, `FileExists` |
+| Data tables | `DataView`, `DataViewFile` |
+| Excel, TXT and CSV files | `ExcelReader`, `TxtReader`, `CsvReader` |
+| Format checking | `JsonFormat`, `XmlFormat` |
+| Sending / reading e-mails | `Mail` |
+| Lightweight RAG | `MicroRag` |
+| Python script execution | `PythonScript` |
+| Service method execution | `ServiceMethod` |
+| Webex notifications | `Webex` |
+| Utilities | `Context`, `Sleep` |
+
+### LLM & embedding
+
+- **New LLM connectors** — `Llama`, `DigitalOcean`, and `Cerebras` (OpenAI-compatible APIs) join `LiteLLM` — see [`profiles.<name>.llm`](#profilesnamellm).
+- **Reworked embedding providers** — the embedder is now chosen per RAG collection (`LiteLLMEmbedder`, `DigitalOceanEmbedder`, `LlamaEmbedder`).
+
+### Authentication wallet
+
+- **Authentication wallet** — `POST /auth` now takes one authorization payload per service (`{"<service>": {...}}`); the secrets returned by each service are stored in the session's wallet and read by services through `Service.getAuth()`. Pipelines declare their own service credentials the same way. Services implement `authenticate()` (replacing `checkAuthentication()`).
+
+### Configuration & security
+
+- **Configuration validation at startup** — `config.json` and every `pipeline.json` are checked against JSON Schemas (`lib/_references/config.schema.json`, `lib/_references/pipeline.schema.json`); the server refuses to start on an invalid file, with an explicit error.
+- **Security fixes** — new [`security`](#security) section (sandbox process cap, minimum JWT secret length, auth rate-limiter window and tracking bound, multipart overhead), together with several security hardening fixes. `extraction.max_concurrent` moved to `security.sandbox_max_process`.
+
+### Other changes
+
+- **External MCP servers** — the `MCPExternalService` handler connects remote MCP servers (HTTP/SSE), with either a static connection shared by all sessions or a per-session connection using the user's token — see [External MCP servers](#external-mcp-servers).
+- **Refactored base classes** — every extensible type now has its abstract base in a `_abstract.py` module next to its implementations (`lib/services/_abstract.py`, `lib/cron/tasks/_abstract.py`, `lib/agent/filters/_abstract.py`, `lib/connectors/_abstract.py`, `lib/pipelines/_abstract.py`, …), and managers live in their own modules (`lib/services/servicemanager.py`, `lib/connectors/connectormanager.py`).
 
 ## Getting started
 
@@ -71,6 +113,7 @@ This split is what makes the service easy to containerize: the application image
 | `languages/<code>/*.json` | No | Custom/override translation files — see [Localization](#localization). Path configurable via [`directories.custom_languages_dir`](#directories). |
 | `services/*.py` | No | Custom service handler classes not shipped in `lib/services/` — see [Adding services](#adding-services). Path configurable via [`directories.custom_services_dir`](#directories). |
 | `tools/**/*.py` | No | Custom MCP tools not shipped in `lib/mcp/tools/` — see [Adding tools](#adding-tools). Path configurable via [`directories.custom_mcp_tools_dir`](#directories). May itself contain further subfolders (e.g. `models/`) for shared code imported by those tools. |
+| `pipelines/<pipeline_uid>/pipeline.json` | No | Pipeline definitions (plus any script used by a `PythonScript` block) — see [Pipelines](#pipelines). Path configurable via [`directories.custom_pipelines`](#directories). |
 | `templates/*.docx` | No | Word template(s) (gabarit) referenced by [`word.template`](#word) — see [Word document templates](#word-document-templates-gabarits). |
 | any folder referenced by a `Ragindexer` CRON task's `config.folders` (e.g. `source-rag/`) | No | Source documents to automatically (re)index into the RAG knowledge base — see [`cron`](#cron). The folder name/location is an arbitrary config value, not a fixed convention. |
 
@@ -81,6 +124,8 @@ Other than `config.json` itself — loaded directly by `Config.init()` — none 
 ## Configuration reference
 
 Lumi is configured through a single JSON file: `config/config.json`. The `config/config.default.json` file serves as a template.
+
+The file is validated at startup against the JSON Schema `lib/_references/config.schema.json`: unknown keys are rejected (`additionalProperties: false`), and the service refuses to start if the file doesn't match. A free-form top-level `custom` object is allowed for deployment-specific settings that Lumi itself doesn't read (e.g. front-end parameters).
 
 ### `app`
 
@@ -95,6 +140,7 @@ General application settings.
 | `allowed_cors_methods` | array | Allowed CORS methods. |
 | `allowed_cors_headers` | array | Allowed CORS headers. |
 | `ws_inactivity_timeout` | int | WebSocket inactivity timeout in seconds (default: 300). |
+| `max_request_body_mb` | number | Maximum HTTP request body size in MB (default: 100), answered with `413` beyond. `POST /files/upload` is instead capped at the largest `attachments.max_file_size_mb` of the profiles. |
 | `admin_users` | array | List of `{ username, password }` objects for HTTP Basic Auth on admin endpoints. |
 | `default_language` | string | Language code used when `POST /auth` doesn't specify one — see [Localization](#localization). |
 
@@ -104,10 +150,11 @@ Controls how users authenticate to obtain a WebSocket token.
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `service` | string | Name of the service used to verify credentials (must match a key in `services`). |
+| `service` | string | Name of the main authentication service (must match a key in `services`). Authenticating to it is mandatory for every `POST /auth` — see [HTTP API → Authentication](#authentication-1). |
 | `jwt_secret` | string | Secret used to sign and verify JWT tokens. |
 | `jwt_algorithm` | string | JWT signing algorithm (e.g. `HS256`). |
 | `session_duration` | int | Session validity duration in seconds. |
+| `max_auth_requests_minute` | int | Maximum `POST /auth` requests per client IP per minute (default `10`, `-1` to disable). Answers `429` beyond. Behind a reverse proxy, start uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy IP>` so the real client IP is used. |
 
 ### `services`
 
@@ -127,9 +174,17 @@ Declares external services available to the tools. Each key is the logical name 
     "database": "dbname",
     "username": "",
     "password": ""
+  },
+  "my_mcp_server": {
+    "handler": "MCPExternalService",
+    "transport": "http",
+    "url": "https://mcp.example.com/mcp",
+    "headers": { "Authorization": "Bearer <token>" }
   }
 }
 ```
+
+Built-in handlers: `LumePackAPI` (HTTP API client), `PostgreSQL` (database, also used by the pgvector RAG store and pipeline logs), and `MCPExternalService` (remote MCP server — see [External MCP servers](#external-mcp-servers)).
 
 Built-in handlers live in `lib/services/`. Deployment-specific handlers go in `directories.custom_services_dir` (default `config/services`) instead, without touching `lib/`. See [Adding services](#adding-services) to create custom ones.
 
@@ -145,7 +200,7 @@ Built-in handlers live in `lib/services/`. Deployment-specific handlers go in `d
 
 Lumi can serve several independent agent configurations from a single running instance. Each key under `profiles` is a profile name — `default` must always be defined — bundling its own `llm`, `mcp`, `attachments`, `rag`, and `connectors` settings.
 
-A client selects a profile when opening a session, via the `profile` field of `POST /auth` (see [HTTP API → Authentication](#authentication)). If the requested profile doesn't exist, Lumi falls back to `default`. Admin endpoints that list or filter tools (`GET /tools`) also accept a `profile` query parameter.
+A client selects a profile when opening a session, via the `profile` field of `POST /auth` (see [HTTP API → Authentication](#authentication-1)). If the requested profile doesn't exist, Lumi falls back to `default`. Admin endpoints that list or filter tools (`GET /tools`) also accept a `profile` query parameter.
 
 ```json
 "profiles": {
@@ -153,7 +208,7 @@ A client selects a profile when opening a session, via the `profile` field of `P
     "llm": { "...": "..." },
     "mcp": { "...": "..." },
     "attachments": { "...": "..." },
-    "rag": { "collection": "demo" },
+    "rag": { "collection": "demo", "top_k": 5 },
     "connectors": { "...": "..." }
   },
   "another_profile": {
@@ -162,7 +217,7 @@ A client selects a profile when opening a session, via the `profile` field of `P
 }
 ```
 
-Everything below (`llm`, `languages`, `mcp`, `attachments`, `rag.collection`, `connectors`) is scoped under `profiles.<name>`.
+Everything below (`llm`, `languages`, `mcp`, `attachments`, `rag`, `connectors`) is scoped under `profiles.<name>`.
 
 #### `profiles.<name>.languages`
 
@@ -176,18 +231,17 @@ LLM and agent settings.
 |-----|------|-------------|
 | `system_prompt_file` | string | Path to the system prompt Markdown file. May contain the `%language%` placeholder, replaced at call time with the session's language name (e.g. `français`) — see [Localization](#localization). |
 | `system_prompt` | string | Inline system prompt, used instead of `system_prompt_file` if set. Also supports `%language%`. |
-| `connector` | string | LLM connector to use (`LiteLLM`). |
+| `connector` | string | LLM connector to use: `LiteLLM`, `Cerebras`, `DigitalOcean`, or `Llama` (classes of `lib/agent/llmconnector/`). The connector's settings go in a block named after it (see `<connector>.*` below). |
 | `memory_messages` | int | Number of past exchanges kept in context. |
 | `empty_llm_response_max_retry` | int | Max retries when the LLM returns an empty response. |
 | `followup_questions.enabled` | bool | Generate follow-up question suggestions after each reply. |
 | `followup_questions.count` | int | Number of follow-up questions to generate. |
 | `filters` | object | Active output filters. Currently supports `CodeFilter` (strips markdown code fences). |
 | `<connector>.model` | string | Model identifier for the connector named in `connector` (e.g. `LiteLLM.model`). |
-| `<connector>.embedding_model` | string | Embedding model identifier, used for this profile's session-attachment RAG. |
 | `<connector>.api_base` | string | Base URL of the LLM provider API. |
-| `<connector>.api_key` | string | API key for the LLM provider. |
+| `<connector>.api_key` | string | API key for the LLM provider (optional for `Llama`). |
 
-The persistent RAG knowledge base (indexing, and search via `search_knowledge_base`) always embeds using the `default` profile's LLM connector, regardless of which profile the session belongs to — only session-attachment search follows the current profile's embedding model.
+Embedding models are not configured here: each RAG collection carries its own embedder (see [`rag`](#rag)).
 
 #### `profiles.<name>.mcp`
 
@@ -196,7 +250,7 @@ MCP tool settings.
 | Key | Type | Description |
 |-----|------|-------------|
 | `max_tool_iterations` | int | Maximum number of consecutive tool calls per agent turn. |
-| `tools_enabled` | array | Patterns controlling which tools are exposed to this profile's agent. A tool not covered by this list is not registered. Accepts: exact tool function names (e.g. `search_knowledge_base`); `namespace.*` to enable every tool of a module or subfolder, matched against the tool's module path relative to `tools.` (e.g. `word.*` enables all tools in `tools/word/`, `datetime.*` enables all tools in `tools/datetime.py`); `namespace/tool_name` to enable a single tool from a group (e.g. `pdf/generer_fichier_pdf`); and general glob patterns (`*`, `?`) matched against the module path. |
+| `tools_enabled` | array | Patterns controlling which tools are exposed to this profile's agent. A tool not covered by this list is not registered. Accepts: exact tool function names (e.g. `search_knowledge_base`); `namespace.*` to enable every tool of a module or subfolder, matched against the tool's module path relative to `tools.` (e.g. `word.*` enables all tools in `tools/word/`, `datetime.*` enables all tools in `tools/datetime.py`); `namespace/tool_name` to enable a single tool from a group (e.g. `pdf/generer_fichier_pdf`); and general glob patterns (`*`, `?`) matched against the module path. Tools of an [external MCP server](#external-mcp-servers) use the namespace `ext.<service>` (e.g. `ext.my_mcp_server.*`). |
 
 #### `profiles.<name>.attachments`
 
@@ -208,13 +262,16 @@ Controls the [file attachment](#file-attachments) feature for this profile.
 | `max_files` | int | Maximum number of files attached at once per session. |
 | `max_file_size_mb` | int | Maximum size, in MB, of a single attached file. |
 | `allowed_extensions` | array | File extensions accepted for upload (e.g. `.pdf`, `.docx`, `.xlsx`, `.md`, `.txt`, `.csv`, ...). |
+| `mode` | string | What is injected into the prompt: `rag` (most relevant chunks only), `full` (complete text of every attached file) or `auto` (default: full text if it fits in `full_text_max_tokens`, chunks otherwise). |
+| `full_text_max_tokens` | int | Threshold of the `auto` mode, on the estimated total size of attached files (≈ 4 characters per token). Default `20000`. |
 | `file_context_top_k` | int | Number of attachment chunks retrieved (and injected into context, or returned by `search_attached_files`) per query. |
 
 #### `profiles.<name>.rag`
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `collection` | string | Default RAG collection searched by `search_knowledge_base` for sessions on this profile. |
+| `collection` | string | RAG collection searched by `search_knowledge_base` for sessions on this profile (the only one they can access; without it, RAG search is unavailable). Must be declared in [`rag.collections`](#rag). Its embedder and chunking settings are also used for session-attachment search. |
+| `top_k` | int | Number of chunks returned per `search_knowledge_base` search. Defaults to `5`. |
 
 #### `profiles.<name>.connectors`
 
@@ -241,6 +298,27 @@ Global usage limits, shared across all profiles.
 | `max_requests_month` | int | Monthly request budget (`-1` = unlimited). |
 | `max_requests_minute` | int | Per-minute rate limit per session. |
 
+### `security`
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `sandbox_max_process` | int | Maximum number of simultaneous sandbox subprocesses (file extraction, cf. `extraction`); further executions wait (default: `4`). |
+| `min_secret_length` | int | Minimum length of `authentication.jwt_secret`, checked at startup (default: `32`, i.e. 256 bits for HS256). |
+| `auth_rate_window` | int | Sliding window, in seconds, over which `authentication.max_auth_requests_minute` is counted (default: `60`). |
+| `auth_rate_max_tracked_ips` | int | Number of client IPs tracked by the auth rate limiter beyond which inactive IPs are purged, to bound memory (default: `10000`). |
+| `multipart_overhead_mb` | number | Margin, in MB, added to the largest `attachments.max_file_size_mb` to size the `POST /files/upload` body limit, covering the multipart envelope (boundaries, part headers) (default: `1`). |
+
+### `extraction`
+
+Text extraction of uploaded or indexed files (PDF, Office, HTML...) runs in an isolated subprocess with resource limits, so that a malicious file (decompression bomb, pathological PDF) cannot exhaust the server. Linux only (`forkserver` multiprocessing context).
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `timeout` | int | Maximum duration of one extraction, in seconds (default: `120`). Also used as CPU time limit. |
+| `max_memory_mb` | int | Maximum memory (address space) of the extraction subprocess, in MB (default: `2048`). |
+| `max_uncompressed_mb` | int | Archives (docx, xlsx, pptx, zip...) whose entries exceed this total uncompressed size are rejected before extraction (default: `500`). |
+| `max_archive_entries` | int | Archives with more entries are rejected before extraction (default: `10000`). |
+
 ### `directories`
 
 Filesystem paths used across Lumi. Built-in ones default to locations under `storage/` (runtime data) or `static/` (built-in language files); the `custom_*` override directories default to locations under `config/` — see [`config/` directory layout](#config-directory-layout).
@@ -254,6 +332,7 @@ Filesystem paths used across Lumi. Built-in ones default to locations under `sto
 | `custom_languages_dir` | string | Directory of deployment-specific translation overrides/additions, same layout as `languages_dir`, merged on top of it. Default: `config/languages`. |
 | `custom_services_dir` | string | Fallback directory scanned for service handler classes not found in `lib/services/` — see [Adding services](#adding-services). Default: `config/services`. |
 | `custom_mcp_tools_dir` | string | Additional directory scanned for MCP tools alongside `lib/mcp/tools/` — see [Adding tools](#adding-tools). Default: `config/tools`. |
+| `custom_pipelines` | string | Directory containing one subfolder per pipeline (`<custom_pipelines>/<pipeline_uid>/pipeline.json`) — see [Pipelines](#pipelines). Default: `config/pipelines`. |
 
 ### `word`
 
@@ -272,18 +351,53 @@ Settings for the Word document template (gabarit) used by the `word.*` MCP tools
 | `heading_style_2` | string | Name of the paragraph style (defined in the template) applied to `##` headings. Defaults to `Heading 2`. |
 | `heading_style_3` | string | Name of the paragraph style (defined in the template) applied to `###` headings. Defaults to `Heading 3`. |
 
-### `rag`
+### `pdf`
 
-Persistent RAG knowledge base settings, shared across profiles (the collection searched is set per profile, see [`profiles.<name>.rag`](#profilesnamerag)).
+Settings for the PDF template used by the `generer_fichier_pdf` MCP tool. All keys are optional.
 
 | Key | Type | Description |
 |-----|------|-------------|
-| `embedding_dim` | int | Embedding vector dimension (must match the embedding model). |
-| `top_k` | int | Number of chunks returned per search. |
+| `template_color` | string | Accent color as a 6-digit hex code without `#` (default: `1F4E79`). |
+| `template_logo` | string \| null | Path to a logo image (relative to the project root, or absolute). Ignored if the file doesn't exist. |
+| `template_footer_text` | string \| null | Text displayed in the page footer. |
+
+### `rag`
+
+Persistent RAG knowledge base settings. `rag.collections` declares each collection by name. A profile references one of them (see [`profiles.<name>.rag`](#profilesnamerag)).
+
+```json
+"rag": {
+  "collections": {
+    "demo": {
+      "embedding_dim": 1024,
+      "chunk_size": 500,
+      "chunk_overlap": 50,
+      "connector": "PgVector",
+      "pgvector": { "table": "rag_documents" },
+      "embedder": {
+        "class": "LiteLLMEmbedder",
+        "model": "openai/Qwen/Qwen3-Embedding-0.6B",
+        "api_base": "https://provider.fr/v1",
+        "api_key": ""
+      }
+    }
+  }
+}
+```
+
+A collection's vectors are only comparable with vectors from the same model, so indexing (cron, API) and search (`search_knowledge_base`) of a collection always use that collection's `embedder`. Changing it requires a full reindex of the collection. Using a collection that is not declared raises an error.
+
+| Key (`rag.collections.<name>.`) | Type | Description |
+|-----|------|-------------|
+| `embedding_dim` | int | Embedding vector dimension (must match the embedder's model). |
 | `chunk_size` | int | Target chunk size in tokens. |
 | `chunk_overlap` | int | Overlap between consecutive chunks. |
 | `connector` | string | Vector store backend (`PgVector`). |
-| `pgvector.table` | string | PostgreSQL table used to store vectors. |
+| `pgvector.table` | string | PostgreSQL table used to store vectors. Collections with the same `embedding_dim` can share a table. |
+| `embedder.class` | string | Embedder class from `lib/agent/llmembedder` (`LiteLLMEmbedder`, `DigitalOceanEmbedder`, `LlamaEmbedder`). |
+| `embedder.model` | string | Embedding model identifier. |
+| `embedder.api_base` | string | Base URL of the embedding API. |
+| `embedder.api_key` | string | API key for the embedding API. |
 
 Indexed source files are kept for citation/download purposes under `directories.rag_storage_dir` (see [`directories`](#directories) and [source file retention](#rag-knowledge-base)).
 
@@ -295,12 +409,12 @@ An array of scheduled background tasks, executed once a minute by `CronManager`.
 "cron": [
   {
     "task": "Shredding",
-    "time": { "minute": "/5", "heure": "*" },
+    "time": { "minute": "/5", "hour": "*" },
     "config": { "log_max_days": 30 }
   },
   {
     "task": "Ragindexer",
-    "time": { "minute": "/10", "heure": "*" },
+    "time": { "minute": "/10", "hour": "*" },
     "config": { "folders": ["/data/docs"], "profile": "default" }
   }
 ]
@@ -309,7 +423,7 @@ An array of scheduled background tasks, executed once a minute by `CronManager`.
 | Key | Type | Description |
 |-----|------|-------------|
 | `task` | string | Name of the `CronTask` subclass to run (must exist in `lib/cron/tasks/`). |
-| `time` | object | Schedule, matched against the current minute/hour. Each field (`minute`, `heure`) accepts `"*"` (always), `"/N"` (every N units), or a fixed integer (exact match). Omitted fields always match. |
+| `time` | object | Schedule, matched against the current minute/hour. Each field (`minute`, `hour`) accepts `"*"` (always), `"/N"` (every N units), or a fixed integer (exact match). Omitted fields always match. |
 | `config` | object | Task-specific configuration, passed to the task instance. |
 
 Built-in tasks live in `lib/cron/tasks/`:
@@ -331,8 +445,19 @@ Built-in tasks live in `lib/cron/tasks/`:
 **POST /auth** — body:
 
 ```json
-{ "authorization": { "token": "<user-token>" }, "profile": "default", "language": "fr" }
+{
+  "authorization": {
+    "<authentication.service>": { "token": "<user-token>" },
+    "<other-service>": { "token": "<other-token>" }
+  },
+  "profile": "default",
+  "language": "fr"
+}
 ```
+
+`authorization` holds one entry per service, keyed by service name. The entry for the main service (`authentication.service`) is mandatory: if that service rejects it, the request fails with `403`. Entries for other configured services are optional and authenticated in parallel; a failure there is only logged and the service is skipped for the session. Each service's `authenticate()` returns a secret (e.g. `{"token": "..."}`) that is stored in the session's **wallet**, from which tools and services read it later (`Service.getAuth()`). Over HTTP, only existing tokens are accepted — login/password credentials are reserved for trusted callers (pipeline configuration).
+
+Only one session per authorization payload is kept: a new `POST /auth` with the same payload replaces the previous session, unless that one has an open WebSocket connection, in which case the request fails with `409`. Requests are rate-limited per client IP (`authentication.max_auth_requests_minute`, `429` beyond).
 
 `profile` selects which [profile](#profiles) the session runs on (its LLM, tools, attachment policy, RAG collection, connectors); falls back to `default` if the name doesn't match a configured profile.
 
@@ -380,6 +505,16 @@ Response:
 | `GET` | `/health` | Basic admin | Service health and active WebSocket connections. |
 | `GET` | `/tools` | Basic admin | List of active MCP tools. Accepts an optional `?profile=<name>` query param to filter down to the tools enabled for that profile (`profiles.<name>.mcp.tools_enabled`); without it, returns the union of tools registered across all profiles. |
 
+### Pipeline runs
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/pipeline/{pipeline_uid}/start` | Basic admin | Start a pipeline asynchronously. Optional JSON body `{ "payload": { ... } }`, exposed to the pipeline as `trigger.data`. Returns `{ "pipelines": [ { "pipeline_uid", "process_uid" } ] }`; `400` if the pipeline doesn't exist. |
+| `GET` | `/pipeline/process/{process_uid}` | Basic admin | Run status (`is_ended`, `is_success`, timestamps) and list of executed steps. |
+| `GET` | `/pipeline/process/{process_uid}/{id}` | Basic admin | Detail of one step, including its logs. |
+
+See [Pipelines](#pipelines) and [README-PIPELINES.md](README-PIPELINES.md).
+
 ### File upload
 
 | Method | Endpoint | Auth | Description |
@@ -397,7 +532,7 @@ Response:
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/files/{key}/{filename}` | Bearer or `?t=` hash | Download a temporary file generated by a tool. |
-| `GET` | `/files/rag/{collection}/{key}/{filename}` | Bearer, `?t=` hash, or Basic admin | Download a source document retained by the RAG knowledge base (see [source file retention](#rag-knowledge-base)). |
+| `GET` | `/files/rag/{collection}/{key}/{filename}` | Bearer (session whose profile's `rag.collection` is `{collection}`), `?t=` per-file signature, or Basic admin | Download a source document retained by the RAG knowledge base (see [source file retention](#rag-knowledge-base)). |
 
 ---
 
@@ -407,7 +542,7 @@ Conversations, MCP tool metadata (display names, confirmation prompts), and syst
 
 ### Selecting a language
 
-A profile declares which languages it supports via [`profiles.<name>.languages`](#profilesnamelanguages) (e.g. `["fr", "en"]`). A client selects one when opening a session, via the `language` field of `POST /auth` (see [HTTP API → Authentication](#authentication)); if omitted, the session falls back to [`app.default_language`](#app). `POST /auth` returns `400` if the requested language doesn't exist or isn't in the profile's `languages` list. The session's language is also reported back by [`GET /auth`](#authentication).
+A profile declares which languages it supports via [`profiles.<name>.languages`](#profilesnamelanguages) (e.g. `["fr", "en"]`). A client selects one when opening a session, via the `language` field of `POST /auth` (see [HTTP API → Authentication](#authentication-1)); if omitted, the session falls back to [`app.default_language`](#app). `POST /auth` returns `400` if the requested language doesn't exist or isn't in the profile's `languages` list. The session's language is also reported back by [`GET /auth`](#authentication-1).
 
 ### Translation files
 
@@ -466,9 +601,21 @@ Files attached via `POST /files/upload` (see [File attachments](#file-attachment
 
 ## RAG knowledge base
 
-The RAG layer indexes documents into a **PostgreSQL / pgvector** vector store. The agent queries it automatically via the `search_knowledge_base` tool, which is scoped to the RAG collection configured on the session's [profile](#profilesnamerag) (`profiles.<name>.rag.collection`), unless the LLM explicitly requests another collection.
+The RAG layer indexes documents into a **PostgreSQL / pgvector** vector store. The agent queries it automatically via the `search_knowledge_base` tool, which is strictly scoped to the RAG collection configured on the session's [profile](#profilesnamerag) (`profiles.<name>.rag.collection`): the LLM cannot target another collection, and a profile without `rag.collection` has no RAG search.
 
 Documents can be indexed manually via the [document management API](#document-management-api), or automatically from folders on disk via the [`Ragindexer` CRON task](#cron).
+
+### PostgreSQL / pgvector setup
+
+Lumi automatically creates the pgvector table and its indexes on first use (`CREATE TABLE IF NOT EXISTS ...`), and also issues `CREATE EXTENSION IF NOT EXISTS vector` — but the **pgvector extension binaries must already be installed on the PostgreSQL server**, since Lumi can enable the extension but not install it.
+
+- Use a PostgreSQL image/package that ships pgvector, e.g. the [`pgvector/pgvector`](https://github.com/pgvector/pgvector) Docker image (`pgvector/pgvector:pg16` or similar) instead of the plain `postgres` image, or install the `postgresql-<version>-pgvector` package on a self-managed server.
+- The `services.bdd` user configured in `config.json` (see [`services`](#services)) needs privileges to run `CREATE EXTENSION` on the target database (superuser, or a role granted rights to create pre-authorized extensions).
+- If the extension isn't installed or hasn't been created yet, RAG operations (indexing, search) fail with `vector type not found in the database`. Fix it by connecting to the target database and running:
+  ```sql
+  CREATE EXTENSION IF NOT EXISTS vector;
+  ```
+  If that command itself fails (e.g. `could not open extension control file`), the server is missing the pgvector binaries — switch to a PostgreSQL image/package that includes them.
 
 ### Supported document formats
 
@@ -499,7 +646,7 @@ Both `POST` and `PUT` accept `multipart/form-data` with the fields:
 | `file` | file | Document to index (mutually exclusive with `text`). |
 | `text` | string | Raw text to index (mutually exclusive with `file`). |
 | `source` | string | Identifier for the document (defaults to the filename). |
-| `collection` | string | Target collection (defaults to the `default` profile's `rag.collection`). |
+| `collection` | string | Target collection, declared in `rag.collections` (defaults to the `default` profile's `rag.collection`). |
 
 ---
 
@@ -525,11 +672,17 @@ Requires `profiles.<name>.attachments.enabled` to be `true` for the session's pr
 
 ### Per-session RAG
 
-Attached files are never written to the persistent pgvector store. Instead, each file is chunked and embedded on the fly into an **ephemeral, in-memory index** scoped to the session — cached for the lifetime of the session and discarded when it ends. On every user message, Lumi automatically retrieves the most relevant chunks (`attachments.file_context_top_k`) across all attached files and injects them into the prompt. The `search_attached_files` MCP tool remains available for the LLM to run additional, more targeted searches.
+Attached files are never written to the persistent pgvector store. On every user message, Lumi automatically injects their content into the prompt, according to `attachments.mode`:
+
+- `full`: the complete text of every attached file (page by page for PDFs). Required for requests about the whole document (list, summarize, compare...).
+- `rag`: files are chunked and embedded on the fly into an **ephemeral, in-memory index** scoped to the session (cached for its lifetime, discarded when it ends), and only the most relevant chunks (`attachments.file_context_top_k`) for the message are injected Chunking and embeddings use the settings of the **session's profile's RAG collection** (`profiles.<name>.rag.collection`, or the `default` profile's collection if unset). Nothing is written to that collection.
+- `auto` (default): `full` while the attached files fit in `attachments.full_text_max_tokens`, `rag` beyond.
+
+The `search_attached_files` MCP tool remains available for the LLM to run additional, more targeted searches.
 
 ### Citations
 
-Like `search_knowledge_base`, using attached-file content triggers a `rag` WebSocket event per source file (`{ "type": "rag", "source": "report.pdf", "locations": [2, 5] }`) so the client can show which file (and page, for paginated files) an answer drew from. Since attachments aren't persisted, these events carry no download `url`.
+Like `search_knowledge_base`, using attached-file content triggers a `rag` WebSocket event per source file (`{ "type": "rag", "source": "report.pdf", "locations": [2, 5] }`) so the client can show which file (and page, for paginated files) an answer drew from. When the full text is injected, `locations` is empty (the whole file was used). Since attachments aren't persisted, these events carry no download `url`.
 
 ---
 
@@ -548,6 +701,47 @@ Lumi ships with the following generic MCP tool groups in `lib/mcp/tools/`. Enabl
 | `word` | `lib/mcp/tools/word/word.py` | 8 tools | Word document generation and editing on top of a company template — see [Word document templates](#word-document-templates-gabarits). |
 
 
+
+---
+
+## Pipelines
+
+A **pipeline** is a server-side workflow, declared in JSON, that chains processing **blocks** sharing a common **context**. Each pipeline lives in its own folder under [`directories.custom_pipelines`](#directories) (default `config/pipelines/<pipeline_uid>/pipeline.json`); pipelines are loaded and validated (`lib/_references/pipeline.schema.json`) once at startup.
+
+```json
+{
+  "name": "Recap mail",
+  "services": { "nexora": { "login": "robot@example.com", "password": "..." } },
+  "trigger": [ { "class": "Api", "config": {} } ],
+  "blocks": {
+    "_root":   { "class": "Mail",  "config": { "action": "list", "...": "...", "output": "mails" }, "on_success": "analyse", "on_error": "exit(0)" },
+    "analyse": { "class": "Agent", "config": { "profile": "default", "prompt": "Summarize: {mails}", "output": "summary" }, "on_success": "exit(1)" }
+  }
+}
+```
+
+- Execution starts at the `_root` block and follows each block's `on_success` / `on_error` (another block id, `exit(1)` = success, `exit(0)` = failure).
+- Block configuration strings are templates over the context: `{var.path[0]}`, `{% for %}`, `{% if %}`.
+- `services` authenticates the run to configured services (credentials allowed here, since the pipeline file is trusted); secrets go into the run's wallet, shared with the `Agent` blocks' MCP tools.
+- Each run executes in its own thread with its own process id; files produced during the run are purged at the end.
+- The only trigger implemented so far is `Api` (`POST /pipeline/{pipeline_uid}/start`, see [HTTP API → Pipeline runs](#pipeline-runs)).
+
+The full guide — configuration file, context and templating, every block and its parameters, run monitoring, and a commented example — is in **[README-PIPELINES.md](README-PIPELINES.md)** (in French).
+
+---
+
+## External MCP servers
+
+A remote MCP server is declared as a service with the `MCPExternalService` handler:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `transport` | string | `http` (streamable HTTP) or `sse`. |
+| `url` | string | URL of the MCP endpoint. |
+| `headers` | object | Optional static HTTP headers sent on connection. |
+| `auth` | string | `static` (default): connected once at startup, shared by every session. `session`: connected per conversation turn, with the session's own token (`Authorization: Bearer <token>`), taken from the wallet — the client provides it in `POST /auth` under the service's name. |
+
+Its tools are exposed to the LLM as `ext__<service>__<tool>` and enabled per profile in `mcp.tools_enabled` with the `ext.<service>` namespace (e.g. `ext.my_mcp_server.*`). A server unreachable at startup is logged and skipped.
 
 ---
 
@@ -691,20 +885,22 @@ Services are reusable HTTP or database clients made available to tools via `Serv
 Create a file named after your handler (lowercased) in `lib/services/` or your `custom_services_dir`, and define a class that extends `Service`:
 
 ```python
-from lib.services.services import Service
+from lib.services._abstract import Service
 
 class MyService(Service):
 
-    def __init__(self, data: dict):
+    def __init__(self, name: str, data: dict):
         service_format = {
             "url": "str",
             "timeout": "int",
         }
-        super().__init__(data=data, serviceDataFormat=service_format)
+        super().__init__(name=name, data=data, serviceDataFormat=service_format)
         self.timeout = data.get("timeout", 10)
 ```
 
-The `serviceDataFormat` dict declares the expected keys in the service's configuration block. The `Service` base class validates the config structure at startup and raises a clear error if a key is missing or unexpected.
+`name` is the service's key in `services`. The `serviceDataFormat` dict declares the expected keys in the service's configuration block (`handler` excluded). The `Service` base class validates the config structure at startup and raises a clear error if a key is missing or unexpected.
+
+A service is a single instance shared by all sessions and pipeline runs: it must not hold any per-user state. Per-user authentication goes through the wallet (see [Authentication](#authentication-2) below).
 
 ### Registering a service
 
@@ -723,7 +919,7 @@ Add the service to `services` in `config.json`. The `handler` key must match the
 ### Using a service from a tool
 
 ```python
-from lib.services.services import ServiceManager
+from lib.services.servicemanager import ServiceManager
 
 class MyTools(MCPTool):
     def my_tool(self, ...):
@@ -733,11 +929,15 @@ class MyTools(MCPTool):
 
 ### Authentication
 
-Services can implement the `checkAuthentication(authorization: dict)` method to verify user credentials at session open time. The `authorization` dict is the payload sent by the client in `POST /auth`.
+Services can override `authenticate(authorization: dict, allow_credentials: bool = False) -> dict | bool` to verify user credentials. `authorization` is the entry for this service in the `POST /auth` payload (or in a pipeline's `services` block). The method returns the secret to keep in the wallet (e.g. `{"token": "..."}`), or `False` on failure. `allow_credentials` is `True` only for trusted callers (pipelines), allowing a login/password exchange; over HTTP only existing tokens should be accepted. The default implementation returns `{}` (no per-user authentication).
+
+Inside the service, `self.getAuth()` returns the current session's (or pipeline run's) secret for this service.
+
+A public method with the signature `method(self, context, params)` can also be called from a pipeline through the `ServiceMethod` block — see [README-PIPELINES.md](README-PIPELINES.md).
 
 ### Dynamic class loading
 
-LLM filters, LLM connectors, connectors (e.g. Webex), and CRON tasks are all instantiated through a single mechanism, `DynamicImport.getInstance` (`lib/utils/dynamicimport.py`). It only imports classes from a fixed allow-list of module paths (`lib.cron.tasks`, `lib.agent.filters`, `lib.agent.llmconnector`, `lib.connectors.webex`), so configuration values can never trigger the loading of arbitrary code — dropping a new class in one of these packages is enough to make it loadable, but the package itself must be explicitly allow-listed.
+LLM filters, LLM connectors, embedders, connectors (e.g. Webex), CRON tasks, and pipeline triggers and blocks are all instantiated through a single mechanism, `DynamicImport.getInstance` (`lib/utils/dynamicimport.py`). It only imports classes from a fixed allow-list of module paths (`lib.cron.tasks`, `lib.agent.filters`, `lib.agent.llmconnector`, `lib.agent.llmembedder`, `lib.connectors.webex`, `lib.pipelines.triggers`, `lib.pipelines.blocks`), so configuration values can never trigger the loading of arbitrary code — dropping a new class in one of these packages is enough to make it loadable, but the package itself must be explicitly allow-listed.
 
 Services follow a separate, path-based loading mechanism instead (`ServiceManager`, see [Adding services](#adding-services) above): the `handler` name in a service's config is resolved to a `.py` file in `lib/services/`, falling back to `directories.custom_services_dir`, rather than going through `DynamicImport`'s allow-list.
 
@@ -749,10 +949,10 @@ CRON tasks run periodically in the background (see [`cron`](#cron) for schedulin
 
 ### Creating a CRON task
 
-Create a file in `lib/cron/tasks/` and define a class that extends `CronTask`, with a class name matching the file name (case-insensitive) and the `task` value used in the `cron` config entry:
+Create a file in `lib/cron/tasks/` and define a class that extends `CronTask`, with a class name matching the file name (case-insensitive) and the `task` value used in the `cron` config entry. Also add the task name to the `cronTask.task` enum of `lib/_references/config.schema.json`, otherwise the configuration is rejected at startup:
 
 ```python
-from lib.cron.tasks.crontask import CronTask
+from lib.cron.tasks._abstract import CronTask
 
 class MyTask(CronTask):
     def __init__(self, config: dict):
@@ -833,9 +1033,17 @@ On startup, for every profile with `connectors.webex.enabled: true`, the connect
 
 
 
+### v1.6.x — Abyss (beta)
+
+See [What's new in v1.6.0](#whats-new-in-v160--abyss).
+
 ### v1.5.x — Waves
 
-See [What's new in v1.5.0](#whats-new-in-v150--waves).
+- **Multilingual LLM conversations** — profiles now declare an allowed `languages` list; a session selects one via `POST /auth`, and the agent substitutes it into the system prompt (`%language%`) so replies are generated in that language.
+- **Translation manager** — a new `LanguageManager` / `Language` / `Traduction` layer loads per-language JSON dictionaries from `static/languages/<code>/` (built-in) and merges in overrides from `config/languages/<code>/` (deployment-specific), keyed by dotted translation codes (e.g. `[word.generer_fichier_word.confirmation]`).
+- **Translated MCP tool helpers, confirmations, and errors** — tool display names, confirmation questions/options, and system error messages (rate limiting, response-in-progress, …) are now resolved through the session's language instead of being hardcoded.
+- **`GET /auth` session info endpoint** — returns the current session's effective configuration (follow-up questions enabled, language, attachment policy) derived from its profile, so the client can adapt the agent's UI directly instead of duplicating profile settings.
+- **Reorganized directory layout for Docker** — built-in code moved under `lib/` (`lib/mcp/tools/`, `lib/services/`), and everything deployment-specific was consolidated under two directories: `config/` (configuration, custom tools/services/languages, prompts, templates, secrets) and `storage/` (temp files, logs, local DB, RAG storage). See [`config/` directory layout](#config-directory-layout).
 
 ### v1.4.x - Phosphor
 

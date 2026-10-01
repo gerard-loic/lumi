@@ -1,9 +1,18 @@
 import os
+import asyncio
 import fnmatch
 import inspect
+import functools
+import contextvars
 import importlib.util
+from concurrent.futures import ThreadPoolExecutor
 from mcp.server.fastmcp import FastMCP
 from lib.config.config import Config
+
+#Pool dédié à l'exécution des outils MCP synchrones (cf. MCPTool._wrap_method) : séparé du pool par défaut
+#d'asyncio pour que des outils longs (conversion LibreOffice, pages web lentes) ne puissent pas le saturer et
+#bloquer les autres usages (ex. requêtes pgvector du RAG)
+_SYNC_TOOLS_EXECUTOR = ThreadPoolExecutor(max_workers=16, thread_name_prefix="lumi-tool")
 
 def slow_tool(func=None):
     """Décorateur signalant qu'un outil peut être lent à s'exécuter."""
@@ -40,17 +49,19 @@ def restricted_tool(func=None):
         return decorator(func)
     return decorator
 
-def _inject_session_auth(session_id: str) -> None:
-    """Définit l'auth et la session courante pour l'exécution d'un outil."""
-    if not session_id:
-        return
-    from lib.session.session import AuthSessionManager
-    from lib.services.services import ServiceManager
-    from lib.http.auth import Auth
-    session = AuthSessionManager.get(session_id)
-    if session:
-        ServiceManager.setAuthorization(authorization=session.authentication)
-        Auth._session_id_var.set(session_id)
+def _inject_session_auth(process_id: str):
+    """Pose le process courant (et donc l'auth aux services via son wallet) pour l'exécution d'un outil.
+    Renvoie le token à passer à ProcessManager.exit()."""
+    if not process_id:
+        return None
+    from lib.process.processmanager import ProcessManager
+    if not ProcessManager.get(process_id):
+        return None
+    return ProcessManager.setCurrent(process_id)
+
+def _exit_session_auth(token) -> None:
+    from lib.process.processmanager import ProcessManager
+    ProcessManager.exit(token)
 
 
 """
@@ -87,8 +98,8 @@ class MCPTool:
         sig = inspect.signature(method)
         params_no_self = [p for p in sig.parameters.values() if p.name != "self"]
 
-        # lumi_session_id est injecté par call_tool à chaque appel ; il est filtré
-        # du schéma exposé au LLM dans tools_as_openai_format.
+        # lumi_session_id est injecté par call_tool à chaque appel ; il est filtré du schéma
+        # exposé au LLM (cf. MCPClientManager._tool_schema).
         _session_param = inspect.Parameter(
             "lumi_session_id",
             kind=inspect.Parameter.KEYWORD_ONLY,
@@ -102,16 +113,31 @@ class MCPTool:
 
         if inspect.iscoroutinefunction(method):
             async def wrapper(*args, **kwargs):
-                _inject_session_auth(kwargs.pop("lumi_session_id", ""))
-                instance = cls()
-                result = await method(instance, *args, **kwargs)
-                return {"result": result, "events": instance._events}
+                _process_token = _inject_session_auth(kwargs.pop("lumi_session_id", ""))
+                try:
+                    instance = cls()
+                    result = await method(instance, *args, **kwargs)
+                    return {"result": result, "events": instance._events}
+                finally:
+                    _exit_session_auth(_process_token)
         else:
-            def wrapper(*args, **kwargs):
-                _inject_session_auth(kwargs.pop("lumi_session_id", ""))
-                instance = cls()
-                result = method(instance, *args, **kwargs)
-                return {"result": result, "events": instance._events}
+            #Outil synchrone (requêtes réseau, conversion de documents...) : FastMCP l'appellerait directement sur la
+            #boucle événementielle, bloquant tout le serveur (WebSockets de tous les utilisateurs compris) pendant son
+            #exécution. Il est donc exécuté dans le pool de threads dédié aux outils, dans une copie du contexte
+            #courant (le process courant posé par _inject_session_auth reste propre à cet appel).
+            def _run_sync(*args, **kwargs):
+                _process_token = _inject_session_auth(kwargs.pop("lumi_session_id", ""))
+                try:
+                    instance = cls()
+                    result = method(instance, *args, **kwargs)
+                    return {"result": result, "events": instance._events}
+                finally:
+                    _exit_session_auth(_process_token)
+
+            async def wrapper(*args, **kwargs):
+                loop = asyncio.get_running_loop()
+                ctx = contextvars.copy_context()
+                return await loop.run_in_executor(_SYNC_TOOLS_EXECUTOR, functools.partial(ctx.run, _run_sync, *args, **kwargs))
 
         wrapper.__name__ = method.__name__
         wrapper.__qualname__ = method.__qualname__
@@ -163,6 +189,14 @@ serveur MCP (celui-ci est unique et partagé : `registerTools` enregistre
 l'union des `tools_enabled` de tous les profils). Le filtrage effectif par
 profil — quels outils un profil donné voit et peut appeler — se fait ensuite
 côté `MCPClientManager` (`lib/mcp/client.py`), à partir du même motif.
+
+Les outils servis par un serveur MCP externe (cf. `MCPExternalService`,
+`lib/services/mcpexternalservice.py`) ne passent pas par ce loader : ils sont
+récupérés à l'exécution via `list_tools()` sur la session distante, par
+`MCPClientManager._connect_external_servers`. Ils suivent néanmoins la même
+convention de motifs, sous le namespace réservé "ext.<nom_du_service>" (le nom
+d'outil exposé au LLM est préfixé "ext__<nom_du_service>__<outil>") : ex.
+"ext.mon_serveur.*" active tous les outils de ce serveur externe.
 
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """

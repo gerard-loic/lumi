@@ -22,7 +22,7 @@ class RagHelper:
         
         try:
             indexer = Indexer(collection=collection)
-            await VectorStore.ensureTable()
+            await VectorStore.ensureTable(indexer._collection)
 
             if file:
                 #Indexation d'un fichier, il faut au préalable le convertir

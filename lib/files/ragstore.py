@@ -4,8 +4,10 @@ import secrets
 import os
 import re
 import shutil
-from lib.http.auth import Auth
-from lib.session.session import AuthSessionManager
+import time
+import hmac
+import hashlib
+from lib.process.processmanager import ProcessManager
 
 _KEY_URL_RE = re.compile(r"/files/rag/([^/]+)/([0-9a-f]{32})/([^?]+)")
 
@@ -32,18 +34,46 @@ class RagStore:
         #n'est ajoutée, avec le jeton de la session en cours, qu'au moment de la consultation, via signUrl().
         return f"/files/rag/{collection}/{key}/{filename}"
 
-    #Ajoute la base (app.url) et signe une URL RagStore avec le jeton de la session courante
-    #(contextuel : appelé lors de la consultation/citation du fichier, jamais au moment de l'indexation)
+    #Ajoute la base (app.url) et signe une URL RagStore (contextuel : appelé lors de la consultation/citation
+    #du fichier, jamais au moment de l'indexation). La signature (?t=<expiration>.<hmac>) ne vaut que pour CE
+    #fichier : une URL divulguée (logs, message Webex...) ne donne pas accès au reste du stockage RAG. Elle expire
+    #avec la session courante, ou à défaut (run de pipeline sans expiration) après authentication.session_duration.
     @staticmethod
     def signUrl(url: str) -> str:
         #Compatibilité avec les URLs absolues indexées avant l'introduction des URLs relatives
         if not url.startswith("http://") and not url.startswith("https://"):
             url = f"{Config.get(key='app.url')}{url}"
-        session = AuthSessionManager.get(Auth.getSessionId())
-        if not session or not session.token_hash:
+        url = url.split("?", 1)[0]
+        match = _KEY_URL_RE.search(url)
+        if not match:
             return url
-        sep = "&" if "?" in url else "?"
-        return f"{url}{sep}t={session.token_hash}"
+        collection, key, _ = match.groups()
+
+        process = ProcessManager.getCurrent()
+        expires_at = process.getExpiresAt() if process else None
+        if expires_at is None:
+            expires_at = time.time() + Config.get("authentication.session_duration")
+        expires_at = int(expires_at)
+
+        return f"{url}?t={expires_at}.{RagStore._signature(collection, key, expires_at)}"
+
+    #Vérifie la signature ?t= d'une URL RagStore (cf. signUrl) : fichier signé et signature non expirée
+    @staticmethod
+    def checkSignature(collection: str, key: str, t: str) -> bool:
+        try:
+            expires_at, signature = t.split(".", 1)
+            expires_at = int(expires_at)
+        except ValueError:
+            return False
+        if expires_at <= time.time():
+            return False
+        return hmac.compare_digest(signature, RagStore._signature(collection, key, expires_at))
+
+    #HMAC du fichier (collection + clé) et de son expiration. Le préfixe sépare cet usage du secret de celui des JWT.
+    @staticmethod
+    def _signature(collection: str, key: str, expires_at: int) -> str:
+        message = f"lumi-ragstore-url:{collection}/{key}:{expires_at}".encode()
+        return hmac.new(Config.get("authentication.jwt_secret").encode(), message, hashlib.sha256).hexdigest()
 
     @staticmethod
     def delete(key:str, collection:str ) -> bool:

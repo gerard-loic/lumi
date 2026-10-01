@@ -1,7 +1,6 @@
 from typing import Annotated, Optional
 from pydantic import BaseModel, Field
 from lib.mcp.toolloader import MCPTool, slow_tool, tool_description
-from lib.http.auth import Auth
 from lib.agent.events import RagEvent
 from lib.rag.attachmentretriever import AttachmentRetriever
 
@@ -34,8 +33,7 @@ class FilesTool(MCPTool):
         que sur les fichiers explicitement joints par l'utilisateur dans cette conversation. Si aucun fichier
         n'a été joint, retourne une liste vide.
         """
-        session_id = Auth.getSessionId()
-        results = await AttachmentRetriever().search(session_id, query)
+        results = await AttachmentRetriever().search(query)
 
         #Signale au client les documents utilisés pour construire la réponse (un événement par fichier distinct)
         for filename, pages in AttachmentRetriever.group_pages_by_file(results).items():

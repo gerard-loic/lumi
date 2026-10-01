@@ -3,13 +3,13 @@ import psycopg2
 import psycopg2.extras
 from psycopg2 import sql
 from lib.config.config import Config
-from lib.services.services import Service
+from lib.services._abstract import Service
 
 #CREATE EXTENSION IF NOT EXISTS pg_trgm
 #CREATE EXTENSION IF NOT EXISTS vector
 
 class PostgreSQL(Service):
-    def __init__(self, data:dict):
+    def __init__(self, name:str, data:dict):
         service_format = {
             "host" : "str",
             "port" : "int",
@@ -17,7 +17,7 @@ class PostgreSQL(Service):
             "username" : "str",
             "password" : "str"
         }
-        super().__init__(data=data, serviceDataFormat=service_format)
+        super().__init__(name=name, data=data, serviceDataFormat=service_format)
         self._connect()
 
     #Ouvre une connexion neuve à la BDD (jamais partagée/conservée sur l'instance : ce service est un
@@ -89,7 +89,10 @@ class PostgreSQL(Service):
         try:
             with cnx.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 query = sql.Composed(parts)
+<<<<<<< HEAD
                 print(cur.mogrify(query, params).decode())
+=======
+>>>>>>> abyss
                 cur.execute(query, params)
                 record = cur.fetchone()
         finally:

@@ -5,8 +5,6 @@ from typing import Annotated, Optional
 from openpyxl import Workbook
 from lib.files.filestore import FileStore
 from lib.agent.events import FileEvent
-from lib.http.auth import Auth
-from lib.session.session import AuthSessionManager
 from lib.mcp.toolloader import MCPTool
 from lib.mcp.toolloader import confirmation_tool, restricted_tool, tool_description
 

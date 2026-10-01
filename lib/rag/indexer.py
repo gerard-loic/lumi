@@ -1,8 +1,8 @@
 
 import os
+from lib.rag.collection import RagCollection
 from lib.rag.embedder import Embedder
 from lib.rag.vectorstore import VectorStore
-from lib.config.config import Config
 
 #Correspondance des types de fichiers et extensions
 _FILE_TYPE_MAP = {
@@ -40,15 +40,16 @@ Flux principal :
 class Indexer:
     def __init__(self, collection: str = None):
         #Collection utilisée. Par défaut celle du profil "default" (utilisé hors contexte de session : cron, endpoints admin)
-        from lib.agent.profile import ProfileManager
-        self._collection    = collection or ProfileManager.getProfile("default").getConfigValue("rag.collection")
-        self._chunk_size    = Config.get("rag.chunk_size") # taille maximale (en tokens ou caractères) de chaque morceau de texte
-        self._chunk_overlap = Config.get("rag.chunk_overlap") #nombre de tokens/caractères qui se chevauchent entre deux chunks consécutifs
-        self._embedder      = Embedder()
+        self._collection    = collection or RagCollection.ofProfile()
+        config              = RagCollection.get(self._collection)
+        self._chunk_size    = config["chunk_size"] # taille maximale (en tokens ou caractères) de chaque morceau de texte
+        self._chunk_overlap = config["chunk_overlap"] #nombre de tokens/caractères qui se chevauchent entre deux chunks consécutifs
+        #Embedder de la collection, le même que celui utilisé pour la recherche (cf. Retriever)
+        self._embedder      = Embedder(self._collection)
 
     # Indexation depuis texte brut
     async def indexText(self, text: str, metadata: dict = None) -> int:
-        await VectorStore.ensureTable()
+        await VectorStore.ensureTable(self._collection)
         base_meta = dict(metadata or {})
         if "file_type" not in base_meta and "source" in base_meta:
             ext = os.path.splitext(base_meta["source"])[-1].lower()
@@ -64,7 +65,7 @@ class Indexer:
 
     #Reindexation d'un texte
     async def reindexText(self, source: str, text: str, metadata: dict = None) -> dict:
-        await VectorStore.ensureTable()
+        await VectorStore.ensureTable(self._collection)
         deleted = await VectorStore.deleteBySource(self._collection, source)
         m = {**(metadata or {}), "source": source}
         indexed = await self.indexText(text, metadata=m)
@@ -76,7 +77,7 @@ class Indexer:
         """
     async def indexFile(self, path: str, source: str = None, metadata: dict = None) -> int:
 
-        await VectorStore.ensureTable()
+        await VectorStore.ensureTable(self._collection)
         src = source or os.path.basename(path)
         filename = os.path.basename(src)
         ext = os.path.splitext(src)[-1].lower()
@@ -102,7 +103,7 @@ class Indexer:
 
     #Réindexation d'un fichier
     async def reindexFile(self, path: str, source: str = None, metadata: dict = None) -> dict:
-        await VectorStore.ensureTable()
+        await VectorStore.ensureTable(self._collection)
         src = source or os.path.basename(path)
         old_meta = await VectorStore.sourceMetadata(self._collection, src)
         deleted = await VectorStore.deleteBySource(self._collection, src)

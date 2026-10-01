@@ -1,10 +1,9 @@
 import os
-from typing import Annotated, Optional
+from typing import Annotated
 from pydantic import Field
 from lib.agent.events import RagEvent
 from lib.rag.retriever import Retriever
-from lib.http.auth import Auth
-from lib.session.session import AuthSessionManager
+from lib.process.processmanager import ProcessManager
 from lib.files.ragstore import RagStore
 from lib.mcp.toolloader import MCPTool, tool_description
 
@@ -16,7 +15,6 @@ class RAGTool(MCPTool):
     async def search_knowledge_base(
         self,
         query: Annotated[str, Field(description="Question ou sujet à rechercher dans la base de connaissances")],
-        collection: Annotated[Optional[str], Field(default=None, description="Nom de la collection (optionnel, utilise la collection par défaut si absent)")] = None,
     ) -> list[dict]:
         """
         Recherche les passages les plus pertinents dans la base de connaissances.
@@ -24,13 +22,18 @@ class RAGTool(MCPTool):
         Retourne les extraits de texte les plus pertinents avec leur score de similarité.
         Ne pas utiliser si la question porte sur un fichier que l'utilisateur a joint à la conversation (voir search_attached_files).
         """
-        #À défaut de collection explicitement demandée par le LLM, utilise celle du profil de la session en cours
-        if collection is None:
-            profile = AuthSessionManager.get_profile(Auth.getSessionId())
-            if profile:
-                collection = profile.getConfigValue("rag.collection")
+        #La collection est imposée par le profil de la session en cours (profiles.<profil>.rag.collection), jamais
+        #choisie par le LLM : un utilisateur ne doit pas pouvoir interroger la collection d'un autre profil.
+        #Sans session ou sans collection configurée sur le profil, pas de RAG (aucun repli sur le profil "default").
+        process = ProcessManager.getCurrent()
+        agent_ctx = process.getAgentContext() if process else None
+        profile = agent_ctx.getProfileConfig() if agent_ctx else None
+        collection = profile.getConfigValue("rag.collection") if profile else None
+        if not collection:
+            raise ValueError("Aucune base de connaissances n'est configurée pour ce profil.")
 
-        retriever = Retriever(collection=collection)
+        #Nombre de résultats : paramétrage du profil de la session en cours
+        retriever = Retriever(collection=collection, top_k=profile.getConfigValue("rag.top_k"))
         results = await retriever.search(query)
 
         #Signale au client les documents utilisés pour construire la réponse (un événement par source distincte).

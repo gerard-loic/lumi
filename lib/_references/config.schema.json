@@ -1,0 +1,494 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "lumi/config.schema.json",
+    "title": "Lumi — config/config.json",
+    "description": "Structure attendue du fichier config/config.json. Une clé est requise quand le code la lit sans valeur par défaut.",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["app", "authentication", "services", "logger", "profiles", "usage", "directories", "rag", "cron"],
+    "properties": {
+
+        "custom": {
+            "description": "Paramètres libres propres au déploiement (ex. front-app)",
+            "type": "object"
+        },
+
+        "app": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "description", "allowed_cors_ips", "allowed_cors_methods", "allowed_cors_headers", "url", "ws_inactivity_timeout", "default_language", "admin_users"],
+            "properties": {
+                "name": { "type": "string" },
+                "description": { "type": "string" },
+                "allowed_cors_ips": { "$ref": "#/$defs/stringList" },
+                "allowed_cors_methods": { "$ref": "#/$defs/stringList" },
+                "allowed_cors_headers": { "$ref": "#/$defs/stringList" },
+                "url": { "type": "string" },
+                "ws_inactivity_timeout": { "type": "integer", "minimum": 0, "description": "Secondes" },
+                "max_request_body_mb": { "type": "number", "exclusiveMinimum": 0, "description": "Taille max du corps d'une requête HTTP (Mo)" },
+                "default_language": { "$ref": "#/$defs/language" },
+                "admin_users": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["username", "password"],
+                        "properties": {
+                            "username": { "type": "string" },
+                            "password": { "type": "string" }
+                        }
+                    }
+                }
+            }
+        },
+
+        "authentication": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["service", "jwt_secret", "jwt_algorithm", "session_duration"],
+            "properties": {
+                "service": { "type": "string", "description": "Nom d'une entrée de 'services' utilisée pour l'authentification" },
+                "jwt_secret": { "type": "string" },
+                "jwt_algorithm": {
+                    "enum": ["HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512", "EdDSA"]
+                },
+                "session_duration": { "type": "integer", "minimum": 1, "description": "Secondes" },
+                "max_auth_requests_minute": { "$ref": "#/$defs/limit", "description": "Requêtes POST /auth max par IP et par fenêtre (security.auth_rate_window), -1 = illimité" }
+            }
+        },
+
+        "services": {
+            "description": "Services nommés. 'handler' désigne la classe (lib/services ou directories.custom_services_dir).",
+            "type": "object",
+            "additionalProperties": { "$ref": "#/$defs/service" }
+        },
+
+        "logger": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "output": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "enabled": { "type": "boolean" }
+                    }
+                },
+                "file": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "enabled": { "type": "boolean" },
+                        "path": { "type": "string" }
+                    }
+                }
+            }
+        },
+
+        "profiles": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": { "$ref": "#/$defs/profile" }
+        },
+
+        "usage": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["max_tokens_month", "max_requests_month", "max_requests_minute"],
+            "properties": {
+                "max_tokens_month": { "$ref": "#/$defs/limit" },
+                "max_requests_month": { "$ref": "#/$defs/limit" },
+                "max_requests_minute": { "$ref": "#/$defs/limit" }
+            }
+        },
+
+        "security": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "sandbox_max_process": { "type": "integer", "minimum": 1, "description": "Nombre max de process sandbox simultanés" },
+                "min_secret_length": { "type": "integer", "minimum": 1 },
+                "auth_rate_window": { "type": "integer", "minimum": 1, "description": "Secondes" },
+                "auth_rate_max_tracked_ips": { "type": "integer", "minimum": 1 },
+                "multipart_overhead_mb": { "type": "number", "minimum": 0 }
+            }
+        },
+
+        "extraction": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "timeout": { "type": "integer", "minimum": 1, "description": "Secondes (aussi limite de temps CPU)" },
+                "max_memory_mb": { "type": "integer", "minimum": 1 },
+                "max_uncompressed_mb": { "type": "integer", "minimum": 1 },
+                "max_archive_entries": { "type": "integer", "minimum": 1 }
+            }
+        },
+
+        "directories": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["temp_dir", "local_storage_dir", "languages_dir", "rag_storage_dir", "custom_languages_dir", "custom_services_dir", "custom_pipelines"],
+            "properties": {
+                "temp_dir": { "type": "string" },
+                "local_storage_dir": { "type": "string" },
+                "languages_dir": { "type": "string" },
+                "rag_storage_dir": { "type": "string" },
+                "custom_languages_dir": { "type": "string" },
+                "custom_services_dir": { "type": "string" },
+                "custom_mcp_tools_dir": { "type": "string" },
+                "custom_pipelines": { "type": "string" }
+            }
+        },
+
+        "word": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "template": { "type": "string" },
+                "template_placeholder": { "type": "string" },
+                "template_summary_placeholder": { "type": "string" },
+                "template_title_placeholder": { "type": "string" },
+                "template_date_placeholder": { "type": "string" },
+                "template_array_style": { "type": "string" },
+                "page_break_before_heading1": { "type": "boolean" },
+                "heading_style_1": { "type": "string" },
+                "heading_style_2": { "type": "string" },
+                "heading_style_3": { "type": "string" }
+            }
+        },
+
+        "pdf": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "template_color": { "type": "string", "pattern": "^[0-9A-Fa-f]{6}$", "description": "Couleur hexadécimale sans '#'" },
+                "template_logo": { "type": ["string", "null"] },
+                "template_footer_text": { "type": ["string", "null"] }
+            }
+        },
+
+        "rag": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["collections"],
+            "properties": {
+                "collections": {
+                    "description": "Collections RAG, nom -> configuration (référencées par profiles.<profil>.rag.collection)",
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/$defs/ragCollection" }
+                }
+            }
+        },
+
+        "cron": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/cronTask" }
+        }
+    },
+
+    "$defs": {
+
+        "stringList": {
+            "type": "array",
+            "items": { "type": "string" }
+        },
+
+        "language": {
+            "type": "string",
+            "pattern": "^[a-z]{2}$"
+        },
+
+        "limit": {
+            "type": "integer",
+            "minimum": -1,
+            "description": "-1 = illimité"
+        },
+
+        "service": {
+            "type": "object",
+            "required": ["handler"],
+            "properties": {
+                "handler": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+            },
+            "allOf": [
+                {
+                    "if": { "properties": { "handler": { "const": "LumePackAPI" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["url", "timeout"],
+                        "properties": {
+                            "handler": true,
+                            "url": { "type": "string" },
+                            "timeout": { "type": "integer", "minimum": 1 }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "handler": { "const": "PostgreSQL" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["host", "port", "database", "username", "password"],
+                        "properties": {
+                            "handler": true,
+                            "host": { "type": "string" },
+                            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+                            "database": { "type": "string" },
+                            "username": { "type": "string" },
+                            "password": { "type": "string" }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "handler": { "const": "MCPExternalService" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["transport", "url"],
+                        "properties": {
+                            "handler": true,
+                            "transport": { "enum": ["http", "sse"] },
+                            "url": { "type": "string" },
+                            "headers": {
+                                "type": "object",
+                                "additionalProperties": { "type": "string" }
+                            },
+                            "auth": { "enum": ["static", "session"], "description": "Défaut : static" }
+                        }
+                    }
+                }
+            ]
+        },
+
+        "profile": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["llm"],
+            "properties": {
+                "llm": { "$ref": "#/$defs/llm" },
+                "languages": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": { "$ref": "#/$defs/language" }
+                },
+                "mcp": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "max_tool_iterations": { "type": "integer", "minimum": 1 },
+                        "tools_enabled": {
+                            "description": "Motifs d'outils autorisés (ex. 'word.*', 'search_knowledge_base')",
+                            "$ref": "#/$defs/stringList"
+                        }
+                    }
+                },
+                "attachments": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "enabled": { "type": "boolean" },
+                        "max_file_size_mb": { "type": "number", "exclusiveMinimum": 0 },
+                        "file_context_top_k": { "type": "integer", "minimum": 1 },
+                        "mode": { "enum": ["rag", "full", "auto"] },
+                        "full_text_max_tokens": { "type": "integer", "minimum": 1 },
+                        "max_files": { "type": "integer", "minimum": 1 },
+                        "allowed_extensions": {
+                            "type": "array",
+                            "items": { "type": "string", "pattern": "^\\.[A-Za-z0-9]+$" }
+                        }
+                    }
+                },
+                "rag": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["collection"],
+                    "properties": {
+                        "collection": { "type": "string", "description": "Nom d'une entrée de 'rag.collections'" },
+                        "top_k": { "type": "integer", "minimum": 1, "description": "Nombre de résultats par recherche (défaut : 5)" }
+                    }
+                },
+                "connectors": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "webex": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": ["enabled", "bot_token", "webex_api"],
+                            "properties": {
+                                "enabled": { "type": "boolean" },
+                                "bot_token": { "type": "string" },
+                                "webhook_secret": { "type": "string" },
+                                "webex_api": { "type": "string" },
+                                "api_key": { "type": "string" },
+                                "allow_group_messages": { "type": "boolean" }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+
+        "llm": {
+            "type": "object",
+            "required": ["connector"],
+            "properties": {
+                "connector": { "enum": ["LiteLLM", "Cerebras", "DigitalOcean", "Llama"] },
+                "system_prompt_file": { "type": "string" },
+                "system_prompt": { "type": "string" },
+                "memory_messages": { "type": "integer", "minimum": 0 },
+                "empty_llm_response_max_retry": { "type": "integer", "minimum": 0 },
+                "followup_questions": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "enabled": { "type": "boolean" },
+                        "count": { "type": "integer", "minimum": 1 }
+                    }
+                },
+                "filters": {
+                    "description": "Filtres appliqués aux messages (lib/agent/filters), nom de classe -> configuration",
+                    "type": "object",
+                    "propertyNames": { "enum": ["CodeFilter"] },
+                    "additionalProperties": { "type": "object" }
+                },
+                "LiteLLM": { "$ref": "#/$defs/llmConnector" },
+                "Cerebras": { "$ref": "#/$defs/llmConnector" },
+                "DigitalOcean": { "$ref": "#/$defs/llmConnector" },
+                "Llama": { "$ref": "#/$defs/llmConnectorOptionalKey" }
+            },
+            "additionalProperties": false,
+            "anyOf": [
+                { "required": ["system_prompt_file"] },
+                { "required": ["system_prompt"] }
+            ],
+            "allOf": [
+                {
+                    "if": { "properties": { "connector": { "const": "LiteLLM" } } },
+                    "then": { "required": ["LiteLLM"] }
+                },
+                {
+                    "if": { "properties": { "connector": { "const": "Cerebras" } } },
+                    "then": { "required": ["Cerebras"] }
+                },
+                {
+                    "if": { "properties": { "connector": { "const": "DigitalOcean" } } },
+                    "then": { "required": ["DigitalOcean"] }
+                },
+                {
+                    "if": { "properties": { "connector": { "const": "Llama" } } },
+                    "then": { "required": ["Llama"] }
+                }
+            ]
+        },
+
+        "llmConnector": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["model", "api_base", "api_key"],
+            "properties": {
+                "model": { "type": "string" },
+                "api_base": { "type": "string" },
+                "api_key": { "type": "string" }
+            }
+        },
+
+        "llmConnectorOptionalKey": {
+            "description": "Connecteur dont l'API peut ne pas exiger de clé (ex. serveur llama.cpp / Ollama local)",
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["model", "api_base"],
+            "properties": {
+                "model": { "type": "string" },
+                "api_base": { "type": "string" },
+                "api_key": { "type": "string" }
+            }
+        },
+
+        "ragCollection": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["embedding_dim", "chunk_size", "chunk_overlap", "connector", "embedder"],
+            "properties": {
+                "embedding_dim": { "type": "integer", "minimum": 1, "description": "Doit correspondre au modèle de l'embedder" },
+                "chunk_size": { "type": "integer", "minimum": 1 },
+                "chunk_overlap": { "type": "integer", "minimum": 0 },
+                "connector": { "enum": ["PgVector"] },
+                "pgvector": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["table"],
+                    "properties": {
+                        "table": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "description": "Partageable entre collections de même embedding_dim" }
+                    }
+                },
+                "embedder": {
+                    "description": "Embedder de la collection : toute modification impose une réindexation complète",
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["class", "model", "api_base", "api_key"],
+                    "properties": {
+                        "class": { "enum": ["LiteLLMEmbedder", "DigitalOceanEmbedder", "LlamaEmbedder"], "description": "Classe de lib/agent/llmembedder" },
+                        "model": { "type": "string" },
+                        "api_base": { "type": "string" },
+                        "api_key": { "type": "string" }
+                    }
+                }
+            },
+            "if": { "properties": { "connector": { "const": "PgVector" } } },
+            "then": { "required": ["pgvector"] }
+        },
+
+        "cronField": {
+            "description": "Valeur exacte, '*' (toujours) ou '/N' (tous les N)",
+            "oneOf": [
+                { "type": "integer", "minimum": 0 },
+                { "type": "string", "pattern": "^(\\*|/[1-9][0-9]*|[0-9]+)$" }
+            ]
+        },
+
+        "cronTask": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["task", "time", "config"],
+            "properties": {
+                "task": { "enum": ["Shredding", "Ragindexer"] },
+                "time": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                        "minute": { "$ref": "#/$defs/cronField" },
+                        "hour": { "$ref": "#/$defs/cronField" }
+                    }
+                },
+                "config": { "type": "object" }
+            },
+            "allOf": [
+                {
+                    "if": { "properties": { "task": { "const": "Shredding" } } },
+                    "then": {
+                        "properties": {
+                            "config": {
+                                "required": ["log_max_days"],
+                                "properties": { "log_max_days": { "type": "integer", "minimum": 1 } }
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": { "properties": { "task": { "const": "Ragindexer" } } },
+                    "then": {
+                        "properties": {
+                            "config": {
+                                "required": ["folders"],
+                                "properties": {
+                                    "folders": { "$ref": "#/$defs/stringList" },
+                                    "profile": { "type": "string" }
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}

@@ -8,6 +8,7 @@ __pycache__
 docker
 Makefile
 README.md
+README-PIPELINES.md
 todo.md
 
 # Données locales et secrets — jamais dans une couche d'image

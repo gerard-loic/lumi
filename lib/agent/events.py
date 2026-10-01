@@ -81,6 +81,7 @@ class RagEvent:
     @staticmethod
     def get(source:str, locations:list = [], url:str = None):
         return Event.get(eventType="rag", payload={"source":source, "locations":locations, "url":url})
+
     
 
 """

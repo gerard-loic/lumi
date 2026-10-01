@@ -5,6 +5,7 @@ import psycopg2.extras
 from psycopg2 import sql
 from pgvector.psycopg2 import register_vector
 from lib.config.config import Config
+from lib.rag.collection import RagCollection
 
 """
 PgVector : service de RAG PostreSQL PgVector
@@ -30,17 +31,23 @@ class PgVector:
         register_vector(conn)
         return conn
 
+    #Table de la collection (rag.collections.<collection>.pgvector.table). Plusieurs collections peuvent partager
+    #une table si elles ont la même dimension d'embedding (la colonne `collection` les distingue)
     @staticmethod
-    def _table() -> sql.Identifier:
-        return sql.Identifier(Config.get("rag.pgvector.table"))
+    def _tableName(collection: str) -> str:
+        return RagCollection.get(collection)["pgvector"]["table"]
 
-    #S'assurer que les prérequis soient présents
     @staticmethod
-    async def ensureTable() -> None:
-        dim = int(Config.get("rag.embedding_dim"))
+    def _table(collection: str) -> sql.Identifier:
+        return sql.Identifier(PgVector._tableName(collection))
+
+    #S'assurer que les prérequis de la collection soient présents
+    @staticmethod
+    async def ensureTable(collection: str) -> None:
+        dim = int(RagCollection.get(collection)["embedding_dim"])
 
         def _run():
-            table_name = Config.get("rag.pgvector.table")
+            table_name = PgVector._tableName(collection)
             table    = sql.Identifier(table_name)
             hnsw_idx = sql.Identifier(f"{table_name}_hnsw_idx")
             coll_idx = sql.Identifier(f"{table_name}_collection_idx")
@@ -84,7 +91,7 @@ class PgVector:
                         sql.SQL(
                             "INSERT INTO {} (collection, content, metadata, embedding)"
                             " VALUES (%s, %s, %s, %s)"
-                        ).format(PgVector._table()),
+                        ).format(PgVector._table(collection)),
                         (collection, content, json.dumps(metadata), embedding),
                     )
                     conn.commit()
@@ -107,7 +114,7 @@ class PgVector:
                             WHERE collection = %s
                             ORDER BY embedding <=> %s::vector
                             LIMIT %s
-                        """).format(PgVector._table()),
+                        """).format(PgVector._table(collection)),
                         (embedding, collection, embedding, top_k),
                     )
                     rows = cur.fetchall()
@@ -124,25 +131,21 @@ class PgVector:
 
         return await asyncio.to_thread(_run)
 
-    #Statistiques
+    #Statistiques d'une collection : nombre de chunks (0 si la table n'existe pas encore)
     @staticmethod
-    async def stats() -> dict:
+    async def stats(collection: str) -> int:
         def _run():
-            conn = PgVector._connect()
+            conn = PgVector._connect_raw()
             try:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT to_regclass(%s)", (f'"{PgVector._tableName(collection)}"',))
+                    if cur.fetchone()[0] is None:
+                        return 0
                     cur.execute(
-                        sql.SQL("""
-                            SELECT collection, COUNT(*) AS chunks
-                            FROM {}
-                            GROUP BY collection
-                            ORDER BY collection
-                        """).format(PgVector._table())
+                        sql.SQL("SELECT COUNT(*) FROM {} WHERE collection = %s").format(PgVector._table(collection)),
+                        (collection,),
                     )
-                    rows = cur.fetchall()
-                collections = [{"name": r["collection"], "chunks": r["chunks"]} for r in rows]
-                total = sum(c["chunks"] for c in collections)
-                return {"total_chunks": total, "collections": collections}
+                    return cur.fetchone()[0]
             finally:
                 conn.close()
 
@@ -158,7 +161,7 @@ class PgVector:
                     cur.execute(
                         sql.SQL(
                             "SELECT 1 FROM {} WHERE collection = %s AND metadata->>'source' = %s LIMIT 1"
-                        ).format(PgVector._table()),
+                        ).format(PgVector._table(collection)),
                         (collection, source),
                     )
                     return cur.fetchone() is not None
@@ -177,7 +180,7 @@ class PgVector:
                     cur.execute(
                         sql.SQL(
                             "SELECT metadata FROM {} WHERE collection = %s AND metadata->>'source' = %s LIMIT 1"
-                        ).format(PgVector._table()),
+                        ).format(PgVector._table(collection)),
                         (collection, source),
                     )
                     row = cur.fetchone()
@@ -199,7 +202,7 @@ class PgVector:
                     cur.execute(
                         sql.SQL(
                             "DELETE FROM {} WHERE collection = %s AND metadata->>'source' = %s"
-                        ).format(PgVector._table()),
+                        ).format(PgVector._table(collection)),
                         (collection, source),
                     )
                     count = cur.rowcount
@@ -220,7 +223,7 @@ class PgVector:
                     cur.execute(
                         sql.SQL(
                             "DELETE FROM {} WHERE collection = %s"
-                        ).format(PgVector._table()),
+                        ).format(PgVector._table(collection)),
                         (collection,),
                     )
                     count = cur.rowcount

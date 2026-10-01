@@ -1,5 +1,5 @@
 import os
-from lib.cron.tasks.crontask import CronTask
+from lib.cron.tasks._abstract import CronTask
 from lib.rag.vectorstore import VectorStore
 from lib.rag.indexer import Indexer
 from lib.agent.profile import ProfileManager
@@ -28,6 +28,7 @@ class Ragindexer(CronTask):
         await super().run()
         print(f"[RagIndexer] {self.config}")
 
+        await VectorStore.ensureTable(self._collection)
         files = self._listFiles()
         for file in files:
             exists = await self._exists(file=file)

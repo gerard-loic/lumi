@@ -8,10 +8,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # fonts-dejavu-core : requis par tools/pdf.py (chemins en dur)
+# fonts-ipaexfont-gothic : glyphes japonais (hiragana/katakana/kanji), utilisé en police de secours par tools/pdf.py
 # libreoffice-writer : conversions bureautiques
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         fonts-dejavu-core \
+        fonts-ipaexfont-gothic \
         libreoffice-writer && \
     rm -rf /var/lib/apt/lists/*
 

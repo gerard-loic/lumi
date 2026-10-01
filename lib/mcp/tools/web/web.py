@@ -1,14 +1,91 @@
-import io
+import asyncio
+import socket
+import ipaddress
 import httpx
 from typing import Annotated, Optional
 from pydantic import BaseModel, Field
 from ddgs import DDGS
-from markitdown import MarkItDown
 from lib.mcp.toolloader import MCPTool, slow_tool, tool_description
+from lib.rag.textextractor import TextExtractor
 
 _MAX_PAGE_CHARS = 12_000
 _HTTPX_TIMEOUT = 15
-_MARKITDOWN = MarkItDown()
+_MAX_REDIRECTS = 5
+_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+
+
+class UrlNonAutoriseeError(ValueError):
+    pass
+
+
+#Une IP n'est acceptée que si elle est publique (routable sur internet) : refuse loopback, réseaux privés,
+#link-local (dont 169.254.169.254, métadonnées cloud), multicast, réservés... y compris lorsqu'elle est
+#encapsulée dans une adresse IPv6 (IPv4-mapped, 6to4, Teredo)
+def _ip_autorisee(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if isinstance(ip, ipaddress.IPv6Address):
+        embedded = ip.ipv4_mapped or ip.sixtofour or (ip.teredo[1] if ip.teredo else None)
+        if embedded is not None and not _ip_autorisee(embedded):
+            return False
+    return ip.is_global and not ip.is_multicast
+
+
+#Vérifie l'URL et résout son hôte. Renvoie l'IP à contacter : toutes les IP résolues doivent être autorisées
+#(sinon un enregistrement DNS mixte public/privé pourrait être exploité).
+def _resoudre_url(url: httpx.URL) -> str:
+    if url.scheme not in ("http", "https"):
+        raise UrlNonAutoriseeError(f"Schéma non autorisé : {url.scheme or '(aucun)'}")
+    if not url.host:
+        raise UrlNonAutoriseeError("URL sans hôte")
+
+    port = url.port or (443 if url.scheme == "https" else 80)
+    try:
+        infos = socket.getaddrinfo(url.host, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror:
+        raise UrlNonAutoriseeError(f"Hôte introuvable : {url.host}")
+
+    ips = {ipaddress.ip_address(info[4][0].split("%")[0]) for info in infos}
+    if not ips or not all(_ip_autorisee(ip) for ip in ips):
+        raise UrlNonAutoriseeError(f"Accès refusé à une adresse non publique : {url.host}")
+    return str(sorted(ips, key=lambda ip: ip.version)[0])
+
+
+#Requête GET protégée contre la SSRF : la connexion se fait directement sur l'IP vérifiée (pas de seconde
+#résolution DNS exploitable par DNS rebinding), avec l'en-tête Host et le SNI TLS du nom d'origine pour que le
+#certificat reste validé sur ce nom. Les redirections sont suivies manuellement et revérifiées à chaque saut.
+#Renvoie (url finale, content-type, contenu), contenu tronqué à _MAX_RESPONSE_BYTES.
+def _get_securise(url: str, headers: dict) -> tuple[str, str, bytes]:
+    current = httpx.URL(url)
+    #trust_env=False : un proxy défini par variable d'environnement résoudrait lui-même le nom, contournant la vérification
+    with httpx.Client(timeout=_HTTPX_TIMEOUT, follow_redirects=False, trust_env=False) as client:
+        for _ in range(_MAX_REDIRECTS + 1):
+            ip = _resoudre_url(current)
+            request = client.build_request(
+                "GET",
+                current.copy_with(host=ip),
+                headers={**headers, "Host": current.netloc.decode("ascii")},
+                extensions={"sni_hostname": current.host},
+            )
+            response = client.send(request, stream=True)
+            try:
+                if response.is_redirect:
+                    location = response.headers.get("location")
+                    if not location:
+                        raise UrlNonAutoriseeError("Redirection sans destination")
+                    current = current.join(location)
+                    continue
+
+                response.raise_for_status()
+                content = bytearray()
+                for chunk in response.iter_bytes():
+                    content.extend(chunk)
+                    if len(content) >= _MAX_RESPONSE_BYTES:
+                        del content[_MAX_RESPONSE_BYTES:]
+                        break
+                return str(current), response.headers.get("content-type", ""), bytes(content)
+            finally:
+                response.close()
+
+    raise UrlNonAutoriseeError(f"Trop de redirections (> {_MAX_REDIRECTS})")
 
 
 class ResultatRecherche(BaseModel):
@@ -66,7 +143,7 @@ class WebService(MCPTool):
 
     @slow_tool
     @tool_description(name="[web.lire_page_web]")
-    def lire_page_web(
+    async def lire_page_web(
         self,
         url: Annotated[
             str,
@@ -85,18 +162,17 @@ class WebService(MCPTool):
                 "Chrome/124.0.0.0 Safari/537.36"
             )
         }
-        response = httpx.get(url, headers=headers, timeout=_HTTPX_TIMEOUT, follow_redirects=True)
-        response.raise_for_status()
+        #Téléchargement (bloquant) hors de la boucle événementielle
+        final_url, content_type, content = await asyncio.to_thread(_get_securise, url, headers)
 
-        content_type = response.headers.get("content-type", "")
-        result = _MARKITDOWN.convert_stream(
-            io.BytesIO(response.content),
+        #Contenu d'un serveur quelconque, potentiellement piégé (bombe de décompression, PDF pathologique...) :
+        #conversion dans un sous-processus isolé, comme les pièces jointes (cf. TextExtractor, lib/utils/sandbox.py)
+        titre, contenu = await TextExtractor.convertContent(
+            content,
             mime_type=content_type.split(";")[0].strip(),
-            url=url,
+            url=final_url,
         )
-
-        titre = result.title or url
-        contenu = result.text_content or ""
+        titre = titre or url
 
         if len(contenu) > _MAX_PAGE_CHARS:
             contenu = contenu[:_MAX_PAGE_CHARS] + "\n\n[...contenu tronqué]"

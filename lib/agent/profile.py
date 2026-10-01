@@ -12,6 +12,7 @@ class Profile:
         self.config = Config.get(f"profiles.{name}")
         Logger.write(f"[Profile] Profile {name} intialized", OK)
 
+    #Retourne une valeur de configuration d'un profil
     def getConfigValue(self, key:str, default=None):
         value = self.config
         for part in key.split("."):
@@ -20,6 +21,7 @@ class Profile:
             value = value[part]
         return value
 
+    #Retourne le nom du profile
     def getName(self)->str:
         return self.name
 
@@ -34,17 +36,25 @@ class ProfileManager:
         ProfileManager.profiles = {}
         for p in Config.get("profiles"):
             ProfileManager.profiles[p] = Profile(name=p)
+            #La collection RAG du profil doit être déclarée dans rag.collections (lève une exception sinon)
+            collection = ProfileManager.profiles[p].getConfigValue("rag.collection")
+            if collection is not None:
+                from lib.rag.collection import RagCollection
+                RagCollection.get(collection)
 
+    #Retourne un profile en fonction de son nom
     @staticmethod
     def getProfile(name:str):
         return ProfileManager.profiles[name]
 
+    #Retourne si un profil existe
     @staticmethod
     def profileExists(name:str)->bool:
         if name in ProfileManager.profiles:
             return True
         return False
 
+    #Retourne la liste de tous les profiles existant
     @staticmethod
     def getProfileNames()->list:
         return ProfileManager.profiles.keys()

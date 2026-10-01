@@ -1,18 +1,21 @@
-WAVE
-- [x] Implémentation des traductions LLM
-- [x] Traduction des codes d'erreur
-- [x] Gestion des noms d'outils MCP en multilingue
-- [x] Gestionnaire de traduction
-- [x] API pour avoir la configuration d'un profil
-- [x] Réorganiser les fichiers / dossiers
-- [x] Refactor
-- [x] Fichiers dans les autres langues
-- [x] Version
-- [x] Readme
-- [x] Optimisation pour déploiement Docker
 
-----------------------------
+
 BACKLOG
+- [ ] Delestage à revoir
+- [ ] Revue des logs
+- [ ] Optimisation du microRag
+- [ ] Support autres connecteurs ?
+- [ ] API statistiques détaillées (usage / pipeline)
+- [ ] Modification des pipelines à la volée
+- [ ] Prévoir la configuration des profiles dans des fichiers de configuration à part
+- [ ] API info profil
+- [ ] Gestionnaire de droits d'API Basic
+- [ ] Bloc : zip 
+- [ ] Bloc : unzip
+- [ ] Bloc : transformMapping (?)
+- [ ] Bloc : ImageToText (for Nova)
+- [ ] Bloc : subpipeline
+- [ ] Revue de l'API d'info session / profil
 - [ ] Gérer d'autres sources de données ?
 - [ ] Limiter la sortie ?
 - [ ] Support OCR / modèle de compréhension d'image
@@ -21,7 +24,6 @@ BACKLOG
 - [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
 - [ ] Critique de la réponse par un modèle
 - [ ] Possibilité d'arreter une conversation proprement
-- [ ] Création de pipelines
 - [ ] Loop
 - [ ] MCP externes
 - [ ] MCP contextuel ?
@@ -40,6 +42,39 @@ BACKLOG
 - [ ] Simplification et refactor des classes pour le RAG
 - [ ] Refactor AuthSessionManager
 - [ ] Gestionnaire de codes d'erreur
+- [ ] Conservation d'historique de conversations / pouvoir les continuer
+- [ ] Gestion téléchargement fichiers CSV
+- [ ] Pb des logs non enregistrés ?? (le démarrage)
+- [ ] Outils MCP recherche WEB : préciser la recherche effectuée
+- [ ] sourcer la réponse
+- [ ] Event de redirection
+- [ ] Supprimer un fichier du micro RAG
+- [ ] Suppression des messages du context : résumer dabord
+- [ ] modifier l'evenement rag en source plus globale
+- [ ] Avoir les affichages de sources dans les contenus
+- [ ] Sur les appels MCP avec un UID d'appel d'outil
+- [ ] Problématique du RAG avec source sur documents non adéquats (score minimal ?)
+- [ ] Liaison de documents à un message en particulier
+- [ ] Gestion de la suppression du contexte et du récapitulatif du contexte
+- [ ] Suppression d'un fichier du raisonnement
+- [ ] Annuler une demande en cours
+- [ ] Meilleure gestion de la réponse vide (implémenter un sleep)
+- [ ] Trigger : cron
+- [ ] Trigger : callback
+- [ ] Trigger : urlWatch
+- [ ] Trigger : apiWatch
+- [ ] Trigger : fileWatch
+- [ ] Trigger : mailWatch
+- [ ] Trigger : dbWatch
+- [ ] Trigger : serviceWatch
+- [ ] Trigger : agentWatch
+- [ ] Trigger : webHook (secret + vérif signature)
+- [ ] Trigger : CLI
+- [ ] Trigger : pipelineEvent
+- [ ] Vérifier le service d'auth Webex nécessaire ?
+
+
+
 
 ------------
 Versions à venir : 
@@ -157,7 +192,62 @@ Version PHOSPHOR :
 - [x] Garder les fichiers sources du RAG
 - [x] Evenement Rag, intégrer une Url pour accéder au fichier
 - [x] Dans route auth, profile par défaut
-------------
+
+Version WAVE :
+- [x] Implémentation des traductions LLM
+- [x] Traduction des codes d'erreur
+- [x] Gestion des noms d'outils MCP en multilingue
+- [x] Gestionnaire de traduction
+- [x] API pour avoir la configuration d'un profil
+- [x] Réorganiser les fichiers / dossiers
+- [x] Refactor
+- [x] Fichiers dans les autres langues
+- [x] Version
+- [x] Readme
+- [x] Optimisation pour déploiement Docker
+
+Version ABYSS : 
+- [x] Gestion d'un fallback de font pour les PDF
+- [x] Création de pipelines
+- [x] Suivi des pipelines
+- [x] Support connecteur LLM DigitalOcean 
+- [x] Support connecteur LLM Cerebras
+- [x] Support connecteur Llama
+- [x] Dans Embedder liaison dynamique / gestion différentiée des providers
+- [x] Documentation spécifique sur l'écriture des fichiers de configuration avec options
+- [x] Vérificateur de format des fichiers de configuration
+- [x] Modification de la gestion de l'authentification => conteneur d'authentifications
+- [x] Correctif sécurité service d'auth ?
+- [x] Bloc : conditionnelle (Condition) - [ ] switch
+- [x] Bloc : sleep
+- [x] Bloc : Loop
+- [x] Bloc : DataView
+- [x] Bloc : csvformat (CsvReader)
+- [x] Bloc : xmlformat
+- [x] Bloc : filereader (TxtReader)
+- [x] Bloc : ExcelReader
+- [x] Bloc : filedelete
+- [x] Bloc : filemove
+- [x] Bloc : FileExists
+- [x] Bloc : webexNotification
+- [x] Bloc : MicroRag
+- [x] Bloc : apiGet
+- [x] Bloc : apiPost
+- [x] Bloc : apiPut
+- [x] Bloc : apiDelete
+- [x] Bloc : pythonScript
+- [x] Bloc : filewriter
+- [x] Bloc : serviceMethod
+- [x] Revoir le readme -> prévoir une documentation sur l'écriture d'un pipeline + une documentation sur la configuration
+- [x] Log in out de chaque bloc
+- [x] Système de trousseau d'authentification
+- [x] Correctifs de sécurité
+- [x] Refonte du gestionnaire d'authentification et de processus
+- [x] MAJ README + README PIPELINES
+- [x] Revue de code
+- [x] Finalisation de la version
+- [x] Revue de sécurité
+
 
 Installer cloudflared
 

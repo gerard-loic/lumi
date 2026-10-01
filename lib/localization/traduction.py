@@ -14,5 +14,6 @@ class Traduction:
     def __init__(self, language:Language):
         self._language = language
 
+    #Traduire une chaîne
     def trad(self, text:str):
         return Traduction.translate(language=self._language, text=text)
