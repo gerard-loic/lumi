@@ -1,4 +1,3 @@
-import base64
 import httpx
 from urllib.parse import urlencode
 from lib.services._abstract import Service
@@ -171,21 +170,25 @@ class LumePackAPI(Service):
             Logger.write(f"[LUMEPACKAPI] authenticate erreur réseau : {e}", type=ERROR)
             return False
 
-    #api_key : clé d'API propre au connecteur/profil Webex à l'origine de l'appel
-    #(cf profiles.<profil>.connectors.webex.api_key), fournie par l'appelant plutôt que
-    #lue depuis une config globale.
-    #Renvoie {"token": "..."} ou False.
-    def webexAuthenticate(self, username: str, api_key: str):
+    #login/password : identifiants de service propres au connecteur/profil Webex à l'origine de l'appel
+    #(cf profiles.<profil>.connectors.webex.auth_login / auth_password), utilisés uniquement pour obtenir
+    #le token qui autorise l'appel à /api/webex/auth.
+    #Renvoie {"token": "..."} (token de l'utilisateur Webex) ou False.
+    def webexAuthenticate(self, username: str, login: str, password: str):
+        service_auth = self._login(login=login, password=password)
+        if not service_auth:
+            Logger.write(f"[LUMEPACKAPI] webexAuthenticate : échec de l'authentification du compte de service '{login}'", type=ERROR)
+            return False
+
         url = f"{self.getConfValue(key='url')}/api/webex/auth"
         try:
             with httpx.Client(timeout=self.timeout) as client:
-                encoded_key = base64.b64encode(api_key.encode()).decode()
                 r = client.post(
                     url,
                     files={"login": (None, username)},
                     headers={
                         "Accept": "application/json",
-                        "Authorization": f"Basic {encoded_key}",
+                        "Authorization": f"Bearer {service_auth['token']}",
                     },
                 )
                 r.raise_for_status()

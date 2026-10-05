@@ -118,7 +118,8 @@
                     "bot_token": "",
                     "webhook_secret": "",
                     "webex_api" : "https://webexapis.com/v1",
-                    "api_key" : "",
+                    "auth_login" : "",
+                    "auth_password" : "",
                     "allow_group_messages": false
                 }
             }

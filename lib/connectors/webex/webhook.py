@@ -90,7 +90,7 @@ class WebexWebhookHandler:
             auth_service_name = Config.get(key="authentication.service")
             auth_service = ServiceManager.get(name=auth_service_name)
             #Appel réseau synchrone : exécuté hors de la boucle événementielle pour ne pas bloquer le serveur
-            auth_data = await asyncio.to_thread(auth_service.webexAuthenticate, username=email, api_key=self._connector.api_key)
+            auth_data = await asyncio.to_thread(auth_service.webexAuthenticate, username=email, login=self._connector.auth_login, password=self._connector.auth_password)
             if not auth_data:
                 Logger.write(f"[Connector webex] Authentication failed for {email}", type=ERROR)
                 await self._connector.send_message(room_id, f"❌ Votre compte **{email}** n'est pas autorisé à utiliser ce service.")

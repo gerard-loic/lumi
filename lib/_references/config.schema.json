@@ -313,13 +313,14 @@
                         "webex": {
                             "type": "object",
                             "additionalProperties": false,
-                            "required": ["enabled", "bot_token", "webex_api"],
+                            "required": ["enabled", "bot_token", "webex_api", "auth_login", "auth_password"],
                             "properties": {
                                 "enabled": { "type": "boolean" },
                                 "bot_token": { "type": "string" },
                                 "webhook_secret": { "type": "string" },
                                 "webex_api": { "type": "string" },
-                                "api_key": { "type": "string" },
+                                "auth_login": { "type": "string", "description": "Identifiant du compte de service utilisé pour appeler l'authentification Webex du service d'authentification" },
+                                "auth_password": { "type": "string" },
                                 "allow_group_messages": { "type": "boolean" }
                             }
                         }

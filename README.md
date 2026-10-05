@@ -285,7 +285,8 @@ Connectors extend this profile's agent to additional communication channels. Eac
 | `bot_token` | string | Webex bot access token. |
 | `webhook_secret` | string | Secret used to verify incoming webhook signatures. |
 | `webex_api` | string | Webex API base URL (`https://webexapis.com/v1`). |
-| `api_key` | string | Optional API key passed to the authentication service for Webex users of this profile. |
+| `auth_login` | string | Login of the service account used only to obtain a token from the authentication service before calling its Webex authentication endpoint. |
+| `auth_password` | string | Password of that service account. |
 | `allow_group_messages` | bool | If `true`, the bot responds in group spaces; if `false`, only in 1-to-1 spaces. |
 
 ### `usage`
@@ -992,7 +993,8 @@ In `config/config.json`, under the target profile:
         "bot_token": "<bot-access-token>",
         "webhook_secret": "<a-random-secret-string>",
         "webex_api": "https://webexapis.com/v1",
-        "api_key": "",
+        "auth_login": "<service-account-login>",
+        "auth_password": "<service-account-password>",
         "allow_group_messages": false
       }
     }
@@ -1002,7 +1004,7 @@ In `config/config.json`, under the target profile:
 
 - `webhook_secret`: choose any random string. Lumi uses it to verify that incoming webhook requests genuinely come from Webex.
 - `allow_group_messages`: set to `true` if the bot should respond in group spaces. When `false`, the bot only processes direct (1-to-1) messages.
-- `api_key`: passed to the authentication service (see [How it works](#how-it-works)) when authenticating a Webex user for this profile.
+- `auth_login` / `auth_password`: service account credentials, used only to log in to the authentication service (see [How it works](#how-it-works)) before authenticating a Webex user for this profile.
 - `app.url` must point to the public URL of the Lumi server (e.g. `https://lumi.example.com`). Lumi registers the webhook at `<app.url>/webex/webhook/<profile>` on startup, where `<profile>` is the profile's name.
 
 ### Step 3 — Expose the server
@@ -1025,7 +1027,7 @@ On startup, for every profile with `connectors.webex.enabled: true`, the connect
 - When a user sends a message to a bot, Webex calls `POST /webex/webhook/<profile>` for the corresponding profile.
 - Lumi verifies the `X-Spark-Signature` header using that profile's `webhook_secret`.
 - The message is dispatched to that profile's agent, and the reply is sent back to the Webex space.
-- User authentication is handled transparently: the bot identifies the sender by their Webex email and calls the profile's `connectors.webex.api_key` + the configured authentication service to obtain a session token.
+- User authentication is handled transparently: the bot identifies the sender by their Webex email and logs in to the configured authentication service with the profile's `connectors.webex.auth_login` / `auth_password`, then uses the resulting token to call its Webex authentication endpoint (`/api/webex/auth`) and obtain the user's session token.
 
 ---
 
