@@ -19,9 +19,10 @@ class WebexBot:
         self._token = bot_token
         self._connector = connector
         self._webex_api = connector.getConfValue("webex_api")
-        #Clé d'API utilisée pour authentifier les utilisateurs Webex auprès du service d'authentification
-        #(ex: Nexora), propre au profil/connecteur — cf LumePackAPI.webexAuthenticate
-        self.api_key = connector.getConfValue("api_key")
+        #Identifiants de service utilisés pour authentifier les utilisateurs Webex auprès du service
+        #d'authentification (ex: LumePack), propres au profil/connecteur — cf LumePackAPI.webexAuthenticate
+        self.auth_login = connector.getConfValue("auth_login")
+        self.auth_password = connector.getConfValue("auth_password")
         #Réponse dans les espaces de groupe (profiles.<profil>.connectors.webex.allow_group_messages), optionnel :
         #désactivé par défaut, une réponse en groupe étant visible de tous les membres de l'espace
         self.allow_group_messages = connector._config.get("allow_group_messages", False) is True
