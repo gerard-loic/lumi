@@ -184,7 +184,7 @@ Declares external services available to the tools. Each key is the logical name 
 }
 ```
 
-Built-in handlers: `LumePackAPI` (HTTP API client), `PostgreSQL` (database, also used by the pgvector RAG store and pipeline logs), and `MCPExternalService` (remote MCP server — see [External MCP servers](#external-mcp-servers)).
+Built-in handlers: `LumePackAPI` (HTTP API client), `PostgreSQL` (database, also used by the pgvector RAG store and pipeline logs), `MCPExternalService` (remote MCP server — see [External MCP servers](#external-mcp-servers)), and `Sylo` (client for a [Sylo](https://github.com/gerard-loic/sylo) instance: REST API methods `list`/`show`/`get`/`create`/`update`/`delete`, plus its `/mcp` server connected per session with the user's token — config: `url`, optional `timeout` (default 10) and `mcp` (default `true`)).
 
 Built-in handlers live in `lib/services/`. Deployment-specific handlers go in `directories.custom_services_dir` (default `config/services`) instead, without touching `lib/`. See [Adding services](#adding-services) to create custom ones.
 

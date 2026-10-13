@@ -240,6 +240,19 @@
                     }
                 },
                 {
+                    "if": { "properties": { "handler": { "const": "Sylo" } } },
+                    "then": {
+                        "additionalProperties": false,
+                        "required": ["url"],
+                        "properties": {
+                            "handler": true,
+                            "url": { "type": "string" },
+                            "timeout": { "type": "integer", "minimum": 1, "description": "Défaut : 10" },
+                            "mcp": { "type": "boolean", "description": "Connexion au serveur MCP /mcp de Sylo (auth session). Défaut : true" }
+                        }
+                    }
+                },
+                {
                     "if": { "properties": { "handler": { "const": "MCPExternalService" } } },
                     "then": {
                         "additionalProperties": false,
