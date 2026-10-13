@@ -14,6 +14,7 @@ from lib.log.logger import Logger, ERROR, OK
 #
 #Paramètres de configuration (clé "config" du bloc) :
 #  - input     (str,  obligatoire)   : clé du contexte contenant la liste de lignes (list[dict]).
+#                                      En format "json", un objet seul (dict) est aussi accepté.
 #  - format    (str,  défaut "csv")  : "csv" | "json" | "jsonl".
 #  - filename  (str,  défaut "dataview.<format>") : nom du fichier proposé au téléchargement.
 #  - delimiter (str,  défaut ",")    : séparateur CSV (format "csv" uniquement).
@@ -44,7 +45,10 @@ class DataViewFile(Block):
             Logger.write(f"[Block DataViewFile] Context key '{input_key}' not found", type=ERROR)
             return False
 
-        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        #En format json, un objet seul (ex. sortie d'un bloc JsonFormat) est sérialisé tel quel
+        is_object = fmt == "json" and isinstance(rows, dict)
+
+        if not is_object and (not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows)):
             Logger.write("[Block DataViewFile] 'input' must be a list of dict rows", type=ERROR)
             return False
 
@@ -65,5 +69,5 @@ class DataViewFile(Block):
         key = FileStore.key_from_url(url)
         context.set(output, {"key": key, "filename": filename, "path": FileStore.path(key), "url": url})
 
-        Logger.write(f"[Block DataViewFile] {len(rows)} row(s) -> {filename} ({fmt})", type=OK)
+        Logger.write(f"[Block DataViewFile] {'object' if is_object else f'{len(rows)} row(s)'} -> {filename} ({fmt})", type=OK)
         return True

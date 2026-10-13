@@ -186,6 +186,21 @@ Quand le pipeline est déclenché par un événement, le contexte est pré-rempl
 Exemple : un `POST /pipeline/mon_pipeline/start` avec le corps
 `{"payload": {"client_id": 42}}` rend `{trigger.data.client_id}` → `42`.
 
+Quel que soit le déclenchement, le contexte contient aussi les informations du run (date et
+heure **locales** du démarrage, figées pour tout le run) :
+
+| Variable       | Contenu                                         | Exemple            |
+|----------------|-------------------------------------------------|--------------------|
+| `run.uid`      | Identifiant du run (`process_uid`).             |                    |
+| `run.date`     | Date de démarrage.                              | `2026-10-13`       |
+| `run.time`     | Heure de démarrage (sans `:`, sûr pour un nom de fichier). | `14-30-05` |
+| `run.datetime` | Date et heure compactes.                        | `20261013-143005`  |
+
+Exemple : `"filename": "rapport_{run.datetime}.csv"` → `rapport_20261013-143005.csv`.
+
+> Les noms de variables n'acceptent que lettres, chiffres, `_` et `.` : une clé `output`
+> contenant un `-` (ex. `"ma-sortie"`) ne pourra pas être référencée par `{ma-sortie}`.
+
 ### 2.2 Interpolation dans la configuration
 
 Toutes les **chaînes** de la `config` d'un bloc sont interprétées comme des templates au
@@ -682,7 +697,7 @@ dans un fichier temporaire rattaché au run.
 
 | Paramètre   | Type   | Défaut               | Rôle                                                    |
 |-------------|--------|----------------------|-----------------------------------------------------|
-| `input`     | string | —                    | **Obligatoire.** Clé de contexte contenant la `list[dict]`. |
+| `input`     | string | —                    | **Obligatoire.** Clé de contexte contenant la `list[dict]` (en format `json`, un objet seul est aussi accepté, ex. sortie d'un `JsonFormat`). |
 | `format`    | string | `"csv"`              | `"csv"`, `"json"` ou `"jsonl"`.                     |
 | `filename`  | string | `"dataview.<format>"`| Nom du fichier proposé au téléchargement.           |
 | `delimiter` | string | `","`                | Séparateur CSV (format `csv` uniquement).           |
