@@ -1,64 +1,58 @@
-
+BACKLOG PULSE
+- [ ] Optimisation du microRag
+- [ ] API info profil
+- [ ] Revue de l'API d'info session / profil
+- [ ] API de statistiques d'utilisation / gestion de logs d'utilisation
+- [ ] Confirmations : prévoir des options plus riches (objets)
+- [ ] Limitation des résultats
+- [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
+- [ ] Critique de la réponse par un modèle
+- [ ] Possibilité d'arreter une conversation proprement
+- [ ] Refondre l'orchestrateur
+- [ ] Gestion de résumé de conversations
+- [ ] Suppression des messages du context : résumer dabord (idem ci-dessus)
+- [ ] Gestion de la suppression du contexte et du récapitulatif du contexte (idem ci-dessus)
+- [ ] Historiques de conversation stockés
+- [ ] problèmes des retours LLM vides
+- [ ] Meilleure gestion de la réponse vide (implémenter un sleep) (idem ci-dessus)
+- [ ] Simplification et refactor des classes pour le RAG
+- [ ] Conservation d'historique de conversations / pouvoir les continuer
+- [ ] Outils MCP recherche WEB : préciser la recherche effectuée
+- [ ] sourcer la réponse
+- [ ] Event de redirection
+- [ ] Supprimer un fichier du micro RAG
+- [ ] Suppression d'un fichier du raisonnement (idem ci-dessus)
+- [ ] modifier l'evenement rag en source plus globale
+- [ ] Avoir les affichages de sources dans les contenus
+- [ ] Problématique du RAG avec source sur documents non adéquats (score minimal ?)
+- [ ] Liaison de documents à un message en particulier (?)
+- [ ] Annuler une demande en cours
+- [ ] Effort ? (paramètre d'effort) R&D à faire
 
 BACKLOG
 - [ ] Delestage à revoir
 - [ ] Revue des logs
-- [ ] Optimisation du microRag
 - [ ] Support autres connecteurs ?
 - [ ] API statistiques détaillées (usage / pipeline)
 - [ ] Modification des pipelines à la volée
 - [ ] Prévoir la configuration des profiles dans des fichiers de configuration à part
-- [ ] API info profil
 - [ ] Gestionnaire de droits d'API Basic
 - [ ] Bloc : zip 
 - [ ] Bloc : unzip
 - [ ] Bloc : transformMapping (?)
 - [ ] Bloc : ImageToText (for Nova)
 - [ ] Bloc : subpipeline
-- [ ] Revue de l'API d'info session / profil
 - [ ] Gérer d'autres sources de données ?
 - [ ] Limiter la sortie ?
 - [ ] Support OCR / modèle de compréhension d'image
-- [ ] Confirmations : prévoir des options plus riches (objets)
-- [ ] Limitation des résultats
-- [ ] Détermination auto du modèle le mieux adapté pour répondre à une question ?
-- [ ] Critique de la réponse par un modèle
-- [ ] Possibilité d'arreter une conversation proprement
-- [ ] Loop
-- [ ] MCP externes
-- [ ] MCP contextuel ?
 - [ ] Support Audio
 - [ ] Image to text
 - [ ] Génération d'images
 - [ ] Passer le delestage sessions en tache CRON ?
 - [ ] Outils excel et graphiques avancés
-- [ ] Refondre l'orchestrateur
 - [ ] Outils PDF avancés [ABANDON PREMIERE IMPLEMENTATION]
-- [ ] Securiser encore davantage l'import dynamique
-- [ ] Audit sécurité
-- [ ] Revoir les limites d'appels d'outils
-- [ ] problèmes des retours LLM vides
-- [ ] Gestion de profils LLM
-- [ ] Simplification et refactor des classes pour le RAG
-- [ ] Refactor AuthSessionManager
 - [ ] Gestionnaire de codes d'erreur
-- [ ] Conservation d'historique de conversations / pouvoir les continuer
 - [ ] Gestion téléchargement fichiers CSV
-- [ ] Pb des logs non enregistrés ?? (le démarrage)
-- [ ] Outils MCP recherche WEB : préciser la recherche effectuée
-- [ ] sourcer la réponse
-- [ ] Event de redirection
-- [ ] Supprimer un fichier du micro RAG
-- [ ] Suppression des messages du context : résumer dabord
-- [ ] modifier l'evenement rag en source plus globale
-- [ ] Avoir les affichages de sources dans les contenus
-- [ ] Sur les appels MCP avec un UID d'appel d'outil
-- [ ] Problématique du RAG avec source sur documents non adéquats (score minimal ?)
-- [ ] Liaison de documents à un message en particulier
-- [ ] Gestion de la suppression du contexte et du récapitulatif du contexte
-- [ ] Suppression d'un fichier du raisonnement
-- [ ] Annuler une demande en cours
-- [ ] Meilleure gestion de la réponse vide (implémenter un sleep)
 - [ ] Trigger : cron
 - [ ] Trigger : callback
 - [ ] Trigger : urlWatch
@@ -71,7 +65,6 @@ BACKLOG
 - [ ] Trigger : webHook (secret + vérif signature)
 - [ ] Trigger : CLI
 - [ ] Trigger : pipelineEvent
-- [ ] Vérifier le service d'auth Webex nécessaire ?
 
 
 
@@ -79,8 +72,6 @@ BACKLOG
 ------------
 Versions à venir : 
 
-Abyss
-Focalisé sur les pipelines
 
 Nova
 Focalisé sur les capacités d'analyse d'images
