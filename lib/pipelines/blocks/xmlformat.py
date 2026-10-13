@@ -9,6 +9,7 @@ from lib.log.logger import Logger, ERROR
 #Paramètres de configuration (clé "config" du bloc) :
 #  - input  (str,         défaut "")    : clé du contexte contenant la chaine XML sérialisée à parser (une valeur non-str provoque une erreur).
 #  - format (str | False, défaut False) : XML Schema (XSD) de validation sous forme de chaine ; si False, aucune validation n'est effectuée.
+#  - format_file (str,    défaut None)  : fichier .xsd du XML Schema, relatif au dossier du pipeline (exclusif avec format, non interpolé).
 #  - output (str,         défaut "")    : clé du contexte où stocker la structure désérialisée.
 #
 #Conversion XML -> structure : {racine: contenu}, où le contenu d'un élément est
@@ -23,6 +24,25 @@ class XmlFormat(Block):
         format = context.getConfig(key="format", default=False)
         input = context.getConfig(key="input", default="")
         output = context.getConfig(key="output", default="")
+        #Le chemin du schéma n'est volontairement pas interpolé : une donnée du contexte ne doit pas choisir le fichier lu
+        format_file = self._config.get("format_file")
+
+        if format_file is not None:
+            if format is not False:
+                Logger.write(f"[Block XmlFormat] 'format' and 'format_file' are mutually exclusive", type=ERROR)
+                return False
+            path = self.resolvePipelineFile(format_file, (".xsd",)) if isinstance(format_file, str) and format_file != "" else None
+            if path is None:
+                Logger.write(f"[Block XmlFormat] Schema '{format_file}' must be a .xsd file inside the pipeline directory", type=ERROR)
+                return False
+            try:
+                format = path.read_text(encoding="utf-8")
+            except FileNotFoundError:
+                Logger.write(f"[Block XmlFormat] Schema '{format_file}' does not exist", type=ERROR)
+                return False
+            except (OSError, UnicodeDecodeError) as e:
+                Logger.write(f"[Block XmlFormat] Cannot read XML Schema '{format_file}' : {e}", type=ERROR)
+                return False
 
         input_val = context.get(key=input)
 

@@ -395,10 +395,14 @@ JSON Schema, et écrit la structure obtenue.
 |-----------|-----------------|---------|--------------------------------------------------------------------------|
 | `input`   | string          | —       | **Obligatoire.** Clé de contexte contenant la chaîne JSON sérialisée. La valeur **doit** être une chaîne. |
 | `format`  | object \| `false` | `false` | JSON Schema de validation. `false` → aucune validation.                   |
+| `format_file` | string      | —       | Fichier `.json` contenant le JSON Schema, relatif au dossier du pipeline (non interpolé). Exclusif avec `format`. |
 | `output`  | string          | —       | **Obligatoire.** Clé de contexte où stocker la structure désérialisée.    |
 
-Échoue si l'entrée n'est pas une chaîne, si le JSON est invalide, ou si la validation de
-schéma échoue.
+Échoue si l'entrée n'est pas une chaîne, si le JSON est invalide, si le fichier `format_file`
+est absent, hors du dossier du pipeline ou invalide, ou si la validation de schéma échoue.
+
+Le schéma peut aussi être placé dans un fichier à côté de `pipeline.json` :
+`"format_file": "rapport.schema.json"` à la place de `"format": {...}`.
 
 ```json
 "parse": {
@@ -429,6 +433,7 @@ optionnellement contre un XML Schema (XSD), et écrit la structure obtenue.
 |-----------|-------------------|---------|--------------------------------------------------------------------------|
 | `input`   | string            | —       | **Obligatoire.** Clé de contexte contenant la chaîne XML sérialisée. La valeur **doit** être une chaîne. |
 | `format`  | string \| `false` | `false` | XML Schema (XSD) de validation, sous forme de chaîne. `false` → aucune validation. |
+| `format_file` | string        | —       | Fichier `.xsd` contenant le XML Schema, relatif au dossier du pipeline (non interpolé). Exclusif avec `format`. |
 | `output`  | string            | —       | **Obligatoire.** Clé de contexte où stocker la structure désérialisée.    |
 
 La structure produite est `{ "<racine>": <contenu> }`, où le contenu d'un élément est :
@@ -440,8 +445,12 @@ La structure produite est `{ "<racine>": <contenu> }`, où le contenu d'un élé
 Toutes les valeurs restent des chaînes (pas de conversion de type). Le parser ignore les
 commentaires, les DTD et ne résout pas les entités externes (protection XXE).
 
-Échoue si l'entrée n'est pas une chaîne, si le XML est invalide, si le XSD est invalide,
-ou si la validation de schéma échoue.
+Échoue si l'entrée n'est pas une chaîne, si le XML est invalide, si le XSD est invalide
+(ou si le fichier `format_file` est absent ou hors du dossier du pipeline), ou si la
+validation de schéma échoue.
+
+Le XSD peut aussi être placé dans un fichier à côté de `pipeline.json` :
+`"format_file": "rapport.xsd"` à la place de `"format": "<xs:schema ...>"`.
 
 ```json
 "parse": {
