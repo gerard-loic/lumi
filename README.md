@@ -373,6 +373,7 @@ Settings of the [`tavily`](#built-in-tools) tool group (enable it with `"tavily.
 | `api_key` | string | Tavily API key. Falls back to the `TAVILY_API_KEY` environment variable. |
 | `search_depth` | string | `basic` (default, 1 credit), `advanced` (2 credits, more relevant snippets), `fast` or `ultra-fast`. |
 | `extract_depth` | string | First extraction attempt depth: `basic` (default) or `advanced`. |
+| `include_answer` | bool | Ask Tavily for its generated summary of the results and pass it to the model as `synthese_non_verifiee` (default: `false`). This summary is produced by Tavily's own LLM and can be wrong (values from another date or place); the model is told never to take a value from it that is not also in an extract. |
 | `search_mode` | string | Content returned for each `rechercher_web` result. `snippets` (default): Tavily's short snippet. `full`: full page content, truncated to `full_max_chars`. `retrieval`: full content is chunked and embedded, and only the `retrieval_top_k` passages closest to the query (across all results) are returned — as Open WebUI does by default. `full` and `retrieval` fetch page content in the search call itself (`include_raw_content`), at no extra Tavily credit. If embedding fails, `retrieval` falls back to snippets. |
 | `full_max_chars` | int | `full` mode: maximum characters per result (default: `4000`). |
 | `retrieval_top_k` | int | `retrieval` mode: number of passages returned, all results combined (default: `8`). |

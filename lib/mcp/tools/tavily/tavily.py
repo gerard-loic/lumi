@@ -276,7 +276,10 @@ class ResultatRechercheTavily(BaseModel):
 
 
 class ResultatsRechercheTavily(BaseModel):
-    reponse: Optional[str] = Field(default=None, description="Réponse synthétique générée à partir des résultats")
+    synthese_non_verifiee: Optional[str] = Field(default=None, description=(
+        "Résumé généré automatiquement par le moteur de recherche (option tavily.include_answer), qui peut être faux "
+        "ou porter sur une autre date ou un autre lieu : ne jamais en reprendre une valeur absente des extraits"
+    ))
     resultats: list[ResultatRechercheTavily] = Field(description="Liste des résultats de recherche")
     avertissement: Optional[str] = Field(default=None, description="Consigne à respecter (budget de recherche)")
 
@@ -341,11 +344,13 @@ class TavilyService(MCPTool):
         ] = None,
     ) -> ResultatsRechercheTavily:
         """
-        Effectue une recherche sur internet et retourne une réponse synthétique ainsi qu'une liste de résultats
-        avec leurs extraits les plus pertinents. À utiliser dès que l'utilisateur demande des informations
-        récentes, une actualité, ou tout sujet nécessitant une recherche sur le web. Formuler une requête précise
-        et utiliser les filtres (sujet, periode, domaines) dès le premier appel plutôt que multiplier les recherches.
-        La `reponse` et les `extraits` suffisent le plus souvent : n'utiliser lire_pages_web que s'ils ne suffisent pas.
+        Effectue une recherche sur internet et retourne une liste de résultats avec, pour chacun, l'extrait le plus
+        pertinent de la page et son URL. À utiliser dès que l'utilisateur demande des informations récentes, une
+        actualité, ou tout sujet nécessitant une recherche sur le web. Formuler une requête précise et utiliser les
+        filtres (sujet, periode, domaines) dès le premier appel plutôt que multiplier les recherches. Les `extraits`
+        suffisent le plus souvent : n'utiliser lire_pages_web que s'ils ne suffisent pas. Toute valeur chiffrée reprise
+        dans la réponse doit figurer dans un extrait ; `synthese_non_verifiee`, si présente, n'est qu'un résumé
+        automatique qui peut être faux.
         """
         autorise, restants = _consommer_budget("rechercher_web", "max_searches_per_turn", _MAX_SEARCHES_PER_TURN)
         if not autorise:
@@ -360,7 +365,9 @@ class TavilyService(MCPTool):
             "max_results": min(max(1, nb_resultats or 5), 10),
             "topic": sujet or "general",
             "search_depth": _config("search_depth", "basic"),
-            "include_answer": True,
+            #Résumé généré par Tavily : désactivé par défaut, il peut être faux (valeurs d'une autre date ou d'un autre
+            #lieu) et le LLM tend à le reprendre tel quel plutôt que de s'appuyer sur les extraits
+            "include_answer": bool(_config("include_answer", False)),
         }
         if periode:
             payload["time_range"] = periode
@@ -409,10 +416,10 @@ class TavilyService(MCPTool):
             avertissement = "Dernière recherche autorisée pour cette question : aucune autre recherche ne sera possible."
         Logger.write(
             f"[Tavily] rechercher_web -> {len(resultats)} résultat(s), {sum(len(r.extrait) for r in resultats)} car. : "
-            f"{[(r.url, len(r.extrait)) for r in resultats]} | reponse Tavily : {(data.get('answer') or '')[:400]!r}",
+            f"{[(r.url, len(r.extrait)) for r in resultats]}" + (f" | synthèse Tavily : {data['answer'][:400]!r}" if data.get("answer") else ""),
             type=INFO,
         )
-        return ResultatsRechercheTavily(reponse=data.get("answer"), resultats=resultats, avertissement=avertissement)
+        return ResultatsRechercheTavily(synthese_non_verifiee=data.get("answer") or None, resultats=resultats, avertissement=avertissement)
 
     @slow_tool
     @tool_description(name="[tavily.lire_pages_web]")

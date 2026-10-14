@@ -175,6 +175,7 @@
                 "api_key": { "type": ["string", "null"], "description": "Clé d'API Tavily (à défaut : variable d'environnement TAVILY_API_KEY)" },
                 "search_depth": { "type": "string", "enum": ["basic", "advanced", "fast", "ultra-fast"] },
                 "extract_depth": { "type": "string", "enum": ["basic", "advanced"] },
+                "include_answer": { "type": "boolean", "description": "Transmettre au LLM le résumé généré par Tavily (champ synthese_non_verifiee)" },
                 "search_mode": { "type": "string", "enum": ["snippets", "full", "retrieval"], "description": "Contenu renvoyé pour chaque résultat de recherche" },
                 "full_max_chars": { "type": "integer", "minimum": 500, "description": "Mode full : caractères maximum par résultat" },
                 "retrieval_top_k": { "type": "integer", "minimum": 1, "description": "Mode retrieval : nombre de passages renvoyés, tous résultats confondus" },
