@@ -75,6 +75,8 @@ Lumi 1.6.x (Abyss) is a major release built around a brand-new **pipeline engine
 ### Other changes
 
 - **External MCP servers** — the `MCPExternalService` handler connects remote MCP servers (HTTP/SSE), with either a static connection shared by all sessions or a per-session connection using the user's token — see [External MCP servers](#external-mcp-servers).
+- **Tavily web search** — new [`tavily`](#tavily) tool group (`rechercher_web`, `lire_pages_web`): pages are fetched and converted by the Tavily API, with per-turn call budget, page cleanup and optional passage retrieval through the RAG embedder.
+- **Fully streamed agent loop** — every LLM call of a chat turn is now streamed, and tool calls are rebuilt from the stream. The final answer is the reply of the call that ends without tool calls, already streamed to the client: it is no longer generated a second time, and a model that asks for another tool at that point is no longer mistaken for an empty response. The `thinking` events sequence (`INITIAL`/`TOOL`, then `FINAL` around the streamed text) is unchanged.
 - **Refactored base classes** — every extensible type now has its abstract base in a `_abstract.py` module next to its implementations (`lib/services/_abstract.py`, `lib/cron/tasks/_abstract.py`, `lib/agent/filters/_abstract.py`, `lib/connectors/_abstract.py`, `lib/pipelines/_abstract.py`, …), and managers live in their own modules (`lib/services/servicemanager.py`, `lib/connectors/connectormanager.py`).
 
 ## Getting started

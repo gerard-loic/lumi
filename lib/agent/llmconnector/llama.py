@@ -46,9 +46,16 @@ class Llama(LLMConnector):
             self._logUsage(getattr(response, "usage", None))
             return response
 
-        return await self._client.chat.completions.create(
+        return self._relayStream(await self._client.chat.completions.create(
             model=self._model,
             messages=messages,
             tools=tools,
             stream=True,
-        )
+        ))
+
+    #Relaie un flux en comptabilisant l'usage s'il est fourni (en fin de flux, selon le serveur) : tous les appels de
+    #chatStream sont streamés, l'usage ne serait sinon comptabilisé que pour les appels non streamés
+    async def _relayStream(self, stream):
+        async for chunk in stream:
+            self._logUsage(getattr(chunk, "usage", None))
+            yield chunk
