@@ -175,6 +175,14 @@
                 "api_key": { "type": ["string", "null"], "description": "Clé d'API Tavily (à défaut : variable d'environnement TAVILY_API_KEY)" },
                 "search_depth": { "type": "string", "enum": ["basic", "advanced", "fast", "ultra-fast"] },
                 "extract_depth": { "type": "string", "enum": ["basic", "advanced"] },
+                "search_mode": { "type": "string", "enum": ["snippets", "full", "retrieval"], "description": "Contenu renvoyé pour chaque résultat de recherche" },
+                "full_max_chars": { "type": "integer", "minimum": 500, "description": "Mode full : caractères maximum par résultat" },
+                "retrieval_top_k": { "type": "integer", "minimum": 1, "description": "Mode retrieval : nombre de passages renvoyés, tous résultats confondus" },
+                "retrieval_collection": { "type": "string", "description": "Mode retrieval : collection RAG dont l'embedder est utilisé (défaut : celle du profil)" },
+                "min_relative_score": { "type": "number", "minimum": 0, "maximum": 1, "description": "Résultats écartés si leur score Tavily est inférieur à cette fraction du meilleur score (0 = aucun filtre)" },
+                "retrieval_score_margin": { "type": "number", "minimum": 0, "maximum": 2, "description": "Mode retrieval : passages écartés si leur similarité est inférieure à celle du meilleur moins cette marge" },
+                "retrieval_chunk_size": { "type": "integer", "minimum": 200, "description": "Mode retrieval : taille maximale d'un passage, en caractères" },                "max_searches_per_turn": { "type": "integer", "minimum": 0, "description": "Recherches maximum par message (0 = illimité)" },
+                "max_extracts_per_turn": { "type": "integer", "minimum": 0, "description": "Appels de lecture de pages maximum par message (0 = illimité)" },
                 "timeout": { "type": "integer", "minimum": 1, "description": "Secondes" }
             }
         },

@@ -371,6 +371,16 @@ Settings of the [`tavily`](#built-in-tools) tool group (enable it with `"tavily.
 | `api_key` | string | Tavily API key. Falls back to the `TAVILY_API_KEY` environment variable. |
 | `search_depth` | string | `basic` (default, 1 credit), `advanced` (2 credits, more relevant snippets), `fast` or `ultra-fast`. |
 | `extract_depth` | string | First extraction attempt depth: `basic` (default) or `advanced`. |
+| `search_mode` | string | Content returned for each `rechercher_web` result. `snippets` (default): Tavily's short snippet. `full`: full page content, truncated to `full_max_chars`. `retrieval`: full content is chunked and embedded, and only the `retrieval_top_k` passages closest to the query (across all results) are returned — as Open WebUI does by default. `full` and `retrieval` fetch page content in the search call itself (`include_raw_content`), at no extra Tavily credit. If embedding fails, `retrieval` falls back to snippets. |
+| `full_max_chars` | int | `full` mode: maximum characters per result (default: `4000`). |
+| `retrieval_top_k` | int | `retrieval` mode: number of passages returned, all results combined (default: `8`). |
+| `retrieval_collection` | string | `retrieval` mode: RAG collection (see [`rag`](#rag)) whose embedder is used. Nothing is stored. Defaults to the agent profile's collection, as for [file attachments](#file-attachments). |
+| `min_relative_score` | number | Search results whose Tavily relevance score is below this fraction of the best result's score are dropped, in every mode (default: `0.5`, `0` = no filter). Duplicate pages (http/https, with or without `www`) are always dropped. |
+| `retrieval_score_margin` | number | `retrieval` mode: passages whose similarity to the query is lower than the best passage's minus this margin are dropped, even if `retrieval_top_k` is not reached (default: `0.15`). |
+| `retrieval_chunk_size` | int | `retrieval` mode: maximum passage size, in characters (default: `1500`). Pages are split between lines, and a passage starting inside a Markdown table repeats the table header so values stay tied to their columns. |
+
+Page content returned by Tavily is cleaned before being truncated or chunked, in every mode and in `lire_pages_web`: Markdown links are replaced by their text, images and HTML tags are removed, and whitespace is collapsed. Menus and link URLs often make up most of a page and would otherwise push the useful content past the limits.| `max_searches_per_turn` | int | Maximum `rechercher_web` calls per agent turn (user message or pipeline Agent block); further calls return no results and an `avertissement` asking the model to answer (default: `3`, `0` = unlimited). |
+| `max_extracts_per_turn` | int | Maximum `lire_pages_web` calls per agent turn, each reading up to 5 URLs (default: `2`, `0` = unlimited). |
 | `timeout` | int | Timeout of one Tavily API call, in seconds (default: `30`). |
 
 ### `rag`
