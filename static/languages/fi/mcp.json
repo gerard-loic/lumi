@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Haku tietopankista",
     "web.rechercher_sur_internet": "Haku internetistä",
     "web.lire_page_web": "Lukee verkkosivun sisällön",
+    "tavily.rechercher_web": "Haku internetistä",
+    "tavily.lire_pages_web": "Lukee verkkosivun sisällön",
     "word.generer_fichier_word": "Luo Word-tiedoston",
     "word.generer_fichier_word.confirmation": "Luon Word-tiedoston. Jatkanko?",
     "word.lire_document_word": "Lukee Word-asiakirjan",

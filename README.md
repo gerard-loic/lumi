@@ -75,6 +75,8 @@ Lumi 1.6.x (Abyss) is a major release built around a brand-new **pipeline engine
 ### Other changes
 
 - **External MCP servers** — the `MCPExternalService` handler connects remote MCP servers (HTTP/SSE), with either a static connection shared by all sessions or a per-session connection using the user's token — see [External MCP servers](#external-mcp-servers).
+- **Tavily web search** — new [`tavily`](#tavily) tool group (`rechercher_web`, `lire_pages_web`): pages are fetched and converted by the Tavily API, with per-turn call budget, page cleanup and optional passage retrieval through the RAG embedder.
+- **Fully streamed agent loop** — every LLM call of a chat turn is now streamed, and tool calls are rebuilt from the stream. The final answer is the reply of the call that ends without tool calls, already streamed to the client: it is no longer generated a second time, and a model that asks for another tool at that point is no longer mistaken for an empty response. The `thinking` events sequence (`INITIAL`/`TOOL`, then `FINAL` around the streamed text) is unchanged.
 - **Refactored base classes** — every extensible type now has its abstract base in a `_abstract.py` module next to its implementations (`lib/services/_abstract.py`, `lib/cron/tasks/_abstract.py`, `lib/agent/filters/_abstract.py`, `lib/connectors/_abstract.py`, `lib/pipelines/_abstract.py`, …), and managers live in their own modules (`lib/services/servicemanager.py`, `lib/connectors/connectormanager.py`).
 
 ## Getting started
@@ -184,7 +186,7 @@ Declares external services available to the tools. Each key is the logical name 
 }
 ```
 
-Built-in handlers: `LumePackAPI` (HTTP API client), `PostgreSQL` (database, also used by the pgvector RAG store and pipeline logs), and `MCPExternalService` (remote MCP server — see [External MCP servers](#external-mcp-servers)).
+Built-in handlers: `LumePackAPI` (HTTP API client), `PostgreSQL` (database, also used by the pgvector RAG store and pipeline logs), `MCPExternalService` (remote MCP server — see [External MCP servers](#external-mcp-servers)), and `Sylo` (client for a [Sylo](https://github.com/gerard-loic/sylo) instance: REST API methods `list`/`show`/`get`/`create`/`update`/`delete`, a `call` method for pipelines (`ServiceMethod` with `endpoint`, `method`, `input` context path sent as JSON body, `output`), plus its `/mcp` server connected per session with the user's token — config: `url`, optional `timeout` (default 10) and `mcp` (default `true`)).
 
 Built-in handlers live in `lib/services/`. Deployment-specific handlers go in `directories.custom_services_dir` (default `config/services`) instead, without touching `lib/`. See [Adding services](#adding-services) to create custom ones.
 
@@ -361,6 +363,28 @@ Settings for the PDF template used by the `generer_fichier_pdf` MCP tool. All ke
 | `template_color` | string | Accent color as a 6-digit hex code without `#` (default: `1F4E79`). |
 | `template_logo` | string \| null | Path to a logo image (relative to the project root, or absolute). Ignored if the file doesn't exist. |
 | `template_footer_text` | string \| null | Text displayed in the page footer. |
+
+### `tavily`
+
+Settings of the [`tavily`](#built-in-tools) tool group (enable it with `"tavily.*"` in [`mcp.tools_enabled`](#profilesnamemcp)). Transient errors (rate limiting, server or network errors) are retried up to 3 times; pages that fail extraction are retried once in `advanced` mode.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `api_key` | string | Tavily API key. Falls back to the `TAVILY_API_KEY` environment variable. |
+| `search_depth` | string | `basic` (default, 1 credit), `advanced` (2 credits, more relevant snippets), `fast` or `ultra-fast`. |
+| `extract_depth` | string | First extraction attempt depth: `basic` (default) or `advanced`. |
+| `include_answer` | bool | Ask Tavily for its generated summary of the results and pass it to the model as `synthese_non_verifiee` (default: `false`). This summary is produced by Tavily's own LLM and can be wrong (values from another date or place); the model is told never to take a value from it that is not also in an extract. |
+| `search_mode` | string | Content returned for each `rechercher_web` result. `snippets` (default): Tavily's short snippet. `full`: full page content, truncated to `full_max_chars`. `retrieval`: full content is chunked and embedded, and only the `retrieval_top_k` passages closest to the query (across all results) are returned — as Open WebUI does by default. `full` and `retrieval` fetch page content in the search call itself (`include_raw_content`), at no extra Tavily credit. If embedding fails, `retrieval` falls back to snippets. |
+| `full_max_chars` | int | `full` mode: maximum characters per result (default: `4000`). |
+| `retrieval_top_k` | int | `retrieval` mode: number of passages returned, all results combined (default: `8`). |
+| `retrieval_collection` | string | `retrieval` mode: RAG collection (see [`rag`](#rag)) whose embedder is used. Nothing is stored. Defaults to the agent profile's collection, as for [file attachments](#file-attachments). |
+| `min_relative_score` | number | Search results whose Tavily relevance score is below this fraction of the best result's score are dropped, in every mode (default: `0.5`, `0` = no filter). Duplicate pages (http/https, with or without `www`) are always dropped. |
+| `retrieval_score_margin` | number | `retrieval` mode: passages whose similarity to the query is lower than the best passage's minus this margin are dropped, even if `retrieval_top_k` is not reached (default: `0.15`). |
+| `retrieval_chunk_size` | int | `retrieval` mode: maximum passage size, in characters (default: `1500`). Pages are split between lines, and a passage starting inside a Markdown table repeats the table header so values stay tied to their columns. |
+
+Page content returned by Tavily is cleaned before being truncated or chunked, in every mode and in `lire_pages_web`: Markdown links are replaced by their text, images and HTML tags are removed, and whitespace is collapsed. Menus and link URLs often make up most of a page and would otherwise push the useful content past the limits.| `max_searches_per_turn` | int | Maximum `rechercher_web` calls per agent turn (user message or pipeline Agent block); further calls return no results and an `avertissement` asking the model to answer (default: `3`, `0` = unlimited). |
+| `max_extracts_per_turn` | int | Maximum `lire_pages_web` calls per agent turn, each reading up to 5 URLs (default: `2`, `0` = unlimited). |
+| `timeout` | int | Timeout of one Tavily API call, in seconds (default: `30`). |
 
 ### `rag`
 
@@ -699,6 +723,7 @@ Lumi ships with the following generic MCP tool groups in `lib/mcp/tools/`. Enabl
 | `pdf` | `lib/mcp/tools/pdf/pdf.py` | `generer_fichier_pdf` | Generates templated PDF documents (cover page, header/footer, tables, charts). |
 | `rag` | `lib/mcp/tools/rag/rag.py` | `search_knowledge_base` | Searches the RAG knowledge base — see [RAG knowledge base](#rag-knowledge-base). |
 | `web` | `lib/mcp/tools/web/web.py` | `rechercher_sur_internet`, `lire_page_web` | Web search and web page reading. |
+| `tavily` | `lib/mcp/tools/tavily/tavily.py` | `rechercher_web`, `lire_pages_web` | Web search and web page / online PDF reading through the [Tavily](https://tavily.com) API — see [`tavily`](#tavily). Pages are fetched and converted by Tavily, not locally. |
 | `word` | `lib/mcp/tools/word/word.py` | 8 tools | Word document generation and editing on top of a company template — see [Word document templates](#word-document-templates-gabarits). |
 
 

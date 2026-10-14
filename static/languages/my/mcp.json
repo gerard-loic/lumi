@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "အသိပညာဆိုင်ရာ အခြေခံအချက်အလက်တွင် ရှာဖွေခြင်း",
     "web.rechercher_sur_internet": "အင်တာနက်ပေါ်တွင် ရှာဖွေခြင်း",
     "web.lire_page_web": "ဝဘ်စာမျက်နှာ၏ အကြောင်းအရာကို ဖတ်သည်",
+    "tavily.rechercher_web": "အင်တာနက်ပေါ်တွင် ရှာဖွေခြင်း",
+    "tavily.lire_pages_web": "ဝဘ်စာမျက်နှာ၏ အကြောင်းအရာကို ဖတ်သည်",
     "word.generer_fichier_word": "Word ဖိုင်တစ်ခု ထုတ်ပေးသည်",
     "word.generer_fichier_word.confirmation": "Word ဖိုင်ကို ထုတ်ပေးပါမည်။ ဆက်လုပ်ရမလား?",
     "word.lire_document_word": "Word စာရွက်စာတမ်းကို ဖတ်သည်",

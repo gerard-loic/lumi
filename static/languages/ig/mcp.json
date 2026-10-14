@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Ọchụchọ na ntọala ihe ọmụma",
     "web.rechercher_sur_internet": "Ọchụchọ na ịntanetị",
     "web.lire_page_web": "Na-agụ ọdịnaya nke ibe weebụ",
+    "tavily.rechercher_web": "Ọchụchọ na ịntanetị",
+    "tavily.lire_pages_web": "Na-agụ ọdịnaya nke ibe weebụ",
     "word.generer_fichier_word": "Na-emepụta faịlụ Word",
     "word.generer_fichier_word.confirmation": "Aga m emepụta faịlụ Word. Ọ ga-aga n'ihu?",
     "word.lire_document_word": "Na-agụ akwụkwọ Word",

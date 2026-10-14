@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Hledání ve znalostní bázi",
     "web.rechercher_sur_internet": "Hledání na internetu",
     "web.lire_page_web": "Přečte obsah webové stránky",
+    "tavily.rechercher_web": "Hledání na internetu",
+    "tavily.lire_pages_web": "Přečte obsah webové stránky",
     "word.generer_fichier_word": "Vygeneruje soubor Word",
     "word.generer_fichier_word.confirmation": "Vygeneruji soubor Word. Mám pokračovat?",
     "word.lire_document_word": "Přečte dokument Word",

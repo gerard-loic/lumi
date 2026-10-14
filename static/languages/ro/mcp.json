@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Căutare în baza de cunoștințe",
     "web.rechercher_sur_internet": "Căutare pe internet",
     "web.lire_page_web": "Citește conținutul unei pagini web",
+    "tavily.rechercher_web": "Căutare pe internet",
+    "tavily.lire_pages_web": "Citește conținutul unei pagini web",
     "word.generer_fichier_word": "Generează un fișier Word",
     "word.generer_fichier_word.confirmation": "Voi genera fișierul Word. Ar trebui să continui?",
     "word.lire_document_word": "Citește un document Word",

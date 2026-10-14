@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "ナレッジベース内を検索",
     "web.rechercher_sur_internet": "インターネットを検索",
     "web.lire_page_web": "ウェブページの内容を読み込みます",
+    "tavily.rechercher_web": "インターネットを検索",
+    "tavily.lire_pages_web": "ウェブページの内容を読み込みます",
     "word.generer_fichier_word": "Wordファイルを生成します",
     "word.generer_fichier_word.confirmation": "Wordファイルを生成します。続けてよろしいですか？",
     "word.lire_document_word": "Word文書を読み込みます",

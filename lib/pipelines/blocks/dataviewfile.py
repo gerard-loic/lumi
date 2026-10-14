@@ -14,12 +14,14 @@ from lib.log.logger import Logger, ERROR, OK
 #
 #Paramètres de configuration (clé "config" du bloc) :
 #  - input     (str,  obligatoire)   : clé du contexte contenant la liste de lignes (list[dict]).
-#  - format    (str,  défaut "csv")  : "csv" | "json" | "jsonl".
+#                                      En format "json", un objet seul (dict) est aussi accepté.
+#                                      En format "txt", une chaîne (ex. réponse d'un bloc Agent).
+#  - format    (str,  défaut "csv")  : "csv" | "json" | "jsonl" | "txt".
 #  - filename  (str,  défaut "dataview.<format>") : nom du fichier proposé au téléchargement.
 #  - delimiter (str,  défaut ",")    : séparateur CSV (format "csv" uniquement).
 #  - output    (str,  défaut "file") : clé du contexte où stocker {"key","filename","path","url"}.
 class DataViewFile(Block):
-    _FORMATS = ("csv", "json", "jsonl")
+    _FORMATS = ("csv", "json", "jsonl", "txt")
 
     def __init__(self, block_uid:str, config:dict, on_success_block:str=None, on_error_block:str=None):
         super().__init__("DataViewFile", block_uid, config, on_success_block=on_success_block, on_error_block=on_error_block)
@@ -35,7 +37,7 @@ class DataViewFile(Block):
             Logger.write("[Block DataViewFile] Missing 'input' in config", type=ERROR)
             return False
         if fmt not in self._FORMATS:
-            Logger.write(f"[Block DataViewFile] Unsupported format '{fmt}' (csv|json|jsonl)", type=ERROR)
+            Logger.write(f"[Block DataViewFile] Unsupported format '{fmt}' (csv|json|jsonl|txt)", type=ERROR)
             return False
 
         try:
@@ -44,11 +46,20 @@ class DataViewFile(Block):
             Logger.write(f"[Block DataViewFile] Context key '{input_key}' not found", type=ERROR)
             return False
 
-        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+        #En format json, un objet seul (ex. sortie d'un bloc JsonFormat) est sérialisé tel quel
+        is_object = fmt == "json" and isinstance(rows, dict)
+
+        if fmt == "txt":
+            if not isinstance(rows, str):
+                Logger.write("[Block DataViewFile] 'input' must be a string in txt format", type=ERROR)
+                return False
+        elif not is_object and (not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows)):
             Logger.write("[Block DataViewFile] 'input' must be a list of dict rows", type=ERROR)
             return False
 
-        if fmt == "json":
+        if fmt == "txt":
+            content = rows
+        elif fmt == "json":
             content = json.dumps(rows, ensure_ascii=False, indent=2)
         elif fmt == "jsonl":
             content = "\n".join(json.dumps(r, ensure_ascii=False) for r in rows)
@@ -65,5 +76,5 @@ class DataViewFile(Block):
         key = FileStore.key_from_url(url)
         context.set(output, {"key": key, "filename": filename, "path": FileStore.path(key), "url": url})
 
-        Logger.write(f"[Block DataViewFile] {len(rows)} row(s) -> {filename} ({fmt})", type=OK)
+        Logger.write(f"[Block DataViewFile] {'text' if fmt == 'txt' else 'object' if is_object else f'{len(rows)} row(s)'} -> {filename} ({fmt})", type=OK)
         return True

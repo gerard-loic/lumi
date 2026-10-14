@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "ज्ञान आधार में खोज",
     "web.rechercher_sur_internet": "इंटरनेट पर खोज",
     "web.lire_page_web": "एक वेब पेज की सामग्री पढ़ता है",
+    "tavily.rechercher_web": "इंटरनेट पर खोज",
+    "tavily.lire_pages_web": "एक वेब पेज की सामग्री पढ़ता है",
     "word.generer_fichier_word": "एक वर्ड फ़ाइल बनाता है",
     "word.generer_fichier_word.confirmation": "मैं वर्ड फ़ाइल बनाऊँगा। क्या मैं जारी रखूँ?",
     "word.lire_document_word": "एक वर्ड दस्तावेज़ पढ़ता है",

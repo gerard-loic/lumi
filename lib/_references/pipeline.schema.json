@@ -445,7 +445,7 @@
                 "required": ["input"],
                 "properties": {
                     "input": { "$ref": "#/$defs/contextKey" },
-                    "format": { "enum": ["csv", "json", "jsonl"] },
+                    "format": { "enum": ["csv", "json", "jsonl", "txt"] },
                     "filename": { "$ref": "#/$defs/template" },
                     "delimiter": { "type": "string", "minLength": 1 },
                     "output": { "$ref": "#/$defs/contextKey" }
@@ -530,8 +530,14 @@
                         "description": "JSON Schema de validation, ou false pour ne pas valider",
                         "anyOf": [ { "type": "object" }, { "const": false } ]
                     },
+                    "format_file": {
+                        "description": "Fichier .json du JSON Schema, relatif au dossier du pipeline (non interpolé, exclusif avec format)",
+                        "type": "string",
+                        "pattern": "\\.[jJ][sS][oO][nN]$"
+                    },
                     "output": { "$ref": "#/$defs/contextKey" }
-                }
+                },
+                "not": { "required": ["format", "format_file"] }
             },
 
             "Loop": {
@@ -711,8 +717,14 @@
                         "description": "XML Schema (XSD) sous forme de chaine, ou false pour ne pas valider",
                         "anyOf": [ { "type": "string", "minLength": 1 }, { "const": false } ]
                     },
+                    "format_file": {
+                        "description": "Fichier .xsd du XML Schema, relatif au dossier du pipeline (non interpolé, exclusif avec format)",
+                        "type": "string",
+                        "pattern": "\\.[xX][sS][dD]$"
+                    },
                     "output": { "$ref": "#/$defs/contextKey" }
-                }
+                },
+                "not": { "required": ["format", "format_file"] }
             }
         },
 

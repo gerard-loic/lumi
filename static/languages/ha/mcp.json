@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Bincike a cikin ma'ajin ilimi",
     "web.rechercher_sur_internet": "Bincike a intanet",
     "web.lire_page_web": "Yana karanta abin da ke cikin shafin yanar gizo",
+    "tavily.rechercher_web": "Bincike a intanet",
+    "tavily.lire_pages_web": "Yana karanta abin da ke cikin shafin yanar gizo",
     "word.generer_fichier_word": "Yana ƙirƙirar fayil na Word",
     "word.generer_fichier_word.confirmation": "Zan ƙirƙiri fayil na Word. Ci gaba?",
     "word.lire_document_word": "Yana karanta takarda ta Word",

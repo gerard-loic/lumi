@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "نالج بیس میں تلاش",
     "web.rechercher_sur_internet": "انٹرنیٹ پر تلاش",
     "web.lire_page_web": "ویب پیج کا مواد پڑھتا ہے",
+    "tavily.rechercher_web": "انٹرنیٹ پر تلاش",
+    "tavily.lire_pages_web": "ویب پیج کا مواد پڑھتا ہے",
     "word.generer_fichier_word": "ایک ورڈ فائل بناتا ہے",
     "word.generer_fichier_word.confirmation": "میں ورڈ فائل بناؤں گا۔ کیا جاری رکھوں؟",
     "word.lire_document_word": "ورڈ دستاویز پڑھتا ہے",

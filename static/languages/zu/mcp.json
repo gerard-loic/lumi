@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Ukusesha kusizinda solwazi",
     "web.rechercher_sur_internet": "Ukusesha ku-inthanethi",
     "web.lire_page_web": "Ifunda okuqukethwe kwekhasi lewebhu",
+    "tavily.rechercher_web": "Ukusesha ku-inthanethi",
+    "tavily.lire_pages_web": "Ifunda okuqukethwe kwekhasi lewebhu",
     "word.generer_fichier_word": "Idala ifayela le-Word",
     "word.generer_fichier_word.confirmation": "Ngizodala ifayela le-Word. Ngiqhubeke?",
     "word.lire_document_word": "Ifunda idokhumenti le-Word",

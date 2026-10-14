@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Iskanje po bazi znanja",
     "web.rechercher_sur_internet": "Iskanje po internetu",
     "web.lire_page_web": "Prebere vsebino spletne strani",
+    "tavily.rechercher_web": "Iskanje po internetu",
+    "tavily.lire_pages_web": "Prebere vsebino spletne strani",
     "word.generer_fichier_word": "Ustvari datoteko Word",
     "word.generer_fichier_word.confirmation": "Ustvaril bom datoteko Word. Naj nadaljujem?",
     "word.lire_document_word": "Prebere dokument Word",

@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Klask e diabarzh diazez ar ouiziegezh",
     "web.rechercher_sur_internet": "Klask war ar genrouedad",
     "web.lire_page_web": "O lenn endalc'had ur bajenn web",
+    "tavily.rechercher_web": "Klask war ar genrouedad",
+    "tavily.lire_pages_web": "O lenn endalc'had ur bajenn web",
     "word.generer_fichier_word": "O krouiñ ur restr Word",
     "word.generer_fichier_word.confirmation": "Krouiñ a rin ar restr Word. Ha dleout a ran kenderc'hel?",
     "word.lire_document_word": "O lenn un teul Word",

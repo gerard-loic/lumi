@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 from contextlib import AsyncExitStack
 from typing import AsyncGenerator
 from lib.mcp.client import mcp_manager, MCPToolError
@@ -19,10 +20,11 @@ from lib.process.process import Process
 
 """
 Agent — Agent d'orchestration / communication LLM
-Stratégie :
-1. Appel LiteLLM NON streamé pour détecter les tool calls
-2. Exécution des tools via MCP si nécessaire
-3. Appel LiteLLM STREAMÉ réponse finale token par token
+Stratégie (chatStream) :
+1. Appel LLM STREAMÉ : le texte est relayé au client token par token, les tool calls sont reconstitués depuis le flux
+2. Si le modèle a demandé des outils : exécution via MCP, puis nouvel appel streamé avec leurs résultats
+3. L'appel qui se termine sans tool call porte la réponse finale, déjà transmise au client
+reflect() (hors chat) utilise des appels non streamés.
 Auteur : Loic Gerard <loic.gerard@e-kodo.fr>
 """
 class Agent:
@@ -154,45 +156,75 @@ class Agent:
                 {"role": "user",   "content": user_content},
             ]
 
-            Logger.write(f"[AGENT {self.profile.getName()}] Call LLM...", type=WARNING)
             # ----------------------------------------------------------------
-            # ÉTAPE 1 — Appel non streamé pour détecter les tool calls
+            # Boucle d'appels LLM, tous streamés (cf. _streamLLM) : le texte est relayé au client au fil de l'eau ;
+            # si le modèle demande des outils, ils sont exécutés et le LLM est rappelé avec leurs résultats. La réponse
+            # finale est celle de l'appel qui se termine sans tool call : elle n'est jamais régénérée pour être
+            # streamée, et une demande d'outil ne peut plus être prise pour une réponse vide.
             # ----------------------------------------------------------------
-            llm_call_uid = Uuid.get()
+            assistant_reply_tokens = []
+            iteration = 0
             llm_call_type = "INITIAL"
-            yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="PENDING")
+            while True:
+                llm_call_uid = Uuid.get()
+                final_call_uid = None
+                yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="PENDING")
+                Logger.write(f"[AGENT {self.profile.getName()}] Call LLM ({llm_call_type})...", type=WARNING)
 
-            for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
-                try:
-                    response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted, extra_tools=session_tools)
-                except Exception as e:
-                    Logger.write(f"[AGENT {self.profile.getName()}] LLM call failure : {str(e)}", type=ERROR)
-                    yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="LLM_CALL_FAIL", message=str(e))
-                    yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
+                content_tokens, tool_calls = [], []
+                for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
+                    try:
+                        async for kind, value in self._streamLLM(messages=messages, exclude_restricted=exclude_restricted, extra_tools=session_tools):
+                            if kind == "tool_calls":
+                                tool_calls = value
+                                continue
+                            #Premier texte de l'appel : la réponse est rédigée en direct (événements FINAL, comme
+                            #lorsque la réponse finale faisait l'objet d'un appel dédié)
+                            if final_call_uid is None:
+                                yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="OK")
+                                final_call_uid = Uuid.get()
+                                yield ThinkingEvent.get(call_uid=final_call_uid, call_type="FINAL", status="PENDING")
+                            content_tokens.append(value)
+                            yield TokenEvent.get(token=value)
+                    except Exception as e:
+                        Logger.write(f"[AGENT {self.profile.getName()}] LLM call failure (iteration {iteration}) : {str(e)}", type=ERROR)
+                        if final_call_uid:
+                            yield ThinkingEvent.get(call_uid=final_call_uid, call_type="FINAL", status="ERROR", error_code="LLM_CALL_FAIL", message=str(e))
+                        else:
+                            yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="LLM_CALL_FAIL", message=str(e))
+                        yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
+                        yield DoneEvent.get()
+                        return
+                    if content_tokens or tool_calls:
+                        break
+                    if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
+                        Logger.write(f"[AGENT {self.profile.getName()}] LLM returned empty response, retrying...", type=WARNING)
+                else:
+                    Logger.write(f"[AGENT {self.profile.getName()}] LLM returned empty response after retries", type=ERROR)
+                    yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="EMPTY_RESPONSE", message="Empty LLM answer")
+                    yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty LLM answer")
                     yield DoneEvent.get()
                     return
-                if response.choices:
-                    break
-                if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
-                    Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response, retrying...", type=WARNING)
-            else:
-                Logger.write("[AGENT] LLM returned empty response after retries", type=ERROR)
-                yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="EMPTY_RESPONSE", message="Empty LLM answer")
-                yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty LLM answer")
-                yield DoneEvent.get()
-                return
-            assistant_msg = response.choices[0].message
-            yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="OK")
-            Logger.write("[AGENT {self.profile.getName()}] Call LLM OK !", type=OK)
 
-            # ----------------------------------------------------------------
-            # ÉTAPE 2 — Boucle de résolution des tool calls
-            # ----------------------------------------------------------------
-            iteration = 0
-            while assistant_msg.tool_calls:
+                if final_call_uid:
+                    yield ThinkingEvent.get(call_uid=final_call_uid, call_type="FINAL", status="OK")
+                else:
+                    yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="OK")
+                assistant_reply_tokens.extend(content_tokens)
+                Logger.write(f"[AGENT {self.profile.getName()}] Call LLM ({llm_call_type}) OK !", type=OK)
+
+                if not tool_calls:
+                    break
+
+                #Texte rédigé avant une demande d'outils (ex. « Je vais rechercher... ») : déjà affiché, on le sépare
+                #de la suite de la réponse
+                if content_tokens:
+                    assistant_reply_tokens.append("\n\n")
+                    yield TokenEvent.get(token="\n\n")
+
                 iteration += 1
                 if iteration > self._MAX_TOOL_ITERATIONS:
-                    Logger.write("[AGENT {self.profile.getName()}] Too many consecutive tool calls", type=ERROR)
+                    Logger.write(f"[AGENT {self.profile.getName()}] Too many consecutive tool calls", type=ERROR)
                     yield ErrorEvent.get(
                         error_code="MCP_TOOL_LIMIT_EXCEEDED",
                         message="Too many consecutive tool calls",
@@ -203,7 +235,7 @@ class Agent:
 
                 messages.append({
                     "role": "assistant",
-                    "content": assistant_msg.content or "",
+                    "content": "".join(content_tokens),
                     "tool_calls": [
                         {
                             "id": tc.id,
@@ -213,12 +245,12 @@ class Agent:
                                 "arguments": tc.function.arguments,
                             },
                         }
-                        for tc in assistant_msg.tool_calls
+                        for tc in tool_calls
                     ],
                 })
 
                 #Appels des outils MCP
-                for tc in assistant_msg.tool_calls:
+                for tc in tool_calls:
                     Logger.write(f"[AGENT {self.profile.getName()}] Call MCP tool {tc.function.name}...", type=WARNING)
                     meta = MCPTool.get_meta(tc.function.name)
                     description = meta.get("description", tc.function.name)
@@ -250,7 +282,7 @@ class Agent:
                     current_tool_uid = tc.function.name
                     current_tool_name = description
                     yield ToolEvent.get(tool_uid=current_tool_uid, tool_name=current_tool_name, call_uid=current_call_uid, status="PENDING", long_call=meta.get("slow", False), message="")
-                    
+
                     #On essaie d'executer l'outil, si erreur on transmet l'erreur au LLM pour qu'il puisse en déduire la suite
                     try:
                         args = json.loads(tc.function.arguments)
@@ -297,74 +329,7 @@ class Agent:
                         "content": result_text,
                     })
 
-
-                llm_call_uid = Uuid.get()
                 llm_call_type = "TOOL"
-                yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="PENDING")
-
-                Logger.write("[AGENT {self.profile.getName()}] Call LLM...", type=WARNING)
-                for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
-                    try:
-                        response = await self._connector.callLLM(messages=messages, stream=False, exclude_restricted=exclude_restricted, extra_tools=session_tools)
-                    except Exception as e:
-                        Logger.write(f"[AGENT {self.profile.getName()}] LLM call failure (iteration {str(iteration)}) : {str(e)}", type=ERROR)
-                        yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="LLM_CALL_FAIL", message=str(e))
-                        yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM call failure", details=str(e))
-                        yield DoneEvent.get()
-                        return
-                    if response.choices:
-                        break
-                    if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
-                        Logger.write("[AGENT] LLM returned empty response, retrying...", type=WARNING)
-                else:
-                    Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response after retries", type=ERROR)
-                    yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="EMPTY_RESPONSE", message="Empty LLM answer")
-                    yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty LLM answer")
-                    yield DoneEvent.get()
-                    return
-                assistant_msg = response.choices[0].message
-                yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="OK")
-                Logger.write("[AGENT {self.profile.getName()}] Call LLM OK !", type=OK)
-
-            # ----------------------------------------------------------------
-            # ÉTAPE 3 — Réponse finale streamée token par token (1 retry si vide)
-            # ----------------------------------------------------------------
-
-            llm_call_uid = Uuid.get()
-            llm_call_type = "FINAL"
-            yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="PENDING")
-
-            assistant_reply_tokens = []
-            for attempt in range(self._EMPTY_LLM_RESPONSE_MAX_RETRY):
-                Logger.write(f"[AGENT {self.profile.getName()}] Call LLM for final answer (attempt {attempt + 1}/{self._EMPTY_LLM_RESPONSE_MAX_RETRY})...", type=WARNING)
-                try:
-                    async for chunk in await self._connector.callLLM(messages=messages, stream=True, exclude_restricted=exclude_restricted, extra_tools=session_tools):
-                        token = chunk.choices[0].delta.content
-                        if token:
-                            assistant_reply_tokens.append(token)
-                            yield TokenEvent.get(token=token)
-                except Exception as e:
-                    Logger.write(f"[AGENT {self.profile.getName()}] LLM streaming error : {str(e)}", type=ERROR)
-                    yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="LLM_CALL_FAIL", message=str(e))
-                    yield ErrorEvent.get(error_code="LLM_CALL_FAIL", message="LLM streaming error", details=str(e))
-                    yield DoneEvent.get()
-                    return
-
-                if assistant_reply_tokens:
-                    break
-                if attempt < self._EMPTY_LLM_RESPONSE_MAX_RETRY - 1:
-                    Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response, retrying...", type=WARNING)
-
-            if not assistant_reply_tokens:
-                Logger.write("[AGENT {self.profile.getName()}] LLM returned empty response after retry", type=ERROR)
-                yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="ERROR", error_code="EMPTY_RESPONSE", message="Empty response from LLM")
-                yield ErrorEvent.get(error_code="EMPTY_RESPONSE", message="Empty response from LLM")
-                yield DoneEvent.get()
-                return
-
-
-            yield ThinkingEvent.get(call_uid=llm_call_uid, call_type=llm_call_type, status="OK")
-            Logger.write("[AGENT {self.profile.getName()}] Call LLM for final answer OK !", type=OK)
 
             #Emission groupée des citations RAG accumulées pendant tout le tour (dédoublonnées par source),
             #une fois la réponse finale prête plutôt qu'au fil des tool calls
@@ -520,6 +485,40 @@ class Agent:
             return assistant_msg.content or ""
         finally:
             await turn_stack.aclose()
+
+    """
+    Appel LLM streamé, utilisé par chatStream(). Produit ("token", texte) au fil du flux, puis un unique
+    ("tool_calls", liste) en fin de flux, vide si le modèle a répondu en texte. Les tool calls arrivent par fragments
+    (delta.tool_calls, repérés par leur index) : nom et identifiant dans le premier, arguments JSON répartis sur les
+    suivants. Ils sont rendus sous la même forme que ceux d'une réponse non streamée (tc.id, tc.function.name,
+    tc.function.arguments).
+    """
+    async def _streamLLM(self, messages: list, exclude_restricted: bool, extra_tools: list | None = None):
+        calls: dict[int, dict] = {}
+        async for chunk in await self._connector.callLLM(messages=messages, stream=True, exclude_restricted=exclude_restricted, extra_tools=extra_tools):
+            #Un fragment sans choix est possible (ex. décompte d'usage en fin de flux)
+            if not chunk.choices or chunk.choices[0].delta is None:
+                continue
+            delta = chunk.choices[0].delta
+            if delta.content:
+                yield "token", delta.content
+            for fragment in getattr(delta, "tool_calls", None) or []:
+                index = fragment.index if getattr(fragment, "index", None) is not None else len(calls)
+                call = calls.setdefault(index, {"id": None, "name": "", "arguments": ""})
+                if fragment.id:
+                    call["id"] = fragment.id
+                function = getattr(fragment, "function", None)
+                if function is not None:
+                    if function.name and not call["name"]:
+                        call["name"] = function.name
+                    if function.arguments:
+                        call["arguments"] += function.arguments
+
+        yield "tool_calls", [
+            SimpleNamespace(id=call["id"] or f"call_{Uuid.get()}", function=SimpleNamespace(name=call["name"], arguments=call["arguments"] or "{}"))
+            for _, call in sorted(calls.items())
+            if call["name"]
+        ]
 
     """
     Appel LLM non streamé avec retry sur réponse vide, utilisé par reflect().

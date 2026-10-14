@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Мэдлэгийн санд хайх",
     "web.rechercher_sur_internet": "Интернетээс хайх",
     "web.lire_page_web": "Вэб хуудасны агуулгыг уншдаг",
+    "tavily.rechercher_web": "Интернетээс хайх",
+    "tavily.lire_pages_web": "Вэб хуудасны агуулгыг уншдаг",
     "word.generer_fichier_word": "Word файл үүсгэдэг",
     "word.generer_fichier_word.confirmation": "Би Word файлыг үүсгэх болно. Үргэлжлүүлэх үү?",
     "word.lire_document_word": "Word баримт бичгийг уншдаг",

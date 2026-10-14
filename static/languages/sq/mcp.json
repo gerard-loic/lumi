@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Kërkim në bazën e njohurive",
     "web.rechercher_sur_internet": "Kërkim në internet",
     "web.lire_page_web": "Lexon përmbajtjen e një faqeje ueb",
+    "tavily.rechercher_web": "Kërkim në internet",
+    "tavily.lire_pages_web": "Lexon përmbajtjen e një faqeje ueb",
     "word.generer_fichier_word": "Krijon një skedar Word",
     "word.generer_fichier_word.confirmation": "Do ta krijoj skedarin Word. A duhet të vazhdoj?",
     "word.lire_document_word": "Lexon një dokument Word",

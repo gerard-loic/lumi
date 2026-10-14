@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "በእውቀት መሰረት ውስጥ ፍለጋ",
     "web.rechercher_sur_internet": "በኢንተርኔት ላይ ፍለጋ",
     "web.lire_page_web": "የድረ-ገጽ ይዘትን ያነባል",
+    "tavily.rechercher_web": "በኢንተርኔት ላይ ፍለጋ",
+    "tavily.lire_pages_web": "የድረ-ገጽ ይዘትን ያነባል",
     "word.generer_fichier_word": "የWord ፋይል ይፈጥራል",
     "word.generer_fichier_word.confirmation": "የWord ፋይሉን እፈጥራለሁ። ልቀጥል?",
     "word.lire_document_word": "የWord ሰነድ ያነባል",

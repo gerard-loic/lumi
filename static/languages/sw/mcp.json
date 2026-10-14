@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Utafutaji katika hifadhi ya maarifa",
     "web.rechercher_sur_internet": "Utafutaji kwenye mtandao",
     "web.lire_page_web": "Inasoma maudhui ya ukurasa wa wavuti",
+    "tavily.rechercher_web": "Utafutaji kwenye mtandao",
+    "tavily.lire_pages_web": "Inasoma maudhui ya ukurasa wa wavuti",
     "word.generer_fichier_word": "Inatengeneza faili la Word",
     "word.generer_fichier_word.confirmation": "Nitatengeneza faili la Word. Niendelee?",
     "word.lire_document_word": "Inasoma hati ya Word",

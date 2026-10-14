@@ -186,6 +186,21 @@ Quand le pipeline est déclenché par un événement, le contexte est pré-rempl
 Exemple : un `POST /pipeline/mon_pipeline/start` avec le corps
 `{"payload": {"client_id": 42}}` rend `{trigger.data.client_id}` → `42`.
 
+Quel que soit le déclenchement, le contexte contient aussi les informations du run (date et
+heure **locales** du démarrage, figées pour tout le run) :
+
+| Variable       | Contenu                                         | Exemple            |
+|----------------|-------------------------------------------------|--------------------|
+| `run.uid`      | Identifiant du run (`process_uid`).             |                    |
+| `run.date`     | Date de démarrage.                              | `2026-10-13`       |
+| `run.time`     | Heure de démarrage (sans `:`, sûr pour un nom de fichier). | `14-30-05` |
+| `run.datetime` | Date et heure compactes.                        | `20261013-143005`  |
+
+Exemple : `"filename": "rapport_{run.datetime}.csv"` → `rapport_20261013-143005.csv`.
+
+> Les noms de variables n'acceptent que lettres, chiffres, `_` et `.` : une clé `output`
+> contenant un `-` (ex. `"ma-sortie"`) ne pourra pas être référencée par `{ma-sortie}`.
+
 ### 2.2 Interpolation dans la configuration
 
 Toutes les **chaînes** de la `config` d'un bloc sont interprétées comme des templates au
@@ -395,10 +410,14 @@ JSON Schema, et écrit la structure obtenue.
 |-----------|-----------------|---------|--------------------------------------------------------------------------|
 | `input`   | string          | —       | **Obligatoire.** Clé de contexte contenant la chaîne JSON sérialisée. La valeur **doit** être une chaîne. |
 | `format`  | object \| `false` | `false` | JSON Schema de validation. `false` → aucune validation.                   |
+| `format_file` | string      | —       | Fichier `.json` contenant le JSON Schema, relatif au dossier du pipeline (non interpolé). Exclusif avec `format`. |
 | `output`  | string          | —       | **Obligatoire.** Clé de contexte où stocker la structure désérialisée.    |
 
-Échoue si l'entrée n'est pas une chaîne, si le JSON est invalide, ou si la validation de
-schéma échoue.
+Échoue si l'entrée n'est pas une chaîne, si le JSON est invalide, si le fichier `format_file`
+est absent, hors du dossier du pipeline ou invalide, ou si la validation de schéma échoue.
+
+Le schéma peut aussi être placé dans un fichier à côté de `pipeline.json` :
+`"format_file": "rapport.schema.json"` à la place de `"format": {...}`.
 
 ```json
 "parse": {
@@ -429,6 +448,7 @@ optionnellement contre un XML Schema (XSD), et écrit la structure obtenue.
 |-----------|-------------------|---------|--------------------------------------------------------------------------|
 | `input`   | string            | —       | **Obligatoire.** Clé de contexte contenant la chaîne XML sérialisée. La valeur **doit** être une chaîne. |
 | `format`  | string \| `false` | `false` | XML Schema (XSD) de validation, sous forme de chaîne. `false` → aucune validation. |
+| `format_file` | string        | —       | Fichier `.xsd` contenant le XML Schema, relatif au dossier du pipeline (non interpolé). Exclusif avec `format`. |
 | `output`  | string            | —       | **Obligatoire.** Clé de contexte où stocker la structure désérialisée.    |
 
 La structure produite est `{ "<racine>": <contenu> }`, où le contenu d'un élément est :
@@ -440,8 +460,12 @@ La structure produite est `{ "<racine>": <contenu> }`, où le contenu d'un élé
 Toutes les valeurs restent des chaînes (pas de conversion de type). Le parser ignore les
 commentaires, les DTD et ne résout pas les entités externes (protection XXE).
 
-Échoue si l'entrée n'est pas une chaîne, si le XML est invalide, si le XSD est invalide,
-ou si la validation de schéma échoue.
+Échoue si l'entrée n'est pas une chaîne, si le XML est invalide, si le XSD est invalide
+(ou si le fichier `format_file` est absent ou hors du dossier du pipeline), ou si la
+validation de schéma échoue.
+
+Le XSD peut aussi être placé dans un fichier à côté de `pipeline.json` :
+`"format_file": "rapport.xsd"` à la place de `"format": "<xs:schema ...>"`.
 
 ```json
 "parse": {
@@ -673,8 +697,8 @@ dans un fichier temporaire rattaché au run.
 
 | Paramètre   | Type   | Défaut               | Rôle                                                    |
 |-------------|--------|----------------------|-----------------------------------------------------|
-| `input`     | string | —                    | **Obligatoire.** Clé de contexte contenant la `list[dict]`. |
-| `format`    | string | `"csv"`              | `"csv"`, `"json"` ou `"jsonl"`.                     |
+| `input`     | string | —                    | **Obligatoire.** Clé de contexte contenant la `list[dict]` (en format `json`, un objet seul est aussi accepté, ex. sortie d'un `JsonFormat` ; en format `txt`, une chaîne, ex. réponse d'un `Agent`). |
+| `format`    | string | `"csv"`              | `"csv"`, `"json"`, `"jsonl"` ou `"txt"`.            |
 | `filename`  | string | `"dataview.<format>"`| Nom du fichier proposé au téléchargement.           |
 | `delimiter` | string | `","`                | Séparateur CSV (format `csv` uniquement).           |
 | `output`    | string | `"file"`             | Clé de contexte où stocker `{key, filename, path, url}`. |

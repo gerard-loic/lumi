@@ -41,6 +41,16 @@ class Block(ABC):
     def setPipelineDir(self, pipeline_dir:Path):
         self._pipeline_dir = pipeline_dir
 
+    #Résout un fichier relatif au dossier du pipeline ; None s'il en sort ou si son extension n'est pas dans suffixes
+    def resolvePipelineFile(self, filename:str, suffixes:tuple)->Path|None:
+        if self._pipeline_dir is None:
+            return None
+        pipeline_dir = self._pipeline_dir.resolve()
+        path = (pipeline_dir / filename).resolve()
+        if not path.is_relative_to(pipeline_dir) or path.suffix.lower() not in suffixes:
+            return None
+        return path
+
     def hasOnSuccessBlock(self)->bool:
         if self._on_success_block is None:
             return False
