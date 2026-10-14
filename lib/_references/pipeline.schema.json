@@ -445,7 +445,7 @@
                 "required": ["input"],
                 "properties": {
                     "input": { "$ref": "#/$defs/contextKey" },
-                    "format": { "enum": ["csv", "json", "jsonl"] },
+                    "format": { "enum": ["csv", "json", "jsonl", "txt"] },
                     "filename": { "$ref": "#/$defs/template" },
                     "delimiter": { "type": "string", "minLength": 1 },
                     "output": { "$ref": "#/$defs/contextKey" }

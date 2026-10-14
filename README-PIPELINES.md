@@ -697,8 +697,8 @@ dans un fichier temporaire rattaché au run.
 
 | Paramètre   | Type   | Défaut               | Rôle                                                    |
 |-------------|--------|----------------------|-----------------------------------------------------|
-| `input`     | string | —                    | **Obligatoire.** Clé de contexte contenant la `list[dict]` (en format `json`, un objet seul est aussi accepté, ex. sortie d'un `JsonFormat`). |
-| `format`    | string | `"csv"`              | `"csv"`, `"json"` ou `"jsonl"`.                     |
+| `input`     | string | —                    | **Obligatoire.** Clé de contexte contenant la `list[dict]` (en format `json`, un objet seul est aussi accepté, ex. sortie d'un `JsonFormat` ; en format `txt`, une chaîne, ex. réponse d'un `Agent`). |
+| `format`    | string | `"csv"`              | `"csv"`, `"json"`, `"jsonl"` ou `"txt"`.            |
 | `filename`  | string | `"dataview.<format>"`| Nom du fichier proposé au téléchargement.           |
 | `delimiter` | string | `","`                | Séparateur CSV (format `csv` uniquement).           |
 | `output`    | string | `"file"`             | Clé de contexte où stocker `{key, filename, path, url}`. |

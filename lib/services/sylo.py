@@ -216,6 +216,27 @@ class Sylo(Service):
         return self.request("DELETE", f"{endpoint.strip('/')}/{id}")
 
     # ------------------------------------------------------------------
+    # Pipelines (bloc ServiceMethod)
+    # ------------------------------------------------------------------
+
+    #Appel libre de l'API depuis un pipeline (signature ServiceMethod : method(self, context, params)).
+    #Paramètres :
+    #  - endpoint (str, obligatoire)  : route appelée (ex: "llm/createlesson").
+    #  - method   (str, défaut "POST"): méthode HTTP.
+    #  - input    (str, optionnel)    : chemin d'une variable du contexte (ex: "lessonjson") envoyée telle quelle
+    #                                   en corps JSON. Un chemin et non "{var}" : l'interpolation produirait une chaine.
+    #  - output   (str, défaut "result") : clé du contexte où stocker le champ `data` de la réponse.
+    #Lève RuntimeError en cas d'erreur API (échec du bloc).
+    def call(self, context, params:dict):
+        endpoint = params.get("endpoint")
+        if not endpoint:
+            raise RuntimeError("paramètre 'endpoint' manquant")
+        body = context.resolve(params["input"]) if params.get("input") else None
+        result = self.request(params.get("method", "POST").upper(), endpoint, json=body)
+        context.set(params.get("output", "result"), result)
+        return True
+
+    # ------------------------------------------------------------------
     # MCP
     # ------------------------------------------------------------------
 

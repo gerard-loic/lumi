@@ -1,10 +1,15 @@
 import json
+import re
 
 from jsonschema import ValidationError, validate
 
 from lib.pipelines._abstract import Block
 from lib.pipelines.pipelinecontext import PipelineContext
-from lib.log.logger import Logger, ERROR
+from lib.log.logger import Logger, ERROR, WARNING
+
+#Séquence d'échappement : un backslash et le caractère qui le suit (les paires \\ sont consommées ensemble)
+_ESCAPE_RE = re.compile(r'\\(.)', re.DOTALL)
+_VALID_ESCAPES = '"\\/bfnrtu'
 
 #Bloc JsonFormat : parse une chaine JSON du contexte, la valide optionnellement contre un JSON Schema, et écrit la structure obtenue.
 #
@@ -50,8 +55,16 @@ class JsonFormat(Block):
             try:
                 value = json.loads(input_val)
             except json.JSONDecodeError as e:
-                Logger.write(f"[Block JsonFormat] Invalid JSON on input '{input}' : {e}", type=ERROR)
-                return False
+                #Les LLM produisent parfois des échappements invalides (ex. \' ) : on retire le backslash superflu et on réessaie
+                if not e.msg.startswith("Invalid \\escape"):
+                    Logger.write(f"[Block JsonFormat] Invalid JSON on input '{input}' : {e}", type=ERROR)
+                    return False
+                try:
+                    value = json.loads(_ESCAPE_RE.sub(lambda m: m.group(0) if m.group(1) in _VALID_ESCAPES else m.group(1), input_val))
+                except json.JSONDecodeError as e2:
+                    Logger.write(f"[Block JsonFormat] Invalid JSON on input '{input}' : {e2}", type=ERROR)
+                    return False
+                Logger.write(f"[Block JsonFormat] Invalid escape sequences fixed on input '{input}'", type=WARNING)
         else:
             Logger.write(f"[Block JsonFormat] Initial value must be a string", type=ERROR)
             return False
