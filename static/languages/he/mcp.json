@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "חיפוש במאגר הידע",
     "web.rechercher_sur_internet": "חיפוש באינטרנט",
     "web.lire_page_web": "קורא את תוכן דף האינטרנט",
+    "tavily.rechercher_web": "חיפוש באינטרנט",
+    "tavily.lire_pages_web": "קורא את תוכן דף האינטרנט",
     "word.generer_fichier_word": "יוצר קובץ Word",
     "word.generer_fichier_word.confirmation": "אני אייצר את קובץ ה-Word. להמשיך?",
     "word.lire_document_word": "קורא מסמך Word",

@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "ស្វែងរកនៅក្នុងមូលដ្ឋានចំណេះដឹង",
     "web.rechercher_sur_internet": "ស្វែងរកនៅលើអ៊ីនធឺណិត",
     "web.lire_page_web": "អានមាតិកានៃទំព័របណ្ដាញ",
+    "tavily.rechercher_web": "ស្វែងរកនៅលើអ៊ីនធឺណិត",
+    "tavily.lire_pages_web": "អានមាតិកានៃទំព័របណ្ដាញ",
     "word.generer_fichier_word": "បង្កើតឯកសារ Word",
     "word.generer_fichier_word.confirmation": "ខ្ញុំនឹងបង្កើតឯកសារ Word។ តើបន្តទេ?",
     "word.lire_document_word": "អានឯកសារ Word",

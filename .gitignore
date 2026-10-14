@@ -11,5 +11,6 @@ storage/rag/*
 storage/logs/*
 !storage/logs/.gitkeep
 config/*
+storage/wakaru/*
 !config/.gitkeep
 __pycache__

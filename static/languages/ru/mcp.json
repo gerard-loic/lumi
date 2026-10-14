@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Поиск в базе знаний",
     "web.rechercher_sur_internet": "Поиск в интернете",
     "web.lire_page_web": "Читает содержимое веб-страницы",
+    "tavily.rechercher_web": "Поиск в интернете",
+    "tavily.lire_pages_web": "Читает содержимое веб-страницы",
     "word.generer_fichier_word": "Создаёт файл Word",
     "word.generer_fichier_word.confirmation": "Я создам файл Word. Продолжить?",
     "word.lire_document_word": "Читает документ Word",

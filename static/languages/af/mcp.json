@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Soektog in die kennisbasis",
     "web.rechercher_sur_internet": "Soektog op die internet",
     "web.lire_page_web": "Lees die inhoud van 'n webblad",
+    "tavily.rechercher_web": "Soektog op die internet",
+    "tavily.lire_pages_web": "Lees die inhoud van 'n webblad",
     "word.generer_fichier_word": "Genereer 'n Word-lêer",
     "word.generer_fichier_word.confirmation": "Ek gaan die Word-lêer genereer. Moet ek voortgaan?",
     "word.lire_document_word": "Lees 'n Word-dokument",

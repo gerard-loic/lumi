@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Tfittxija fil-bażi tal-għarfien",
     "web.rechercher_sur_internet": "Tfittxija fuq l-internet",
     "web.lire_page_web": "Jaqra l-kontenut ta' paġna web",
+    "tavily.rechercher_web": "Tfittxija fuq l-internet",
+    "tavily.lire_pages_web": "Jaqra l-kontenut ta' paġna web",
     "word.generer_fichier_word": "Jiġġenera fajl Word",
     "word.generer_fichier_word.confirmation": "Se niġġenera l-fajl Word. Għandi nkompli?",
     "word.lire_document_word": "Jaqra dokument Word",

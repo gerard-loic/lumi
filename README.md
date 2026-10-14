@@ -362,6 +362,17 @@ Settings for the PDF template used by the `generer_fichier_pdf` MCP tool. All ke
 | `template_logo` | string \| null | Path to a logo image (relative to the project root, or absolute). Ignored if the file doesn't exist. |
 | `template_footer_text` | string \| null | Text displayed in the page footer. |
 
+### `tavily`
+
+Settings of the [`tavily`](#built-in-tools) tool group (enable it with `"tavily.*"` in [`mcp.tools_enabled`](#profilesnamemcp)). Transient errors (rate limiting, server or network errors) are retried up to 3 times; pages that fail extraction are retried once in `advanced` mode.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `api_key` | string | Tavily API key. Falls back to the `TAVILY_API_KEY` environment variable. |
+| `search_depth` | string | `basic` (default, 1 credit), `advanced` (2 credits, more relevant snippets), `fast` or `ultra-fast`. |
+| `extract_depth` | string | First extraction attempt depth: `basic` (default) or `advanced`. |
+| `timeout` | int | Timeout of one Tavily API call, in seconds (default: `30`). |
+
 ### `rag`
 
 Persistent RAG knowledge base settings. `rag.collections` declares each collection by name. A profile references one of them (see [`profiles.<name>.rag`](#profilesnamerag)).
@@ -699,6 +710,7 @@ Lumi ships with the following generic MCP tool groups in `lib/mcp/tools/`. Enabl
 | `pdf` | `lib/mcp/tools/pdf/pdf.py` | `generer_fichier_pdf` | Generates templated PDF documents (cover page, header/footer, tables, charts). |
 | `rag` | `lib/mcp/tools/rag/rag.py` | `search_knowledge_base` | Searches the RAG knowledge base — see [RAG knowledge base](#rag-knowledge-base). |
 | `web` | `lib/mcp/tools/web/web.py` | `rechercher_sur_internet`, `lire_page_web` | Web search and web page reading. |
+| `tavily` | `lib/mcp/tools/tavily/tavily.py` | `rechercher_web`, `lire_pages_web` | Web search and web page / online PDF reading through the [Tavily](https://tavily.com) API — see [`tavily`](#tavily). Pages are fetched and converted by Tavily, not locally. |
 | `word` | `lib/mcp/tools/word/word.py` | 8 tools | Word document generation and editing on top of a company template — see [Word document templates](#word-document-templates-gabarits). |
 
 

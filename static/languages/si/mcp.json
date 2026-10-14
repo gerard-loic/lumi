@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "දැනුම් පදනමේ සෙවීම",
     "web.rechercher_sur_internet": "අන්තර්ජාලයේ සෙවීම",
     "web.lire_page_web": "වෙබ් පිටුවක අන්තර්ගතය කියවයි",
+    "tavily.rechercher_web": "අන්තර්ජාලයේ සෙවීම",
+    "tavily.lire_pages_web": "වෙබ් පිටුවක අන්තර්ගතය කියවයි",
     "word.generer_fichier_word": "Word ගොනුවක් ජනනය කරයි",
     "word.generer_fichier_word.confirmation": "මම Word ගොනුව ජනනය කරමි. ඉදිරියට යා යුතුද?",
     "word.lire_document_word": "Word ලේඛනයක් කියවයි",

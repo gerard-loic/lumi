@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "அறிவுத் தளத்தில் தேடல்",
     "web.rechercher_sur_internet": "இணையத்தில் தேடல்",
     "web.lire_page_web": "ஒரு வலைப்பக்கத்தின் உள்ளடக்கத்தைப் படிக்கிறது",
+    "tavily.rechercher_web": "இணையத்தில் தேடல்",
+    "tavily.lire_pages_web": "ஒரு வலைப்பக்கத்தின் உள்ளடக்கத்தைப் படிக்கிறது",
     "word.generer_fichier_word": "ஒரு Word கோப்பை உருவாக்குகிறது",
     "word.generer_fichier_word.confirmation": "Word கோப்பை உருவாக்குகிறேன். தொடரவா?",
     "word.lire_document_word": "ஒரு Word ஆவணத்தைப் படிக்கிறது",

@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Paghahanap sa knowledge base",
     "web.rechercher_sur_internet": "Paghahanap sa internet",
     "web.lire_page_web": "Binabasa ang nilalaman ng isang web page",
+    "tavily.rechercher_web": "Paghahanap sa internet",
+    "tavily.lire_pages_web": "Binabasa ang nilalaman ng isang web page",
     "word.generer_fichier_word": "Bumubuo ng Word file",
     "word.generer_fichier_word.confirmation": "Bubuo ako ng Word file. Magpatuloy ba?",
     "word.lire_document_word": "Binabasa ang isang Word document",

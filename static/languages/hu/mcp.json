@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Keresés a tudásbázisban",
     "web.rechercher_sur_internet": "Keresés az interneten",
     "web.lire_page_web": "Beolvassa egy weboldal tartalmát",
+    "tavily.rechercher_web": "Keresés az interneten",
+    "tavily.lire_pages_web": "Beolvassa egy weboldal tartalmát",
     "word.generer_fichier_word": "Word-fájlt hoz létre",
     "word.generer_fichier_word.confirmation": "Legenerálom a Word-fájlt. Folytassam?",
     "word.lire_document_word": "Beolvas egy Word-dokumentumot",

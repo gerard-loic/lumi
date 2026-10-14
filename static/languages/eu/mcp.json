@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Ezagutza-basean bilaketa",
     "web.rechercher_sur_internet": "Interneten bilaketa",
     "web.lire_page_web": "Web orri baten edukia irakurtzen du",
+    "tavily.rechercher_web": "Interneten bilaketa",
+    "tavily.lire_pages_web": "Web orri baten edukia irakurtzen du",
     "word.generer_fichier_word": "Word fitxategi bat sortzen du",
     "word.generer_fichier_word.confirmation": "Word fitxategia sortuko dut. Jarraitu behar dut?",
     "word.lire_document_word": "Word dokumentu bat irakurtzen du",

@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "جستجو در پایگاه دانش",
     "web.rechercher_sur_internet": "جستجو در اینترنت",
     "web.lire_page_web": "محتوای یک صفحه وب را می‌خواند",
+    "tavily.rechercher_web": "جستجو در اینترنت",
+    "tavily.lire_pages_web": "محتوای یک صفحه وب را می‌خواند",
     "word.generer_fichier_word": "یک فایل ورد ایجاد می‌کند",
     "word.generer_fichier_word.confirmation": "فایل ورد را ایجاد می‌کنم. ادامه دهم؟",
     "word.lire_document_word": "یک سند ورد را می‌خواند",

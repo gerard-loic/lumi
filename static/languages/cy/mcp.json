@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Chwilio yn y sylfaen wybodaeth",
     "web.rechercher_sur_internet": "Chwilio ar y rhyngrwyd",
     "web.lire_page_web": "Yn darllen cynnwys tudalen we",
+    "tavily.rechercher_web": "Chwilio ar y rhyngrwyd",
+    "tavily.lire_pages_web": "Yn darllen cynnwys tudalen we",
     "word.generer_fichier_word": "Yn cynhyrchu ffeil Word",
     "word.generer_fichier_word.confirmation": "Byddaf yn cynhyrchu'r ffeil Word. A ddylwn barhau?",
     "word.lire_document_word": "Yn darllen dogfen Word",

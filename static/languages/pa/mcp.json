@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "ਗਿਆਨ ਅਧਾਰ ਵਿੱਚ ਖੋਜ",
     "web.rechercher_sur_internet": "ਇੰਟਰਨੈੱਟ ਉੱਤੇ ਖੋਜ",
     "web.lire_page_web": "ਇੱਕ ਵੈੱਬ ਪੇਜ ਦੀ ਸਮੱਗਰੀ ਪੜ੍ਹਦਾ ਹੈ",
+    "tavily.rechercher_web": "ਇੰਟਰਨੈੱਟ ਉੱਤੇ ਖੋਜ",
+    "tavily.lire_pages_web": "ਇੱਕ ਵੈੱਬ ਪੇਜ ਦੀ ਸਮੱਗਰੀ ਪੜ੍ਹਦਾ ਹੈ",
     "word.generer_fichier_word": "ਇੱਕ ਵਰਡ ਫ਼ਾਈਲ ਬਣਾਉਂਦਾ ਹੈ",
     "word.generer_fichier_word.confirmation": "ਮੈਂ ਵਰਡ ਫ਼ਾਈਲ ਬਣਾਵਾਂਗਾ। ਕੀ ਜਾਰੀ ਰੱਖਾਂ?",
     "word.lire_document_word": "ਇੱਕ ਵਰਡ ਦਸਤਾਵੇਜ਼ ਪੜ੍ਹਦਾ ਹੈ",

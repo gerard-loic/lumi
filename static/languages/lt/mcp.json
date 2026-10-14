@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Paieška žinių bazėje",
     "web.rechercher_sur_internet": "Paieška internete",
     "web.lire_page_web": "Perskaito interneto puslapio turinį",
+    "tavily.rechercher_web": "Paieška internete",
+    "tavily.lire_pages_web": "Perskaito interneto puslapio turinį",
     "word.generer_fichier_word": "Sukuria „Word“ failą",
     "word.generer_fichier_word.confirmation": "Sukursiu „Word“ failą. Ar tęsti?",
     "word.lire_document_word": "Perskaito „Word“ dokumentą",

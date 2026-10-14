@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "ძებნა ცოდნის ბაზაში",
     "web.rechercher_sur_internet": "ძებნა ინტერნეტში",
     "web.lire_page_web": "კითხულობს ვებგვერდის შინაარსს",
+    "tavily.rechercher_web": "ძებნა ინტერნეტში",
+    "tavily.lire_pages_web": "კითხულობს ვებგვერდის შინაარსს",
     "word.generer_fichier_word": "ქმნის Word ფაილს",
     "word.generer_fichier_word.confirmation": "შევქმნი Word ფაილს. გავაგრძელო?",
     "word.lire_document_word": "კითხულობს Word დოკუმენტს",

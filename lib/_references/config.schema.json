@@ -168,6 +168,17 @@
             }
         },
 
+        "tavily": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "api_key": { "type": ["string", "null"], "description": "Clé d'API Tavily (à défaut : variable d'environnement TAVILY_API_KEY)" },
+                "search_depth": { "type": "string", "enum": ["basic", "advanced", "fast", "ultra-fast"] },
+                "extract_depth": { "type": "string", "enum": ["basic", "advanced"] },
+                "timeout": { "type": "integer", "minimum": 1, "description": "Secondes" }
+            }
+        },
+
         "rag": {
             "type": "object",
             "additionalProperties": false,

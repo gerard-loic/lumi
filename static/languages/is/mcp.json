@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Leit í þekkingargrunni",
     "web.rechercher_sur_internet": "Leit á internetinu",
     "web.lire_page_web": "Les innihald vefsíðu",
+    "tavily.rechercher_web": "Leit á internetinu",
+    "tavily.lire_pages_web": "Les innihald vefsíðu",
     "word.generer_fichier_word": "Býr til Word-skrá",
     "word.generer_fichier_word.confirmation": "Ég mun búa til Word-skrána. Á ég að halda áfram?",
     "word.lire_document_word": "Les Word-skjal",

@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "জ্ঞান ভান্ডারে অনুসন্ধান",
     "web.rechercher_sur_internet": "ইন্টারনেটে অনুসন্ধান",
     "web.lire_page_web": "একটি ওয়েব পেজের বিষয়বস্তু পড়ে",
+    "tavily.rechercher_web": "ইন্টারনেটে অনুসন্ধান",
+    "tavily.lire_pages_web": "একটি ওয়েব পেজের বিষয়বস্তু পড়ে",
     "word.generer_fichier_word": "একটি ওয়ার্ড ফাইল তৈরি করে",
     "word.generer_fichier_word.confirmation": "আমি ওয়ার্ড ফাইলটি তৈরি করব। আমি কি চালিয়ে যাব?",
     "word.lire_document_word": "একটি ওয়ার্ড ডকুমেন্ট পড়ে",

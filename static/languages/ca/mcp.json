@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Cerca a la base de coneixement",
     "web.rechercher_sur_internet": "Cerca a Internet",
     "web.lire_page_web": "Llegeix el contingut d'una pàgina web",
+    "tavily.rechercher_web": "Cerca a Internet",
+    "tavily.lire_pages_web": "Llegeix el contingut d'una pàgina web",
     "word.generer_fichier_word": "Genera un fitxer Word",
     "word.generer_fichier_word.confirmation": "Generaré el fitxer Word. He de continuar?",
     "word.lire_document_word": "Llegeix un document Word",

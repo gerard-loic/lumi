@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Bilimlar bazasida qidiruv",
     "web.rechercher_sur_internet": "Internetda qidiruv",
     "web.lire_page_web": "Veb-sahifa mazmunini o'qiydi",
+    "tavily.rechercher_web": "Internetda qidiruv",
+    "tavily.lire_pages_web": "Veb-sahifa mazmunini o'qiydi",
     "word.generer_fichier_word": "Word fayl yaratadi",
     "word.generer_fichier_word.confirmation": "Men Word faylni yarataman. Davom etaymi?",
     "word.lire_document_word": "Word hujjatini o'qiydi",

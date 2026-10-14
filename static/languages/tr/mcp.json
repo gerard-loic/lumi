@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Bilgi tabanında arama",
     "web.rechercher_sur_internet": "İnternette arama",
     "web.lire_page_web": "Bir web sayfasının içeriğini okur",
+    "tavily.rechercher_web": "İnternette arama",
+    "tavily.lire_pages_web": "Bir web sayfasının içeriğini okur",
     "word.generer_fichier_word": "Bir Word dosyası oluşturur",
     "word.generer_fichier_word.confirmation": "Word dosyasını oluşturacağım. Devam edeyim mi?",
     "word.lire_document_word": "Bir Word belgesini okur",

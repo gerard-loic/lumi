@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "നോളജ് ബേസിൽ തിരയൽ",
     "web.rechercher_sur_internet": "ഇന്റർനെറ്റിൽ തിരയൽ",
     "web.lire_page_web": "ഒരു വെബ് പേജിന്റെ ഉള്ളടക്കം വായിക്കുന്നു",
+    "tavily.rechercher_web": "ഇന്റർനെറ്റിൽ തിരയൽ",
+    "tavily.lire_pages_web": "ഒരു വെബ് പേജിന്റെ ഉള്ളടക്കം വായിക്കുന്നു",
     "word.generer_fichier_word": "ഒരു Word ഫയൽ സൃഷ്ടിക്കുന്നു",
     "word.generer_fichier_word.confirmation": "ഞാൻ Word ഫയൽ സൃഷ്ടിക്കും. തുടരണോ?",
     "word.lire_document_word": "ഒരു Word രേഖ വായിക്കുന്നു",
