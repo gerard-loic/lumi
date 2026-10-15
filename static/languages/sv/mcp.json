@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Sökning i kunskapsbasen",
     "web.rechercher_sur_internet": "Sökning på internet",
     "web.lire_page_web": "Läser innehållet på en webbsida",
+    "tavily.rechercher_web": "Sökning på internet",
+    "tavily.lire_pages_web": "Läser innehållet på en webbsida",
     "word.generer_fichier_word": "Genererar en Word-fil",
     "word.generer_fichier_word.confirmation": "Jag genererar Word-filen. Ska jag fortsätta?",
     "word.lire_document_word": "Läser ett Word-dokument",

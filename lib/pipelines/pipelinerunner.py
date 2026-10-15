@@ -61,6 +61,16 @@ class PipelineRunner:
                 if not process.getWallet().authenticateAndStore(service=service, authorization=authorization, allow_credentials=True):
                     Logger.write(f"[PipelineRunner] [Process #{self._process}] Authentication failed for service {service}", type=ERROR)
 
+            #On injecte les informations du run (identifiant, date/heure locale de démarrage) : accessibles via
+            #{run.uid}, {run.date}, {run.time}, {run.datetime} (ex : nom de fichier horodaté)
+            started_at = datetime.now()
+            context.set("run", {
+                "uid": self._process,
+                "date": started_at.strftime("%Y-%m-%d"),
+                "time": started_at.strftime("%H-%M-%S"),
+                "datetime": started_at.strftime("%Y%m%d-%H%M%S"),
+            })
+
             #On injecte les données portées par le trigger dans le contexte : elles deviennent
             #accessibles aux blocs via {trigger.type} et {trigger.data.<clé>} (ex : payload d'un
             #appel API, email reçu, fichier détecté...). Sans event (déclenchement interne), le

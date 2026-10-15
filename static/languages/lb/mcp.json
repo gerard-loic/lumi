@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Sich an der Wëssensbank",
     "web.rechercher_sur_internet": "Sich um Internet",
     "web.lire_page_web": "Liest den Inhalt vun enger Websäit",
+    "tavily.rechercher_web": "Sich um Internet",
+    "tavily.lire_pages_web": "Liest den Inhalt vun enger Websäit",
     "word.generer_fichier_word": "Erstellt eng Word-Datei",
     "word.generer_fichier_word.confirmation": "Ech erstellen d'Word-Datei. Soll ech weiderfueren?",
     "word.lire_document_word": "Liest en Word-Dokument",

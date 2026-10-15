@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Cuardach sa bhonn eolais",
     "web.rechercher_sur_internet": "Cuardach ar an idirlíon",
     "web.lire_page_web": "Léann sé ábhar leathanaigh ghréasáin",
+    "tavily.rechercher_web": "Cuardach ar an idirlíon",
+    "tavily.lire_pages_web": "Léann sé ábhar leathanaigh ghréasáin",
     "word.generer_fichier_word": "Gineann sé comhad Word",
     "word.generer_fichier_word.confirmation": "Ginfidh mé an comhad Word. Ar chóir dom leanúint ar aghaidh?",
     "word.lire_document_word": "Léann sé doiciméad Word",

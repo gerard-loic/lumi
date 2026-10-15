@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "జ్ఞాన స్థావరంలో శోధన",
     "web.rechercher_sur_internet": "ఇంటర్నెట్‌లో శోధన",
     "web.lire_page_web": "వెబ్ పేజీ యొక్క కంటెంట్‌ను చదువుతుంది",
+    "tavily.rechercher_web": "ఇంటర్నెట్‌లో శోధన",
+    "tavily.lire_pages_web": "వెబ్ పేజీ యొక్క కంటెంట్‌ను చదువుతుంది",
     "word.generer_fichier_word": "Word ఫైల్‌ను రూపొందిస్తుంది",
     "word.generer_fichier_word.confirmation": "నేను Word ఫైల్‌ను రూపొందిస్తాను. కొనసాగించాలా?",
     "word.lire_document_word": "Word పత్రాన్ని చదువుతుంది",

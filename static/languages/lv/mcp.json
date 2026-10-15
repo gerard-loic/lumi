@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Meklēšana zināšanu bāzē",
     "web.rechercher_sur_internet": "Meklēšana internetā",
     "web.lire_page_web": "Nolasa tīmekļa lapas saturu",
+    "tavily.rechercher_web": "Meklēšana internetā",
+    "tavily.lire_pages_web": "Nolasa tīmekļa lapas saturu",
     "word.generer_fichier_word": "Ģenerē Word failu",
     "word.generer_fichier_word.confirmation": "Es ģenerēšu Word failu. Vai turpināt?",
     "word.lire_document_word": "Nolasa Word dokumentu",

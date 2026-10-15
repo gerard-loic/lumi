@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Որոնում գիտելիքների բազայում",
     "web.rechercher_sur_internet": "Որոնում համացանցում",
     "web.lire_page_web": "Կարդում է վեբ էջի բովանդակությունը",
+    "tavily.rechercher_web": "Որոնում համացանցում",
+    "tavily.lire_pages_web": "Կարդում է վեբ էջի բովանդակությունը",
     "word.generer_fichier_word": "Ստեղծում է Word ֆայլ",
     "word.generer_fichier_word.confirmation": "Ես կստեղծեմ Word ֆայլը։ Շարունակե՞մ",
     "word.lire_document_word": "Կարդում է Word փաստաթուղթ",

@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Αναζήτηση στη βάση γνώσεων",
     "web.rechercher_sur_internet": "Αναζήτηση στο διαδίκτυο",
     "web.lire_page_web": "Διαβάζει το περιεχόμενο μιας ιστοσελίδας",
+    "tavily.rechercher_web": "Αναζήτηση στο διαδίκτυο",
+    "tavily.lire_pages_web": "Διαβάζει το περιεχόμενο μιας ιστοσελίδας",
     "word.generer_fichier_word": "Δημιουργεί ένα αρχείο Word",
     "word.generer_fichier_word.confirmation": "Θα δημιουργήσω το αρχείο Word. Να συνεχίσω;",
     "word.lire_document_word": "Διαβάζει ένα έγγραφο Word",

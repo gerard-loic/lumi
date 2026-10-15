@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Otsimine teadmusbaasist",
     "web.rechercher_sur_internet": "Otsimine internetist",
     "web.lire_page_web": "Loeb veebilehe sisu",
+    "tavily.rechercher_web": "Otsimine internetist",
+    "tavily.lire_pages_web": "Loeb veebilehe sisu",
     "word.generer_fichier_word": "Loob Wordi faili",
     "word.generer_fichier_word.confirmation": "Loon Wordi faili. Kas jätkata?",
     "word.lire_document_word": "Loeb Wordi dokumenti",

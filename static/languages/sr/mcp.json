@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Претрага у бази знања",
     "web.rechercher_sur_internet": "Претрага на интернету",
     "web.lire_page_web": "Чита садржај веб странице",
+    "tavily.rechercher_web": "Претрага на интернету",
+    "tavily.lire_pages_web": "Чита садржај веб странице",
     "word.generer_fichier_word": "Генерише Word фајл",
     "word.generer_fichier_word.confirmation": "Генерисаћу Word фајл. Да наставим?",
     "word.lire_document_word": "Чита Word документ",

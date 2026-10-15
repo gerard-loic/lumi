@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "지식 베이스에서 검색",
     "web.rechercher_sur_internet": "인터넷에서 검색",
     "web.lire_page_web": "웹 페이지의 콘텐츠를 읽습니다",
+    "tavily.rechercher_web": "인터넷에서 검색",
+    "tavily.lire_pages_web": "웹 페이지의 콘텐츠를 읽습니다",
     "word.generer_fichier_word": "Word 파일을 생성합니다",
     "word.generer_fichier_word.confirmation": "Word 파일을 생성하겠습니다. 계속할까요?",
     "word.lire_document_word": "Word 문서를 읽습니다",

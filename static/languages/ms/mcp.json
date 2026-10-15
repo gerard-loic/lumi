@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Carian dalam pangkalan pengetahuan",
     "web.rechercher_sur_internet": "Carian di internet",
     "web.lire_page_web": "Membaca kandungan halaman web",
+    "tavily.rechercher_web": "Carian di internet",
+    "tavily.lire_pages_web": "Membaca kandungan halaman web",
     "word.generer_fichier_word": "Menjana fail Word",
     "word.generer_fichier_word.confirmation": "Saya akan menjana fail Word. Perlu saya teruskan?",
     "word.lire_document_word": "Membaca dokumen Word",

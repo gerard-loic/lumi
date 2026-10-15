@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "在知识库中搜索",
     "web.rechercher_sur_internet": "在互联网上搜索",
     "web.lire_page_web": "读取网页内容",
+    "tavily.rechercher_web": "在互联网上搜索",
+    "tavily.lire_pages_web": "读取网页内容",
     "word.generer_fichier_word": "生成一个Word文件",
     "word.generer_fichier_word.confirmation": "我将生成该Word文件。是否继续？",
     "word.lire_document_word": "读取一个Word文档",

@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "ค้นหาในฐานความรู้",
     "web.rechercher_sur_internet": "ค้นหาทางอินเทอร์เน็ต",
     "web.lire_page_web": "อ่านเนื้อหาของหน้าเว็บ",
+    "tavily.rechercher_web": "ค้นหาทางอินเทอร์เน็ต",
+    "tavily.lire_pages_web": "อ่านเนื้อหาของหน้าเว็บ",
     "word.generer_fichier_word": "สร้างไฟล์ Word",
     "word.generer_fichier_word.confirmation": "ฉันจะสร้างไฟล์ Word ดำเนินการต่อหรือไม่",
     "word.lire_document_word": "อ่านเอกสาร Word",

@@ -72,7 +72,7 @@ class MCPClientManager:
         self._external_sessions = {}
         print("[MCP] Session closed")
 
-    #Se connecte à chaque service MCP externe configuré en auth "static" (handler MCPExternalService),
+    #Se connecte à chaque service MCP externe configuré en auth "static" (cf. _external_server_names),
     #récupère ses outils et les fusionne dans self._tools avec un nom préfixé "ext__<service>__<outil>"
     #pour éviter toute collision avec les outils internes ou entre serveurs externes. Un serveur
     #injoignable au démarrage est loggé et ignoré plutôt que de bloquer le démarrage de l'application.
@@ -86,10 +86,7 @@ class MCPClientManager:
         from lib.config.config import Config
         from lib.services.servicemanager import ServiceManager
 
-        external_names = [
-            name for name, conf in Config.get("services", default={}).items()
-            if conf.get("handler") == "MCPExternalService" and conf.get("auth", "static") == "static"
-        ]
+        external_names = self._external_server_names(Config.get("services", default={}), auth_mode="static")
 
         for name in external_names:
             try:
@@ -106,6 +103,25 @@ class MCPClientManager:
             self._register_external_tools(name, session, tools_response.tools, self._external_sessions, self._tools)
             print(f"[MCP] External server '{name}' connected — {len(tools_response.tools)} tools : "
                   f"{[t.name for t in tools_response.tools]}")
+
+    #Noms des services configurés comme serveurs MCP externes pour un mode d'auth donné ("static" ou "session") :
+    #  - MCPExternalService : mode lu dans `auth` (défaut "static")
+    #  - Sylo : toujours "session" (sans token, Sylo n'expose que ses outils publics), sauf si `mcp` vaut false
+    #Repérage sur le `handler` déclaré en config, cf. _connect_external_servers.
+    @staticmethod
+    def _external_server_names(services: dict, auth_mode: str) -> list[str]:
+        names = []
+        for name, conf in services.items():
+            handler = conf.get("handler")
+            if handler == "MCPExternalService":
+                mode = conf.get("auth", "static")
+            elif handler == "Sylo" and conf.get("mcp", True):
+                mode = "session"
+            else:
+                continue
+            if mode == auth_mode:
+                names.append(name)
+        return names
 
     #Enregistre les outils d'un serveur MCP externe fraîchement connecté (nom exposé
     #"ext__<service>__<outil>", namespace "ext.<service>" pour le filtrage `mcp.tools_enabled`), dans
@@ -149,10 +165,7 @@ class MCPClientManager:
         session_id = process.getRoot().getUid()
         wallet = process.getWallet()
 
-        external_names = [
-            name for name, conf in Config.get("services", default={}).items()
-            if conf.get("handler") == "MCPExternalService" and conf.get("auth", "static") == "session"
-        ]
+        external_names = self._external_server_names(Config.get("services", default={}), auth_mode="session")
 
         tools: list = []
         sessions: dict[str, tuple[ClientSession, str]] = {}
@@ -266,7 +279,7 @@ class MCPClientManager:
         external_sessions = external_sessions or {}
         if name in self._external_sessions or name in external_sessions:
             # Outil d'un serveur MCP externe (auth statique ou par session) : l'authentification est
-            # portée par la connexion elle-même (cf. MCPExternalService), pas d'injection de lumi_session_id.
+            # portée par la connexion elle-même (cf. MCPExternalService, Sylo), pas d'injection de lumi_session_id.
             external_session, real_name = external_sessions.get(name) or self._external_sessions[name]
             result = await external_session.call_tool(real_name, arguments)
         else:

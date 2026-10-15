@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "ຄົ້ນຫາໃນຖານຄວາມຮູ້",
     "web.rechercher_sur_internet": "ຄົ້ນຫາທາງອິນເຕີເນັດ",
     "web.lire_page_web": "ອ່ານເນື້ອຫາຂອງໜ້າເວັບ",
+    "tavily.rechercher_web": "ຄົ້ນຫາທາງອິນເຕີເນັດ",
+    "tavily.lire_pages_web": "ອ່ານເນື້ອຫາຂອງໜ້າເວັບ",
     "word.generer_fichier_word": "ສ້າງໄຟລ໌ Word",
     "word.generer_fichier_word.confirmation": "ຂ້ອຍຈະສ້າງໄຟລ໌ Word. ຄວນດຳເນີນຕໍ່ບໍ?",
     "word.lire_document_word": "ອ່ານເອກະສານ Word",

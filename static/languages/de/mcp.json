@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Suche in der Wissensdatenbank",
     "web.rechercher_sur_internet": "Suche im Internet",
     "web.lire_page_web": "Liest den Inhalt einer Webseite",
+    "tavily.rechercher_web": "Suche im Internet",
+    "tavily.lire_pages_web": "Liest den Inhalt einer Webseite",
     "word.generer_fichier_word": "Erstellt eine Word-Datei",
     "word.generer_fichier_word.confirmation": "Ich werde die Word-Datei erstellen. Soll ich fortfahren?",
     "word.lire_document_word": "Liest ein Word-Dokument",

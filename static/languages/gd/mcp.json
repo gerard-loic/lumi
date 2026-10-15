@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Lorg anns a' bhunait eòlais",
     "web.rechercher_sur_internet": "Lorg air an eadar-lìon",
     "web.lire_page_web": "A' leughadh susbaint duilleige-lìn",
+    "tavily.rechercher_web": "Lorg air an eadar-lìon",
+    "tavily.lire_pages_web": "A' leughadh susbaint duilleige-lìn",
     "word.generer_fichier_word": "A' gineadh faidhle Word",
     "word.generer_fichier_word.confirmation": "Ginidh mi am faidhle Word. An lean mi air adhart?",
     "word.lire_document_word": "A' leughadh sgrìobhainn Word",

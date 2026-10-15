@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "البحث في قاعدة المعرفة",
     "web.rechercher_sur_internet": "البحث على الإنترنت",
     "web.lire_page_web": "يقرأ محتوى صفحة ويب",
+    "tavily.rechercher_web": "البحث على الإنترنت",
+    "tavily.lire_pages_web": "يقرأ محتوى صفحة ويب",
     "word.generer_fichier_word": "ينشئ ملف Word",
     "word.generer_fichier_word.confirmation": "سأقوم بإنشاء ملف Word. هل أواصل؟",
     "word.lire_document_word": "يقرأ مستند Word",

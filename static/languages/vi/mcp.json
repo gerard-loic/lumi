@@ -12,6 +12,8 @@
     "mcp.search_knowledge_base": "Tìm kiếm trong cơ sở tri thức",
     "web.rechercher_sur_internet": "Tìm kiếm trên internet",
     "web.lire_page_web": "Đọc nội dung của một trang web",
+    "tavily.rechercher_web": "Tìm kiếm trên internet",
+    "tavily.lire_pages_web": "Đọc nội dung của một trang web",
     "word.generer_fichier_word": "Tạo một tệp Word",
     "word.generer_fichier_word.confirmation": "Tôi sẽ tạo tệp Word. Tôi có nên tiếp tục không?",
     "word.lire_document_word": "Đọc một tài liệu Word",
