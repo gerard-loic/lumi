@@ -28,6 +28,7 @@ BACKLOG PULSE
 - [ ] Liaison de documents à un message en particulier (?)
 - [ ] Annuler une demande en cours
 - [ ] Effort ? (paramètre d'effort) R&D à faire
+- [ ] Refondre les followup
 
 BACKLOG
 - [ ] Delestage à revoir
