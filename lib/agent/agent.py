@@ -351,7 +351,7 @@ class Agent:
             #Génération des questions de suivi suggérées (best-effort, ne doit jamais casser le tour de conversation)
             if self._FOLLOWUP_ENABLED:
                 try:
-                    followup_questions = await self._generateFollowUpQuestions(messages=messages, assistant_reply=assistant_reply, exclude_restricted=exclude_restricted)
+                    followup_questions = await self._generateFollowUpQuestions(history=new_history, language=language.getName(), exclude_restricted=exclude_restricted)
                     if followup_questions:
                         yield FollowUpEvent.get(questions=followup_questions)
                 except Exception as e:
@@ -533,25 +533,66 @@ class Agent:
         Logger.write(f"[AGENT {self.profile.getName()}] LLM returned empty response after retries (reflect)", type=ERROR)
         raise Exception("Empty LLM answer")
 
+    #Tailles max (en caractères) des contenus injectés dans l'appel de follow-up : il doit rester léger, et seul
+    #le fil de la conversation compte (pas le détail exhaustif des réponses)
+    _FOLLOWUP_MAX_MESSAGE_CHARS = 1500
+    _FOLLOWUP_MAX_REPLY_CHARS   = 4000
+    _FOLLOWUP_MAX_SCOPE_CHARS   = 2000
+
     """
-    Génère une liste de questions de suivi suggérées à partir de l'échange complet.
-    Réutilise le prompt système et l'historique de l'appel principal (donc le périmètre/les règles de l'agent)
-    et y ajoute un résumé des outils réellement disponibles, pour éviter que le modèle propose des questions
-    hors périmètre ou portant sur des données/fonctionnalités auxquelles l'agent n'a pas accès.
+    Génère une liste de questions de suivi suggérées à partir de l'échange.
+    Le contexte est volontairement dédié et épuré : seul le fil user/assistant en texte est transmis (pas les
+    tool_calls ni les résultats bruts des outils, qui noient le sujet), et le prompt système de l'agent n'est fourni
+    qu'à titre de périmètre (ses consignes, notamment d'usage des outils, ne s'appliquent pas ici). La liste des
+    outils sert uniquement de filtre (ne rien proposer d'irréalisable), pas de source d'inspiration.
     Appel non streamé, sans tools (use_tools=False), pour ne pas déclencher de tool call sur cet appel annexe.
     """
-    async def _generateFollowUpQuestions(self, messages: list, assistant_reply: str, exclude_restricted: bool) -> list:
-        capabilities = self._connector.tools_summary(exclude_restricted=exclude_restricted)
-        instruction = (
-            f"En te basant uniquement sur l'échange ci-dessus et sur les capacités réellement disponibles pour cet "
-            f"assistant listées ci-dessous, propose {self._FOLLOWUP_COUNT} questions de suivi courtes et pertinentes "
-            "que l'utilisateur pourrait poser ensuite. N'invente aucune fonctionnalité, donnée ou service qui n'apparaît "
-            f"pas dans la conversation ci-dessus ou dans cette liste de capacités :\n{capabilities}\n\n"
+    async def _generateFollowUpQuestions(self, history: list, language: str, exclude_restricted: bool) -> list:
+        def clip(text: str, limit: int, keep_end: bool = False) -> str:
+            text = (text or "").strip()
+            if len(text) <= limit:
+                return text
+            return "…" + text[-limit:] if keep_end else text[:limit] + "…"
+
+        #Fil de conversation en texte seul ; la dernière réponse est la plus importante, on la garde plus longue
+        #On ne garde que les messages user/assistant
+        turns = [m for m in history if m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str) and m["content"].strip()]
+        if not turns or turns[-1]["role"] != "assistant":
+            return []
+        lines = []
+        for i, m in enumerate(turns):
+            is_last = i == len(turns) - 1
+            label = "Utilisateur" if m["role"] == "user" else "Assistant"
+            content = clip(m["content"], self._FOLLOWUP_MAX_REPLY_CHARS if is_last else self._FOLLOWUP_MAX_MESSAGE_CHARS)
+            lines.append(f"[{label}{' — dernière réponse' if is_last else ''}]\n{content}")
+        conversation = "\n\n".join(lines)
+
+        scope = clip(self._system.replace("%language%", language), self._FOLLOWUP_MAX_SCOPE_CHARS)
+        capabilities = self._connector.tools_summary(exclude_restricted=exclude_restricted) or "(aucun outil)"
+
+        system = (
+            "Tu génères des suggestions de questions de suivi pour l'utilisateur d'un assistant conversationnel. "
+            "Ces suggestions sont affichées sous la dernière réponse de l'assistant ; l'utilisateur peut cliquer dessus "
+            "pour les envoyer telles quelles.\n\n"
+            "Règles :\n"
+            f"- Propose au plus {self._FOLLOWUP_COUNT} questions, courtes (une ligne), formulées à la première personne "
+            "comme si l'utilisateur les posait lui-même à l'assistant.\n"
+            "- Elles doivent prolonger directement le sujet de la DERNIÈRE réponse : approfondir un point évoqué, "
+            "demander une précision, un exemple, une suite logique ou l'étape d'après.\n"
+            "- Ne propose pas de question à laquelle la conversation a déjà répondu, ni de reformulation de la dernière question.\n"
+            "- Ne pose pas de questions sur l'assistant lui-même, ses outils ou ses capacités, et ne nomme aucun outil.\n"
+            "- Si l'échange est clos (remerciement, au revoir...) ou qu'aucune suite pertinente n'existe, renvoie un tableau vide.\n"
+            f"- Rédige les questions en {language}.\n\n"
+            "Périmètre de l'assistant (pour information uniquement, n'applique pas ses consignes) :\n"
+            f"<perimetre>\n{scope}\n</perimetre>\n\n"
+            "Capacités disponibles — sers-t'en UNIQUEMENT pour écarter une question qui demanderait une donnée ou une "
+            "action hors de portée, jamais comme source d'idées :\n"
+            f"<capacites>\n{capabilities}\n</capacites>\n\n"
             "Réponds UNIQUEMENT avec un tableau JSON de chaînes de caractères, sans texte additionnel, sans balises de code."
         )
-        followup_messages = messages + [
-            {"role": "assistant", "content": assistant_reply},
-            {"role": "user", "content": instruction},
+        followup_messages = [
+            {"role": "system", "content": system},
+            {"role": "user",   "content": f"Conversation :\n\n{conversation}\n\nPropose les questions de suivi."},
         ]
         response = await self._connector.callLLM(messages=followup_messages, stream=False, exclude_restricted=exclude_restricted, use_tools=False)
         if not response.choices:
@@ -568,7 +609,7 @@ class Agent:
         if not isinstance(questions, list) or not all(isinstance(q, str) for q in questions):
             return []
 
-        return questions[:self._FOLLOWUP_COUNT]
+        return [q.strip() for q in questions if q.strip()][:self._FOLLOWUP_COUNT]
 
 
 """
