@@ -45,7 +45,7 @@ class CsvReader(Block):
         output      = context.getConfig(key="output", default="result")
 
         try:
-            content, filename = resolve_file_source(self._config.get("source"), context)
+            content, filename = resolve_file_source(self._config.get("source"), context, base_dir=self._pipeline_dir)
         except FileSourceError as e:
             Logger.write(f"[Block CsvReader] {e}", type=ERROR)
             return False

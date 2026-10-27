@@ -44,7 +44,8 @@ class XmlFormat(Block):
                 Logger.write(f"[Block XmlFormat] Cannot read XML Schema '{format_file}' : {e}", type=ERROR)
                 return False
 
-        input_val = context.get(key=input)
+        #Lecture brute (sans templating) : le contenu peut légitimement contenir des accolades, ex. "{{1}}"
+        input_val = context.resolve(input)
 
         if not isinstance(input_val, str):
             Logger.write(f"[Block XmlFormat] Initial value must be a string", type=ERROR)

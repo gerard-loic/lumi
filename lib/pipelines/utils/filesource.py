@@ -21,6 +21,9 @@ from lib.process.processmanager import ProcessManager
 #  - une URL "/files/<key>/<filename>" ou une clé FileStore (32 hexa) désignant un fichier
 #    rattaché au run courant (ou à la session).
 #
+#Un chemin relatif est d'abord cherché dans base_dir (dossier du pipeline, sans pouvoir en sortir),
+#puis, à défaut, relativement au répertoire courant du serveur.
+#
 #  - resolve_file_source(...) -> (contenu_octets, nom_de_fichier) : pour lire le contenu.
 #  - resolve_file_ref(...)    -> FileRef                          : pour agir sur le fichier lui-même.
 #  - resolve_file_refs(...)   -> list[FileRef]                    : idem, en développant les listes.
@@ -75,12 +78,12 @@ class FileRef:
         raise FileSourceError(f"Fichier introuvable : {self.path or self.filename}")
 
 
-def resolve_file_source(raw_source, context, hint_name:str=None):
-    ref = resolve_file_ref(raw_source, context, hint_name)
+def resolve_file_source(raw_source, context, hint_name:str=None, base_dir:Path=None):
+    ref = resolve_file_ref(raw_source, context, hint_name, base_dir)
     return ref.read(), ref.filename
 
 
-def resolve_file_ref(raw_source, context, hint_name:str=None)->FileRef:
+def resolve_file_ref(raw_source, context, hint_name:str=None, base_dir:Path=None)->FileRef:
     if isinstance(raw_source, dict):
         return _ref_from_struct(raw_source, hint_name)
 
@@ -99,12 +102,12 @@ def resolve_file_ref(raw_source, context, hint_name:str=None)->FileRef:
                 raise FileSourceError(f"'{token.group(1)}' est une liste vide")
             first = resolved[0]
             return _ref_from_struct(first, hint_name) if isinstance(first, dict) \
-                else _ref_from_string(str(first), context, hint_name)
+                else _ref_from_string(str(first), context, hint_name, base_dir)
         if resolved is None:
             raise FileSourceError(f"'{token.group(1)}' est nul")
-        return _ref_from_string(str(resolved), context, hint_name)
+        return _ref_from_string(str(resolved), context, hint_name, base_dir)
 
-    return _ref_from_string(raw_source, context, hint_name)
+    return _ref_from_string(raw_source, context, hint_name, base_dir)
 
 
 def resolve_file_refs(raw_source, context, hint_name:str=None)->list:
@@ -136,7 +139,7 @@ def _context_get(context, key:str):
 
 
 #Chaine littérale, éventuellement templatisée ("/data/{date}/rapport.csv"), URL "/files/..." ou clé.
-def _ref_from_string(raw:str, context, hint_name:str=None)->FileRef:
+def _ref_from_string(raw:str, context, hint_name:str=None, base_dir:Path=None)->FileRef:
     source = context.transform(raw).strip()
 
     if "/files/" in source:
@@ -149,7 +152,13 @@ def _ref_from_string(raw:str, context, hint_name:str=None)->FileRef:
     if _HEX_KEY_RE.match(source):
         return FileRef(FileStore.path(source), hint_name, key=source)
 
-    return FileRef(str(Path(source).expanduser()), os.path.basename(source) or hint_name)
+    path = Path(source).expanduser()
+    if base_dir is not None and not path.is_absolute():
+        root = Path(base_dir).resolve()
+        candidate = (root / path).resolve()
+        if candidate.is_relative_to(root) and candidate.is_file():
+            path = candidate
+    return FileRef(str(path), os.path.basename(source) or hint_name)
 
 
 #Dict de fichier de pipeline -> FileRef. La clé FileStore (directe ou extraite de l'URL) prime ;
