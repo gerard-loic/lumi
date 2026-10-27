@@ -47,7 +47,8 @@ class JsonFormat(Block):
                 Logger.write(f"[Block JsonFormat] Invalid JSON Schema '{format_file}' : {e}", type=ERROR)
                 return False
 
-        input_val = context.get(key=input)
+        #Lecture brute (sans templating) : le contenu peut légitimement contenir des accolades, ex. "{{1}}"
+        input_val = context.resolve(input)
 
         #Une chaine est interprétée comme du JSON sérialisé : on la parse pour obtenir la structure.
         #Toute autre valeur est supposée déjà désérialisée et utilisée telle quelle.
