@@ -1,5 +1,9 @@
 BACKLOG PULSE
+- [ ] API de suivi de la consommation
+- [ ] Suivi des requetes de recherche
+- [ ] Extensions de contrat
 - [ ] Optimisation du microRag
+- [ ] Infos de token / requetes de recherche par requête
 - [ ] API info profil
 - [ ] Revue de l'API d'info session / profil
 - [ ] API de statistiques d'utilisation / gestion de logs d'utilisation
@@ -13,8 +17,6 @@ BACKLOG PULSE
 - [ ] Suppression des messages du context : résumer dabord (idem ci-dessus)
 - [ ] Gestion de la suppression du contexte et du récapitulatif du contexte (idem ci-dessus)
 - [ ] Historiques de conversation stockés
-- [ ] problèmes des retours LLM vides
-- [ ] Meilleure gestion de la réponse vide (implémenter un sleep) (idem ci-dessus)
 - [ ] Simplification et refactor des classes pour le RAG
 - [ ] Conservation d'historique de conversations / pouvoir les continuer
 - [ ] Outils MCP recherche WEB : préciser la recherche effectuée
