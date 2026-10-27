@@ -40,9 +40,10 @@ class DataViewFile(Block):
             Logger.write(f"[Block DataViewFile] Unsupported format '{fmt}' (csv|json|jsonl|txt)", type=ERROR)
             return False
 
+        #Lecture brute (sans templating) : le contenu peut légitimement contenir des accolades, ex. "{{1}}"
         try:
-            rows = context.get(key=input_key)
-        except KeyError:
+            rows = context.resolve(input_key)
+        except (KeyError, IndexError, ValueError, TypeError):
             Logger.write(f"[Block DataViewFile] Context key '{input_key}' not found", type=ERROR)
             return False
 
